@@ -1,0 +1,76 @@
+const fs = require('fs');
+const { adminGuildId, adminChannelId } = require('../config.json');
+const { EmbedBuilder } = require('discord.js');
+require('dotenv').config();
+
+let serverLogBuffer = []
+
+function archiveLog() {
+    fs.appendFile('../log/server-log.log', serverLogBuffer.join('\n') + '\n', 'utf-8', (err) => {
+        if (err) {
+            module.exports.serverLog(`[ERROR] Error writing 'server-log.log': ${err}`);
+        }
+    });
+    serverLogBuffer = [];
+}
+
+let client;
+let channel;
+let role;
+
+function setupAdminChannel() {
+    if (process.env.NODE_ENV === 'production') {
+        const guild = client.guilds.cache.get(adminGuildId);
+        if (!guild) {
+            console.error(`[LOGGER_ERROR] Admin server not found. adminGuildId: ${adminGuildId}`);
+            return;
+        }
+    
+        channel = guild.channels.cache.get(adminChannelId);
+    
+        role = guild.roles.cache.find(r => r.name === '서버 오류');
+    }
+}
+
+function sendErrorLog(message) {
+    if (channel) {
+        if (role) {
+            channel.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setTitle('Server Error')
+                        .setDescription(`<@${role.name}>\n${message}`)
+                        .setTimestamp()
+                ],
+            });
+        } else {
+            console.error(`[LOGGER_ERROR] Error mention role not found. Retrying...`);
+            setupAdminChannel();
+        }
+    } else {
+        console.error(`[LOGGER_ERROR] Admin channel not found. adminChannelId: ${adminChannelId}. Retrying...`);
+        setupAdminChannel();
+    }
+}
+
+module.exports = {
+    setClient_server_logger: (_client) => {
+        client = _client;
+    },
+
+    async serverLog(message) {
+        console.log(message);
+        if (message.startsWith('[ERROR]')) {
+            if (process.env.NODE_ENV === 'production') {
+                sendErrorLog(message);
+            }
+        }
+        serverLogBuffer.push(message);
+
+        if (serverLogBuffer.length >= 20) {
+            archiveLog();
+        }
+    },
+
+    setupAdminChannel: setupAdminChannel,
+}

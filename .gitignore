@@ -86,3 +86,9 @@ typings/
 
 # DynamoDB Local files
 .dynamodb/
+
+config.json
+stock_prices.txt
+recent-stock_prices.txt
+
+.idea/
