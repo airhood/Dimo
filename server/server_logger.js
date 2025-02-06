@@ -28,7 +28,7 @@ function setupAdminChannel() {
     
         channel = guild.channels.cache.get(adminChannelId);
     
-        role = guild.roles.cache.find(r => r.name === '서버 오류');
+        role = guild.roles.cache.get('1332029929491267695');
     }
 }
 
@@ -39,7 +39,7 @@ function sendErrorLog(message) {
                 embeds: [
                     new EmbedBuilder()
                         .setTitle('Server Error')
-                        .setDescription(`<@${role.name}>\n${message}`)
+                        .setDescription(`${role}\n${message}`)
                         .setTimestamp()
                 ],
             });

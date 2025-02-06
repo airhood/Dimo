@@ -190,9 +190,7 @@ client.on(Events.MessageCreate, async (message) => {
 			}
 		}
 	}
-})
-
-const { updateStockData } = require('./stock_system/stock_sim');
+});
 
 (async() => {
 	addInteractionHandler(client);
@@ -207,9 +205,7 @@ const { updateStockData } = require('./stock_system/stock_sim');
 		serverLog(`[ERROR] Error loading recent stock data: ${err}`);
 	}
 	startBucketCycle();
-})().then(() => {
-	// updateStockData();
-});
+})();
 
 
 client.login(token);
