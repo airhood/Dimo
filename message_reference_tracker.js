@@ -45,7 +45,7 @@ function existsInCurrentBucket(messageID) {
         }
     });
 
-    if (special) return true;
+    if (special) return 'special';
 
     if (result1) {
         return true;

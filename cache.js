@@ -1,6 +1,16 @@
 
 cache = {};
 
+const printAllCache = () => {
+    const cacheContents = Object.keys(cache).map(uid => {
+        return {
+            uid: uid,
+            data: cache[uid].data
+        };
+    });
+    console.log(JSON.stringify(cacheContents, null, 2));
+}
+
 module.exports = {
     createCache: (uid, expireMin) => {
         if (!uid || expireMin <= 0) return;
@@ -28,8 +38,8 @@ module.exports = {
 
     deleteCache: (uid) => {
         if (cache[uid]) {
-            delete cache[uid];
             clearTimeout(cache[uid].timerID);
+            delete cache[uid];
         }
     }
 }

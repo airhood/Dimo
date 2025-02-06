@@ -39,5 +39,5 @@ const rest = new REST().setToken(token);
 		console.error(error);
 	}
 })().then(() => {
-	process.exit();
+	process.exit()
 });

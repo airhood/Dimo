@@ -95,8 +95,7 @@ client.on(Events.MessageCreate, async (message) => {
 		}else if (userMessage) {
 			if (message.reference) {
 				const referenceMessageID = message.reference.messageId;
-				console.log('referenceMessageID: ', referenceMessageID);
-				if (existsInCurrentBucket(referenceMessageID)) {
+				if (existsInCurrentBucket(referenceMessageID) === true) {
 					const result = await dimoChat(message.content, {
 						messageID: message.id,
 						referenceMessageID: referenceMessageID,
@@ -106,16 +105,50 @@ client.on(Events.MessageCreate, async (message) => {
 						const content = result.content;
 						const formattedContent = content.replace(/<user>/g, message.author.username);
 						
+						let messageID;
 						if (filterMessage(formattedContent)) {
 							const sent = await message.reply(formattedContent);
 							addToBucket(sent, false);
+							messageID = sent.id;
 						} else {
 							const sent = await message.reply(`${formattedContent}\n\n**부적절한 내용 전송으로 경고가 부여되었습니다.**`);
 							addToBucket(sent, false);
+							messageID = sent.id;
 						}
+
+						result.callback(messageID.trim());
 					} else if (result.result === 'reply_timeout') {
 						await message.reply('내용이 기억이 안나.');
-						console.log('aaaaaaaaaa');
+						console.log('a');
+						addToBucket(null, true);
+					} else {
+						await message.reply('으악! 오류가 발생했어.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해줘.');
+						addToBucket(null, true);
+					}
+				} else if (existsInCurrentBucket(referenceMessageID) === 'special') {
+					const result = await dimoChat(message.content, {
+						messageID: message.id,
+						referenceMessageID: null,
+					});
+	
+					if (result.result === 'success') {
+						const content = result.content;
+						const formattedContent = content.replace(/<user>/g, message.author.username);
+
+						let messageID;
+						if (filterMessage(formattedContent)) {
+							const sent = await message.reply(formattedContent);
+							addToBucket(sent, false);
+							messageID = sent.id;
+						} else {
+							const sent = await message.reply(`${formattedContent}\n\n**부적절한 내용 전송으로 경고가 부여되었습니다.**`);
+							addToBucket(sent, false);
+							messageID = sent.id;
+						}
+
+						result.callback(messageID.trim());
+					} else if (result.result === 'reply_timeout') {
+						await message.reply('내용이 기억이 안나.');
 						addToBucket(null, true);
 					} else {
 						await message.reply('으악! 오류가 발생했어.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해줘.');
@@ -133,15 +166,20 @@ client.on(Events.MessageCreate, async (message) => {
 
 				if (result.result === 'success') {
 					const content = result.content;
-					const formattedContent = content.replace(/<user>/g, message.author.username);
+					const formattedContent = content.replace(/<user>/g, message.author.displayName);
 
+					let messageID;
 					if (filterMessage(formattedContent)) {
 						const sent = await message.reply(formattedContent);
 						addToBucket(sent, false);
+						messageID = sent.id;
 					} else {
 						const sent = await message.reply(`${formattedContent}\n\n**부적절한 내용 전송으로 경고가 부여되었습니다.**`);
 						addToBucket(sent, false);
+						messageID = sent.id;
 					}
+
+					result.callback(messageID.trim());
 				} else if (result.result === 'reply_timeout') {
 					await message.reply('내용이 기억이 안나.');
 					addToBucket(null, true);
