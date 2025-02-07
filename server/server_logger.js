@@ -6,7 +6,7 @@ require('dotenv').config();
 let serverLogBuffer = []
 
 function archiveLog() {
-    fs.appendFile('../log/server-log.log', serverLogBuffer.join('\n') + '\n', 'utf-8', (err) => {
+    fs.appendFile('./log/server-log.log', serverLogBuffer.join('\n') + '\n', 'utf-8', (err) => {
         if (err) {
             module.exports.serverLog(`[ERROR] Error writing 'server-log.log': ${err}`);
         }

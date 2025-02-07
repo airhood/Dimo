@@ -73,7 +73,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
 client.on(Events.GuildCreate, async (guild) =>{
 	serverLog(`[INFO] Joined a new guild: ${guild.name}`);
-})
+});
 
 
 client.once(Events.ClientReady, (readyClient) => {

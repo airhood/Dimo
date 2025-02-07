@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('@discordjs/builders');
 const { adminGuildId, statusChannelId } = require('../config.json');
 const schedule = require('node-schedule');
 const moment = require('moment-timezone');
+const { serverLog } = require('./server_logger');
 
 let client;
 let channel;
@@ -25,7 +26,7 @@ async function setupStatusChannel() {
                     .setTitle('디모봇 상태')
                     .addFields(
                         { name: '서버 시작 시간', value: `${serverStartTime}`, inline: true },
-                        { name: '마지막 응답 시간', value: `${moment(new Date()).format('YYYY-MM-DD HH:mm')}`, inline: true }
+                        { name: '마지막 응답 시간', value: `${moment(new Date()).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm')}`, inline: true }
                     )
             ],
         });
@@ -35,16 +36,20 @@ async function setupStatusChannel() {
 function updateStatus() {
     if (!message) return;
     
-    message.edit({
-        embeds: [
-            new EmbedBuilder()
-                .setTitle('디모봇 상태')
-                .addFields(
-                    { name: '서버 시작 시간', value: `${serverStartTime}`, inline: true },
-                    { name: '마지막 응답 시간', value: `${moment(new Date()).format('YYYY-MM-DD HH:mm')}`, inline: true }
-                )
-        ],
-    });
+    try {
+        message.edit({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle('디모봇 상태')
+                    .addFields(
+                        { name: '서버 시작 시간', value: `${serverStartTime}`, inline: true },
+                        { name: '마지막 응답 시간', value: `${moment(new Date()).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm')}`, inline: true }
+                    )
+            ],
+        });
+    } catch (err) {
+        serverLog(`[ERROR] Error updating server status: ${err}`);
+    }
 }
 
 if (process.env.NODE_ENV === 'production') {
