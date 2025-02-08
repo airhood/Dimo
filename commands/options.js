@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { tryGetTicker, getTickerList, getTimeRangeData } = require('../stock_system/stock_sim');
+const { tryGetTicker, getTickerList, getTimeRangeData, getOptionPrice } = require('../stock_system/stock_sim');
 const { getStockName } = require('../stock_system/stock_name');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
@@ -11,18 +11,12 @@ module.exports = {
         .setName('옵션')
         .setDescription('옵션이란 미리 정한 가격으로 미래에 주식을 사거나 팔 수 있는 권리입니다.')
         .addSubcommand((subCommand) =>
-            subCommand.setName('목록')
-                .setDescription('옵션 종목과 가격을 가져옵니다.')
+            subCommand.setName('가격')
+                .setDescription('옵션의 가격을 가져옵니다.')
                 .addStringOption((option) =>
-                    option.setName('정렬기준')
-                        .setDescription('주식 종목을 정렬할 기준을 설정합니다.')
-                        .setChoices(
-                            { name: '가격순(높은)', value: '가격순(높은)' },
-                            { name: '가격순(낮은)', value: '가격순(낮은)' },
-                            { name: '상승순', value: '상승순' },
-                            { name: '하락순', value: '하락순' },
-                        )
-                        .setRequired(false)
+                    option.setName('종목')
+                        .setDescription('정보를 표시할 종목 코드 또는 종목명')
+                        .setRequired(true)
                 )
         )
         .addSubcommand((subCommand) =>
@@ -66,7 +60,7 @@ module.exports = {
                 .setDescription('콜옵션이란 미리 정한 가격으로 미래에 주식을 살 수 있는 권리입니다.')
                 .addSubcommand((subCommand) =>
                     subCommand.setName('매수')
-                        .setDescription('콜옵션을 매수합니다. 만기일은 /옵션 만기일 을 통해 확인할 수 있습니다.')
+                        .setDescription('만기일은 **/옵션 만기일**, 행사가격은 **/행사가격**을 통해 확인할 수 있습니다.')
                         .addStringOption((option) =>
                             option.setName('종목')
                                 .setDescription('콜옵션을 매수하려는 종목 코드 또는 종목명')
@@ -78,20 +72,16 @@ module.exports = {
                                 .setMinValue(1)
                                 .setRequired(true)
                         )
-                        .addStringOption((option) =>
+                        .addIntegerOption((option) =>
                             option.setName('행사가격')
                                 .setDescription('옵션을 행사할 때 적용되는 가격')
-                                .addChoices(
-                                    { name: '(기초자산) x 1.05', value: '5'},
-                                    { name: '(기초자산) x 1.00', value: '0'},
-                                    { name: '(기초자산) x 0.95', value: '-5'},
-                                )
+                                .setMinValue(1)
                                 .setRequired(true)
                         )
                 )
                 .addSubcommand((subCommand) =>
                     subCommand.setName('매도')
-                        .setDescription('콜옵션을 매도합니다.')
+                        .setDescription('행사가격은 **/행사가격**을 통해 확인할 수 있습니다.')
                         .addStringOption((option) =>
                             option.setName('종목')
                                 .setDescription('콜옵션을 매도하려는 종목 코드 또는 종목명')
@@ -103,14 +93,10 @@ module.exports = {
                                 .setMinValue(1)
                                 .setRequired(true)
                         )
-                        .addStringOption((option) =>
+                        .addIntegerOption((option) =>
                             option.setName('행사가격')
                                 .setDescription('옵션을 행사할 때 적용되는 가격')
-                                .addChoices(
-                                    { name: '(기초자산) x 1.05', value: '1.05'},
-                                    { name: '(기초자산) x 1.00', value: '1.00'},
-                                    { name: '(기초자산) x 0.95', value: '0.95'},
-                                )
+                                .setMinValue(1)
                                 .setRequired(true)
                         )
                 )
@@ -121,7 +107,7 @@ module.exports = {
                 .setDescription('풋옵션이란 미리 정한 가격으로 미래에 주식을 팔 수 있는 권리입니다.')
                 .addSubcommand((subCommand) =>
                     subCommand.setName('매수')
-                        .setDescription('풋옵션을 매수합니다.')
+                        .setDescription('만기일은 **/옵션 만기일**, 행사가격은 **/행사가격**을 통해 확인할 수 있습니다.')
                         .addStringOption((option) =>
                             option.setName('종목')
                                 .setDescription('풋옵션을 매수하려는 종목 코드 또는 종목명')
@@ -133,10 +119,16 @@ module.exports = {
                                 .setMinValue(1)
                                 .setRequired(true)
                         )
+                        .addIntegerOption((option) =>
+                            option.setName('행사가격')
+                                .setDescription('옵션을 행사할 때 적용되는 가격')
+                                .setMinValue(1)
+                                .setRequired(true)
+                        )
                 )
                 .addSubcommand((subCommand) =>
                     subCommand.setName('매도')
-                        .setDescription('풋옵션을 매도합니다.')
+                        .setDescription('행사가격은 **/행사가격**을 통해 확인할 수 있습니다.')
                         .addStringOption((option) =>
                             option.setName('종목')
                                 .setDescription('풋옵션을 매도하려는 종목 코드 또는 종목명')
@@ -148,7 +140,17 @@ module.exports = {
                                 .setMinValue(1)
                                 .setRequired(true)
                         )
+                        .addIntegerOption((option) =>
+                            option.setName('행사가격')
+                                .setDescription('옵션을 행사할 때 적용되는 가격')
+                                .setMinValue(1)
+                                .setRequired(true)
+                        )
                 )
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('행사가격')
+                .setDescription('현재 존재하는 옵션들의 행사가격을 가져옵니다.')
         )
         .addSubcommand((subCommand) =>
             subCommand.setName('만기일')
@@ -158,34 +160,57 @@ module.exports = {
     async execute(interaction) {
         const subCommand = interaction.options.getSubcommand;
 
-        if (subCommand === '목록') {
-
-        }
-        else if (subCommand === '정보') {
-
-        }
-        else if (subCommand === '차트') {
-
-        }
-        else if (subCommand === '만기일') {
+        if (subCommand === '가격') {
+            let ticker = interaction.options.getString('종목');
+            ticker = tryGetTicker(ticker.trim());
             
-        }
-        else {
+            if (ticker === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  차트 불러오기 실패')
+                            .setDescription(`존재하지 않는 종목입니다.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
+
+            const optionPrice = getOptionPrice(ticker);
+
+            if (optionPrice === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.
+                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
+        } else if (subCommand === '차트') {
+
+        } else if (subCommand === '행사가격') {
+
+        } else if (subCommand === '만기일') {
+            
+        } else {
             const subCommandGroup = interaction.options.getSubcommandGroup();
 
             if (subCommandGroup === '콜') {
                 if (subCommand === '매수') {
 
-                }
-                else if (subCommand === '매도') {
+                } else if (subCommand === '매도') {
                     
                 }
-            }
-            else if (subCommandGroup === '풋') {
+            } else if (subCommandGroup === '풋') {
                 if (subCommand === '매수') {
 
-                }
-                else if (subCommand === '매도') {
+                } else if (subCommand === '매도') {
                     
                 }
             }

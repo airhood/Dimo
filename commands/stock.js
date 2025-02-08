@@ -1,9 +1,9 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { getStockList, tryGetTicker, getTickerList, getTimeRangeData, getStockInfo } = require('../stock_system/stock_sim');
+const { getStockList, tryGetTicker, getTimeRangeData, getStockInfo } = require('../stock_system/stock_sim');
 const { getStockName } = require('../stock_system/stock_name');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
-const { stockBuy, stockSell, checkUserExists, stockShortSell, stockShortRepay } = require('../database');
+const { stockBuy, stockSell, stockShortSell, stockShortRepay } = require('../database');
 const { generateStockChartImage } = require('../stock_system/stock_chart');
 const { serverLog } = require('../server/server_logger');
 const fs = require('fs');
@@ -216,56 +216,6 @@ module.exports = {
                 components: [row],
                 fetchReply: true
             });
-
-            // await interaction.reply({
-            //     embeds: [
-            //         new EmbedBuilder()
-            //         .setColor(0xF1C40F)
-            //             .setTitle(':chart_with_upwards_trend:  주식 목록')
-            //             .addFields(
-            //                 { name: '종목', value: ticker_list.join('\n\n'), inline: true },
-            //                 { name: '가격', value: price_list.join('\n\n'), inline: true },
-            //                 { name: '변동량', value: difference_list.join('\n\n'), inline: true },
-            //             )
-            //             .setTimestamp()
-            //     ],
-            // });
-
-            /*
-            const data = [
-                ['종목', '가격', '변동량'],
-                ...ticker_list.map((ticker, index) => [
-                    ticker,
-                    price_list[index],
-                    difference_list[index],
-                ])
-            ];
-
-            const config = {
-                columnDefault: {
-                    alignment: 'right',
-                    paddingLeft: 1,
-                    paddingRight: 1,
-                },
-                columns: {
-                    0: { alignment: 'left' },
-                    1: { alignment: 'right' },
-                    2: { alignment: 'right' },
-                },
-            };
-
-            const output = table(data, config);
-
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                    .setColor(0xF1C40F)
-                    .setTitle(':chart_with_upwards_trend:  주식 목록')
-                    .setDescription(`\`\`\`${output}\`\`\``)
-                    .setTimestamp()
-                ],
-            });
-            */
         } else if (subCommand === '정보') {
             const ticker_input = interaction.options.getString('종목');
             const ticker = tryGetTicker(ticker_input.trim());
@@ -390,7 +340,6 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-
                 return;
             }
         } else if (subCommand === '매수') {

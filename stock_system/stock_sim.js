@@ -6,15 +6,18 @@ const { getTicker, getStockName } = require('./stock_name');
 const { getInterestRate } = require('./bank_manager');
 
 
-const mu = 0.001;  // 평균 수익률 (일일 평균)
-const sigma = 0.002;  // 변동성 (일일 변동성)
+const sigma = 0.004;  // 변동성 (일일 변동성)
 const days = 1440;  // 시뮬레이션 기간 (1440분 = 1일)
-const shockProbability = 0.05;  // 급등/급락 확률
-const shockMagnitude = 0.005;  // 급등/급락 폭 (0.08%)
+const shockProbability = 0.07;  // 급등/급락 확률
+const shockMagnitude = 0.007;  // 급등/급락 폭 (0.08%)
 const newsImpact = 0.01;  // 뉴스 발표 시 가격 변화 (1%)
 const bigNewsImpact = -0.3;  // 큰 뉴스 영향 (-0.3% 정도)
 const minBigNewsDuration = 20;  // 큰 뉴스가 지속되는 최소 일수
 const maxBigNewsDuration = 50;  // 큰 뉴스가 지속되는 최대 일수
+
+function roundPos(number, pos) {
+    return Math.round(number * Math.pow(pos)) / Math.pow(pos);
+}
 
 function simulateStockPrice(initialPrice, sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, bigNews) {
     const prices = [];
@@ -80,14 +83,24 @@ function simulateStockPrice(initialPrice, sigma, days, shockProbability, shockMa
             // 상장폐지
         }
 
-        prices.push(Math.round(currentPrice));
+        prices.push(roundPos(currentPrice, 2));
     }
 
     return [prices, newsData];
 }
 
-function convertToSimTime(realTime) {
-    return (realTime / 7) * (2/12);
+function convertToSimTime(time) {
+    return (time / 7) * (2/12);
+}
+
+function calculateVolatility(hourlyVolatility) {
+    // 연간 변동성 계산 (365일 기준, 하루 24시간)
+    const annualVolatility = hourlyVolatility * Math.sqrt(365 * 24);
+    
+    // 1주일 옵션의 변동성 계산 (1주일 = 2개월, 즉 60일)
+    const weeklyVolatility = annualVolatility * Math.sqrt(60 / 365);
+    
+    return weeklyVolatility;
 }
 
 // 표준 정규 분포의 누적 분포 함수
@@ -140,11 +153,16 @@ function calculatePutOptionPrice(S, K, r, T, sigma) {
 
 
 const stocksTotalQuantity = {};
+
 const stocksPricesHistory = [];
 const futuresPricesHistory = [];
 const optionsPricesHistory = [];
+
+const optionsStrikePricesList = [];
+
 const newsDataHistory = [];
 const newsTextHistory = [];
+
 
 let futureTimeLeft = null;
 let optionTimeLeft = null;
@@ -330,13 +348,16 @@ function calculateNextHourOptionPrice(stockData) {
     for (const [ticker, stock_prices] of Object.entries(stockData)) {
         const newOptionPrices = [];
         for (const stock_price of stock_prices) {
-            const call_1_05 = calculateCallOptionPrice(stock_price, stock_price * 1.05, getInterestRate(), convertToSimTime(optionTimeLeft / 24), sigma);
-            const call_1_00 = calculateCallOptionPrice(stock_price, stock_price * 1.00, getInterestRate(), convertToSimTime(optionTimeLeft / 24), sigma);
-            const call_0_95 = calculateCallOptionPrice(stock_price, stock_price * 0.95, getInterestRate(), convertToSimTime(optionTimeLeft / 24), sigma);
+            const call = [];
+            const put = [];
 
-            const put_1_05 = calculateCallOptionPrice(stock_price, stock_price * 1.05, getInterestRate(), convertToSimTime(optionTimeLeft / 24), sigma);
-            const put_1_00 = calculateCallOptionPrice(stock_price, stock_price * 1.00, getInterestRate(), convertToSimTime(optionTimeLeft / 24), sigma);
-            const put_0_95 = calculateCallOptionPrice(stock_price, stock_price * 0.95, getInterestRate(), convertToSimTime(optionTimeLeft / 24), sigma);
+            const call_1_05 = calculateCallOptionPrice(stock_price, stock_price * 1.05, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
+            const call_1_00 = calculateCallOptionPrice(stock_price, stock_price * 1.00, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
+            const call_0_95 = calculateCallOptionPrice(stock_price, stock_price * 0.95, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
+
+            const put_1_05 = calculateCallOptionPrice(stock_price, stock_price * 1.05, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
+            const put_1_00 = calculateCallOptionPrice(stock_price, stock_price * 1.00, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
+            const put_0_95 = calculateCallOptionPrice(stock_price, stock_price * 0.95, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
             
             newOptionPrices.push({
                 call: [
@@ -368,6 +389,20 @@ function updateFutureTimeLeft() {
     if (futureTimeLeft === 0) {
         futureTimeLeft = HOURS_IN_A_WEEK;
     }
+}
+
+function calculateOptionStrikePriceDist(price) {
+    const standardPrice = roundPos(price, -2);
+    const strikePrice = [];
+    const UNIT_DIFF = 100;
+    for (let diff = UNIT_DIFF * (-3); diff <= UNIT_DIFF * 3; diff += UNIT_DIFF) {
+        strikePrice.push(standardPrice + diff);
+    }
+    return strikePrice;
+}
+
+function updateOptionStrikePriceList() {
+
 }
 
 function updateOptionTimeLeft() {
@@ -423,16 +458,20 @@ function getStockList() {
         stock_list.push({
             ticker: ticker,
             price: stock_prices[minutes],
-            difference: ((minutes !== 0)
-                ? (stock_prices[minutes] - stock_prices[minutes - 1])
-                : (stock_prices[0] - stocksPricesHistory[stocksPricesHistory.length - 2][ticker][59]))
+            difference: (stock_prices[minutes] - stocksPricesHistory[stocksPricesHistory.length - 2][ticker][minutes])
         });
     }
     return stock_list;
 }
 
 function getFuturePrice(ticker) {
-
+    const now = new Date();
+    const minutes = now.getMinutes();
+    
+    if (ticker in futuresPricesHistory[futuresPricesHistory.length - 1]) {
+        return futuresPricesHistory[futuresPricesHistory.length - 1][ticker][minutes];
+    }
+    return null;
 }
 
 function getFutureExpirationDate() {
@@ -442,15 +481,29 @@ function getFutureExpirationDate() {
 }
 
 function getFutureList() {
+    const now = new Date();
+    const minutes = now.getMinutes();
 
+    const future_list = [];
+
+    for (const [ticker, future_prices] of Object.entries(futuresPricesHistory[futuresPricesHistory.length - 1])) {
+        future_list.push({
+            ticker: ticker,
+            price: future_prices[minutes],
+            difference: (future_prices[minutes] - futuresPricesHistory[futuresPricesHistory.length - 2][ticker][minutes])
+        });
+    }
+    return future_list;
 }
 
-function getCallOptionPrice(ticker) {
-
-}
-
-function getPutOptionPrice(ticker) {
-
+function getOptionPrice(ticker) {
+    const now = new Date();
+    const minutes = now.getMinutes();
+    
+    if (ticker in optionsPricesHistory[optionsPricesHistory.length - 1]) {
+        const optionPrice = optionsPricesHistory[optionsPricesHistory.length - 1][ticker][minutes];
+    }
+    return null;
 }
 
 function getOptionExpirationDate() {
@@ -561,8 +614,7 @@ exports.getStockList = getStockList;
 exports.getFuturePrice = getFuturePrice;
 exports.getFutureExpirationDate = getFutureExpirationDate;
 exports.getFutureList = getFutureList;
-exports.getCallOptionPrice = getCallOptionPrice;
-exports.getPutOptionPrice = getPutOptionPrice;
+exports.getOptionPrice = getOptionPrice;
 exports.getOptionExpirationDate = getOptionExpirationDate;
 exports.getOptionList = getOptionList;
 exports.getStockInfo = getStockInfo;

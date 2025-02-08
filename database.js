@@ -113,6 +113,7 @@ module.exports = {
 
             if (!newUser) {
                 serverLog(`[ERROR] Create user failed. Failed to create user data. id: ${id}`);
+                return false;
             }
 
             const newProfile = await Profile.create({
@@ -528,12 +529,13 @@ module.exports = {
             }
 
             const receiveDate = userState.subsidy_recieve_date;
+            const localDate = new Date(receiveDate.toLocaleString());
             const today = new Date();
 
-            receiveDate.setHours(0, 0, 0, 0);
+            localDate.setHours(0, 0, 0, 0);
             today.setHours(0, 0, 0, 0);
 
-            if (receiveDate < today) return false;
+            if (localDate < today) return false;
             else return true;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:checkSubsidyReceived': ${err}`);
@@ -785,26 +787,53 @@ module.exports = {
                 serverLog(`[INFO] Buy future failed. Not enough balance. id: ${id}`);
                 return false;
             }
+            
+            let quantityLeft = quantity;
+            
+            for (let i = 0; i < userAsset.futures.length; i++) {
+                const future = userAsset.futures[i];
+                if ((future.ticker === ticker) && (future.quantity < 0)) {
+                    if (Math.abs(future.quantity) > quantityLeft) {
+                        future.quantity += quantityLeft;
+                        quantityLeft = 0;
+                        break;
+                    } else if (Math.abs(future.quantity) === quantityLeft) {
+                        userAsset.futures.splice(i, 1);
+                        quantityLeft = 0;
+                        break;
+                    } else if (Math.abs(future.quantity) < quantityLeft) {
+                        quantityLeft -= Math.abs(future.quantity);
+                        userAsset.futures.splice(i, 1);
+                        i--;
+                    }
+                }
+            }
 
+            if (quantityLeft > 0) {
+                const expirationDate = getFutureExpirationDate();
+                const purchaseDate = new Date();
+                
+                userAsset.futures.push({
+                    ticker: ticker,
+                    quantity: quantity,
+                    leverage: leverage,
+                    expirationDate: expirationDate,
+                    purchasePrice: currentPrice,
+                    purchaseDate: purchaseDate,
+                });
+            }
+
+            if (userAsset.futures.length !== 0) {
+                module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
+            }
+            
             userAsset.balance -= margin;
-
-            const expirationDate = getFutureExpirationDate();
-            const purchaseDate = new Date();
-
-            userAsset.futures.push({
-                ticker: ticker,
-                quantity: quantity,
-                leverage: leverage,
-                expirationDate: expirationDate,
-                purchasePrice: currentPrice,
-                purchaseDate: purchaseDate,
-            });
 
             let totalQuantity = 0;
             let totalLevQuantity = 0;
             let totalMargin = 0;
-            let totalInitPositionValue = 0
-            
+            let totalInitPositionValue = 0;
+
             userAsset.futures.forEach((future) => {
                 if (future.ticker === ticker) {
                     totalQuantity += future.quantity;
@@ -813,21 +842,23 @@ module.exports = {
                     totalInitPositionValue += future.purchaseDate * future.quantity * future.leverage;
                 }
             });
-
+            
             let marginCallPrice;
             if (totalLevQuantity > 0) {
                 marginCallPrice = (totalInitPositionValue - totalMargin) / totalLevQuantity;
             } else if (totalLevQuantity < 0) {
-                marginCallPrice = (totalInitPositionValue + totalMargin)
+                marginCallPrice = (totalInitPositionValue + totalMargin) / totalLevQuantity;
             }
 
-            if (totalQuantity > 0) {
+            if (totalLevQuantity > 0) {
                 module.exports.setTransactionSchedule(`${id}-${ticker}_fut`, id, `settle future ${userAsset._id} buy ${totalInitPositionValue} ${Math.abs(totalLevQuantity)} ${totalMargin}`);
                 module.exports.setTransactionSchedule(`${id}-${ticker}_fut_mc`, id, `marginCall future ${userAsset._id} condition ${ticker} low ${marginCallPrice}`);
-            } else if (totalQuantity < 0) {
+            } else if (totalLevQuantity < 0) {
                 module.exports.setTransactionSchedule(`${id}-${ticker}_fut`, id, `settle future ${userAsset._id} sell ${totalInitPositionValue} ${Math.abs(totalLevQuantity)} ${totalMargin}`);
                 module.exports.setTransactionSchedule(`${id}-${ticker}_fut_mc`, id, `marginCall future ${userAsset._id} condition ${ticker} high ${marginCallPrice}`);
             }
+
+            module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
 
             const saveResult = await userAsset.save();
             if (!saveResult) {
@@ -865,7 +896,7 @@ module.exports = {
 
             for (let i = 0; i < userAsset.futures.length; i++) {
                 const future = userAsset.futures[i];
-                if (future.ticker === ticker) {
+                if ((future.ticker === ticker) || (future.quantity > 0)) {
                     if (future.quantity > quantityLeft) {
                         future.quantity -= quantityLeft;
                         quantityLeft = 0;
@@ -881,12 +912,55 @@ module.exports = {
                     }
                 }
             }
-            
-            module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
 
-            if (quantityLeft !== 0) return false;
+            if (quantityLeft !== 0) {
+                const expirationDate = getFutureExpirationDate();
+                const purchaseDate = new Date();
+
+                userAsset.futures.push({
+                    ticker: ticker,
+                    quantity: -quantityLeft,
+                    leverage: leverage,
+                    expirationDate: expirationDate,
+                    purchasePrice: currentPrice,
+                    purchaseDate: purchaseDate,
+                });
+            }
+            
+            if (userAsset.futures.length !== 0) {
+                module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
+            }
 
             userAsset.balance += transactionAmount;
+
+            let totalQuantity = 0;
+            let totalLevQuantity = 0;
+            let totalMargin = 0;
+            let totalInitPositionValue = 0;
+
+            userAsset.futures.forEach((future) => {
+                if (future.ticker === ticker) {
+                    totalQuantity += future.quantity;
+                    totalLevQuantity += future.quantity * future.leverage;
+                    totalMargin += future.purchasePrice * future.quantity;
+                    totalInitPositionValue += future.purchaseDate * future.quantity * future.leverage;
+                }
+            });
+            
+            let marginCallPrice;
+            if (totalLevQuantity > 0) {
+                marginCallPrice = (totalInitPositionValue - totalMargin) / totalLevQuantity;
+            } else if (totalLevQuantity < 0) {
+                marginCallPrice = (totalInitPositionValue + totalMargin) / totalLevQuantity;
+            }
+
+            if (totalLevQuantity > 0) {
+                module.exports.setTransactionSchedule(`${id}-${ticker}_fut`, id, `settle future ${userAsset._id} buy ${totalInitPositionValue} ${Math.abs(totalLevQuantity)} ${totalMargin}`);
+                module.exports.setTransactionSchedule(`${id}-${ticker}_fut_mc`, id, `marginCall future ${userAsset._id} condition ${ticker} low ${marginCallPrice}`);
+            } else if (totalLevQuantity < 0) {
+                module.exports.setTransactionSchedule(`${id}-${ticker}_fut`, id, `settle future ${userAsset._id} sell ${totalInitPositionValue} ${Math.abs(totalLevQuantity)} ${totalMargin}`);
+                module.exports.setTransactionSchedule(`${id}-${ticker}_fut_mc`, id, `marginCall future ${userAsset._id} condition ${ticker} high ${marginCallPrice}`);
+            }
 
             const saveResult = await userAsset.save();
             if (!saveResult) {
@@ -987,6 +1061,25 @@ module.exports = {
             return null;
         }
     },
+
+    async postNotics(title, content) {
+        try {
+            const result = await Notice.create({
+                title: title,
+                content: content,
+                date: moment(new Date()).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm'),
+            });
+
+            if (!result) {
+                serverLog(`[ERROR] Post notice failed.`);
+                return false;
+            }
+            return true;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:postNotics': ${err}`);
+            return false;
+        }
+    },
     
     async increaseLevelPoint(id) {
         const DEFAULT_POINT_REQUIRED = 100;
@@ -1039,7 +1132,7 @@ module.exports = {
     },
 
     async addAchievements(id) {
-        
+
     },
     
     async getAchievements(id) {

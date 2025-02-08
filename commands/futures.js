@@ -1,9 +1,9 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { tryGetTicker, getTickerList, getTimeRangeData } = require('../stock_system/stock_sim');
+const { tryGetTicker, getFutureList, getFutureExpirationDate } = require('../stock_system/stock_sim');
 const { getStockName } = require('../stock_system/stock_name');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
-const { checkUserExists } = require('../database');
+const { checkUserExists, futureBuy } = require('../database');
 const { generateStockChartImage } = require('../stock_system/stock_chart');
 
 module.exports = {
@@ -15,7 +15,7 @@ module.exports = {
                 .setDescription('선물 종목과 가격을 가져옵니다.')
                 .addStringOption((option) =>
                     option.setName('정렬기준')
-                        .setDescription('주식 종목을 정렬할 기준을 설정합니다.')
+                        .setDescription('종목을 정렬할 기준을 설정합니다.')
                         .setChoices(
                             { name: '가격순(높은)', value: '가격순(높은)' },
                             { name: '가격순(낮은)', value: '가격순(낮은)' },
@@ -110,22 +110,127 @@ module.exports = {
         const subCommand = interaction.options.getSubcommand;
 
         if (subCommand === '목록') {
+            let sortingOption = interaction.options.getString('정렬기준');
 
-        }
-        else if (subCommand === '정보') {
+            if (sortingOption === null) {
+                sortingOption = '가격순(높은)';
+            }
 
-        }
-        else if (subCommand === '차트') {
+            const future_list = getFutureList();
+            let stock_list_format = [];
 
-        }
-        else if (subCommand === '매수') {
+            const ticker_list = [];
+            const price_list = [];
+            const difference_list = [];
 
-        }
-        else if (subCommand === '매도') {
+            let sorted_future_list;
+            if (sortingOption === '가격순(높은)') {
+                sorted_future_list = [...future_list].sort((a, b) => b.price - a.price);
+            } else if (sortingOption === '가격순(낮은)') {
+                sorted_future_list = [...future_list].sort((a, b) => a.price - b.price);
+            } else if (sortingOption === '상승순') {
+                sorted_future_list = [...future_list].sort((a, b) => b.difference - a.difference);
+            } else if (sortingOption === '하락순') {
+                sorted_future_list = [...future_list].sort((a, b) => a.difference - b.difference);
+            }
+        } else if (subCommand === '차트') {
+            let ticker = interaction.options.getString('종목');
+            ticker = tryGetTicker(ticker.trim());
+            
+            if (ticker === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  차트 불러오기 실패')
+                            .setDescription(`존재하지 않는 종목입니다.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
+        } else if (subCommand === '매수') {
+            let ticker = interaction.options.getString('종목');
+            ticker = tryGetTicker(ticker.trim());
+            
+            if (ticker === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  주문 실패')
+                            .setDescription(`존재하지 않는 종목입니다.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
 
-        }
-        else if (subCommand === '만기일') {
+            const quantity = interaction.options.getInteger('수량');
+            const leverage = interaction.options.getInteger('레버리지');
 
+            const result = await futureBuy(interaction.user.id, ticker, quantity, leverage);
+
+            if (result === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  주문 실패')
+                            .setDescription(`오류가 발생하였습니다.
+                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else if (result === false) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  주문 실패')
+                            .setDescription(`잔액이 부족합니다.`)
+                            .setTimestamp()
+                    ],
+                });
+            } else if (result === true) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x448FE6)
+                            .setTitle(':white_check_mark:  주문 체결 완료')
+                            .setDescription(`${ticker} 선물 ${quantity}계약 매수 주문이 체결되었습니다.`)
+                            .setTimestamp()
+                    ],
+                });
+            }
+        } else if (subCommand === '매도') {
+            let ticker = interaction.options.getString('종목');
+            ticker = tryGetTicker(ticker.trim());
+            
+            if (ticker === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  주문 실패')
+                            .setDescription(`존재하지 않는 종목입니다.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
+        } else if (subCommand === '만기일') {
+            const expirationDate = getFutureExpirationDate();
+            
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle('선물 만기일')
+                        .setDescription(`${moment(expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm')}`)
+                ],
+            });
         }
     }
 }

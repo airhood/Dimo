@@ -18,6 +18,8 @@ let client;
 let channel;
 let role;
 
+let _isReady = false;
+
 function setupAdminChannel() {
     if (process.env.NODE_ENV === 'production') {
         const guild = client.guilds.cache.get(adminGuildId);
@@ -30,6 +32,8 @@ function setupAdminChannel() {
     
         role = guild.roles.cache.get('1332029929491267695');
     }
+
+    _isReady = true;
 }
 
 function sendErrorLog(message) {
@@ -56,6 +60,10 @@ function sendErrorLog(message) {
 module.exports = {
     setClient_server_logger: (_client) => {
         client = _client;
+    },
+
+    isReady() {
+        return _isReady;
     },
 
     async serverLog(message) {

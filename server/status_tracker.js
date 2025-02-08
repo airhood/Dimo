@@ -8,7 +8,7 @@ let client;
 let channel;
 let message;
 
-let serverStartTime = moment(new Date()).format('YYYY-MM-DD HH:mm');
+let serverStartTime = moment(new Date()).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
 
 async function setupStatusChannel() {
     if (process.env.NODE_ENV === 'production') {
