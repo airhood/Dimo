@@ -4,7 +4,7 @@ const moment = require('moment-timezone');
 const { getStockPrice, getFuturePrice, getCallOptionPrice, getPutOptionPrice } = require('../stock_system/stock_sim');
 const asset = require('../schemas/asset');
 
-const ROUND_POS = 1;
+const ROUND_POS = 3;
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -154,7 +154,7 @@ module.exports = {
                 stock_format += `${stock.ticker} ${stock.quantity}주
 | 현재가격: ${getStockPrice(stock.ticker)}원
 | 매수가격: ${stock.purchasePrice}원
-| 평가손익: ${getStockPrice(stock.ticker) - stock.purchasePrice}원 (${earnSign}${Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%)
+| 평가손익: ${stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)}원 (${earnSign}${(Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100}%)
 | 매수날짜: ${formattedPurchaseDate}`;
             }
 
@@ -180,7 +180,7 @@ module.exports = {
                 stock_format += `${short.ticker} ${-short.quantity}주
 | 현재가격: ${getStockPrice(short.ticker)}원
 | 매도가격: ${short.sellPrice}원
-| 평가손익: ${short.sellPrice - getStockPrice(short.ticker)}원 (${earnSign}${Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%)
+| 평가손익: ${stock.quantity * (short.sellPrice - getStockPrice(short.ticker))}원 (${earnSign}${(Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100}%)
 | 상환일: ${formattedBuyBackDate}
 | 매도날짜: ${formattedSellDate}`;
             }
@@ -198,7 +198,7 @@ module.exports = {
                     earnSign = '';
                 }
 
-                stock_format += `${stock.ticker} ${stock.quantity}주 (평가손익: ${getStockPrice(stock.ticker) - stock.purchasePrice}원 (${earnSign}${Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%))`;
+                stock_format += `${stock.ticker} ${stock.quantity}주 (평가손익: ${stocks.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)}원 (${earnSign}${Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%))`;
             }
 
             if (result.asset.stockShortSales.length > 0) {
@@ -218,7 +218,7 @@ module.exports = {
                     earnSign = '';
                 }
 
-                stock_format += `${short.ticker} ${-short.quantity}주 (평가손익: ${short.sellPrice - getStockPrice(short.ticker)}원 (${earnSign}${Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%))`;
+                stock_format += `${short.ticker} ${-short.quantity}주 (평가손익: ${short.quantity * (short.sellPrice - getStockPrice(short.ticker))}원 (${earnSign}${Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%))`;
             }
         }
 
@@ -251,7 +251,7 @@ module.exports = {
                 future_format += `${future.contract} ${future.quantity}계약
 | 현재가격: ${getFuturePrice(future.ticker)}원
 | 매수가격: ${future.purchasePrice}원
-| 평가손익: ${getFuturePrice(future.ticker) - future.purchasePrice}원 (${earnSign}${Math.round(((getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%)
+| 평가손익: ${future.quantity * (getFuturePrice(future.ticker) - future.purchasePrice)}원 (${earnSign}${Math.round(((getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%)
 | 만기일: ${formattedExpirationDate}
 | 매수날짜: ${formattedPurchaseDate})`;
             }
@@ -270,7 +270,7 @@ module.exports = {
                     earnSign = '';
                 }
 
-                future_format += `${future.contract} ${future.quantity}계약 (평가손익: ${getFuturePrice(future.ticker) - future.purchasePrice}원 (${earnSign}${Math.round(((getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%))`;
+                future_format += `${future.contract} ${future.quantity}계약 (평가손익: ${future.quantity * (getFuturePrice(future.ticker) - future.purchasePrice)}원 (${earnSign}${Math.round(((getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%))`;
             }
         }
 
@@ -311,7 +311,7 @@ module.exports = {
                 option_format += `${option.contract} ${formattedOptionType}옵션 ${option.quantity}계약
 | 현재가격: ${currentPrice}원
 | 매수가격: ${option.purchasePrice}원
-| 평가손익: ${currentPrice - option.purchasePrice}원 (${Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%)
+| 평가손익: ${option.quantity (currentPrice - option.purchasePrice)}원 (${Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%)
 | 행사가격: ${option.strikePrice}원
 | 만기일: ${formattedExpirationDate}
 | 매수날짜: ${formattedPurchaseDate})`;
@@ -343,7 +343,7 @@ module.exports = {
                 else if (option.optionType === 'put') formattedOptionType = '풋';
                 const formattedExpirationDate = moment(option.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(option.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
-                option_format += `${option.contract} ${formattedOptionType}옵션 ${option.quantity}계약 (평가손익: ${currentPrice - option.purchasePrice}원 (${Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%))`;
+                option_format += `${option.contract} ${formattedOptionType}옵션 ${option.quantity}계약 (평가손익: ${option.quantity * (currentPrice - option.purchasePrice)}원 (${Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)}%))`;
             }
         }
 

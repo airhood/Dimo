@@ -151,6 +151,7 @@ function calculatePutOptionPrice(S, K, r, T, sigma) {
 // const putOptionPrice = calculatePutOptionPrice(S, K, r, T, sigma);
 // console.log('풋옵션 가격:', putOptionPrice);
 
+const tickerList = [];
 
 const stocksTotalQuantity = {};
 
@@ -190,7 +191,7 @@ function backupRecentData() {
     serverLog('[INFO] Back-up recent stock data success');
 }
 
-function loadRecentStockData() {
+async function loadRecentStockData() {
     return new Promise((resolve, reject) => {
         fs.access('./data/stock_meta.txt', fs.constants.F_OK, (err) => {
             if (err) {
@@ -301,7 +302,9 @@ function loadRecentStockData() {
                             stocksPricesHistory.push(newStockData);
                             serverLog('[INFO] Loaded recent stock price data.');
                         }
-        
+
+                        tickerList = Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]);
+
                         resolve();
                     });
                 });
@@ -351,25 +354,16 @@ function calculateNextHourOptionPrice(stockData) {
             const call = [];
             const put = [];
 
-            const call_1_05 = calculateCallOptionPrice(stock_price, stock_price * 1.05, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
-            const call_1_00 = calculateCallOptionPrice(stock_price, stock_price * 1.00, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
-            const call_0_95 = calculateCallOptionPrice(stock_price, stock_price * 0.95, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
+            for (const strikePrice of optionsStrikePricesList) {
+                const callPrice = calculateCallOptionPrice(stock_price, strikePrice, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
+                const putPrice = calculatePutOptionPrice(stock_price, strikePrice, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
+                call.push(callPrice);
+                put.push(putPrice);
+            }
 
-            const put_1_05 = calculateCallOptionPrice(stock_price, stock_price * 1.05, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
-            const put_1_00 = calculateCallOptionPrice(stock_price, stock_price * 1.00, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
-            const put_0_95 = calculateCallOptionPrice(stock_price, stock_price * 0.95, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
-            
             newOptionPrices.push({
-                call: [
-                    call_1_05,
-                    call_1_00,
-                    call_0_95,
-                ],
-                put: [
-                    put_1_05,
-                    put_1_00,
-                    put_0_95,
-                ],
+                call: call,
+                put: put,
             });
         }
         newOptionData[ticker] = newOptionPrices;
@@ -385,10 +379,20 @@ function updateFutureTimeLeft() {
         futureTimeLeft = HOURS_IN_A_WEEK;
         return;
     }
+
     futureTimeLeft--;
+
     if (futureTimeLeft === 0) {
+        futureExpireCallback();
+
         futureTimeLeft = HOURS_IN_A_WEEK;
     }
+}
+
+let futureExpireCallback;
+
+function setFutureExpireCallback(callback) {
+    futureExpireCallback = callback;
 }
 
 function calculateOptionStrikePriceDist(price) {
@@ -402,16 +406,46 @@ function calculateOptionStrikePriceDist(price) {
 }
 
 function updateOptionStrikePriceList() {
-
+    for (const ticker of tickerList) {
+        const underlyingAssetPrice = getStockPrice(ticker);
+        optionsStrikePricesList[ticker] = calculateOptionStrikePriceDist(underlyingAssetPrice);
+    }
 }
 
 function updateOptionTimeLeft() {
     if (optionTimeLeft === null) {
         optionTimeLeft = HOURS_IN_A_WEEK;
     }
+
     optionTimeLeft--;
+
     if (optionTimeLeft === 0) {
+        optionExpireCallback();
+
         optionTimeLeft = HOURS_IN_A_WEEK;
+    }
+}
+
+let optionExpireCallback;
+
+function setOptionExpireCallback(callback) {
+    optionExpireCallback = callback;
+}
+
+const COMPRESSION_CUTOFF = 3;
+const COMPRESSION_RATE = 5;
+
+function compressOldData() {
+    for (const [ticker, stockPrices] of stocksPricesHistory[stocksPricesHistory.length - COMPRESSION_CUTOFF]) {
+        stocksPricesHistory[stocksPricesHistory.length - COMPRESSION_CUTOFF][ticker] = stockPrices.filter((_, index) => index % COMPRESSION_RATE === 0);
+    }
+
+    for (const [ticker, futurePrices] of futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF]) {
+        futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF][ticker] = futurePrices.filter((_, index) => index % COMPRESSION_RATE === 0);
+    }
+
+    for (const [ticker, optionPrices] of optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF]) {
+        optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF][ticker] = optionPrices.filter((_, index) => index % COMPRESSION_RATE === 0);
     }
 }
 
@@ -427,13 +461,14 @@ function updateStockData() {
         stocksPricesHistory.splice(0, 1);
     }
     calculateNextHourPrice();
-    backupRecentData();
     updateProductTimeLeft();
 }
 
 schedule.scheduleJob('0 * * * *', () => {
     serverLog('[INFO] Update stock data');
     updateStockData();
+    backupRecentData();
+    compressOldData();
 });
 
 exports.updateStockData = updateStockData;
@@ -501,7 +536,7 @@ function getOptionPrice(ticker) {
     const minutes = now.getMinutes();
     
     if (ticker in optionsPricesHistory[optionsPricesHistory.length - 1]) {
-        const optionPrice = optionsPricesHistory[optionsPricesHistory.length - 1][ticker][minutes];
+        return optionsPricesHistory[optionsPricesHistory.length - 1][ticker][minutes];
     }
     return null;
 }
@@ -510,10 +545,6 @@ function getOptionExpirationDate() {
     const date = new Date();
     date.setTime(date.getTime() - (optionTimeLeft * 60 * 60 * 1000));
     return date;
-}
-
-function getOptionList() {
-
 }
 
 function getStockInfo(ticker) {
@@ -540,7 +571,6 @@ function tryGetTicker(str) {
 }
 
 function getTickerList() {
-    const tickerList = Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]);
     return tickerList;
 }
 
@@ -616,8 +646,10 @@ exports.getFutureExpirationDate = getFutureExpirationDate;
 exports.getFutureList = getFutureList;
 exports.getOptionPrice = getOptionPrice;
 exports.getOptionExpirationDate = getOptionExpirationDate;
-exports.getOptionList = getOptionList;
 exports.getStockInfo = getStockInfo;
+
+exports.setFutureExpireCallback = setFutureExpireCallback;
+exports.setOptionExpireCallback = setOptionExpireCallback;
 
 exports.tryGetTicker = tryGetTicker;
 exports.getTickerList = getTickerList;

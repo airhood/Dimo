@@ -3,12 +3,20 @@ const { isReady, serverLog } = require('./server/server_logger');
 
 try {
 	(async () => {
-		await app.run();
+		const result = await app.run();
+
+		if (!result) {
+			safeLog(`[ERROR] Services not fully loaded.`);
+		}
 	})();
 } catch (err) {
+	safeLog(`[ERROR] Unexpected error: ${err}`);
+}
+
+function safeLog(message) {
 	if (isReady()) {
-		serverLog(`[ERROR] Unexpected error: ${err}`);
+		serverLog(message);
 	} else {
-		console.log(`[ERROR] Unexpected error: ${err}`);
+		console.log(message);
 	}
 }

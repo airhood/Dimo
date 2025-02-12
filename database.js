@@ -71,25 +71,32 @@ function isServersideLocked(id) {
 module.exports = {
     loadServersideLockData() {
         fs.access('serverside_locked_accounts.txt', fs.constants.F_OK, (err) => {
-            if (err) return;
+            if (err) return false;
 
             fs.readFile('serverside_locked_accounts.txt', 'utf-8', (err, data) => {
                 if (err) {
                     serverLog(`[ERROR] Error while reading 'serverside_locked_accounts.txt': ${err}`);
-                    return;
+                    return false;
                 }
         
                 serversideLockedAccounts = data.split('\n');
             });
         });
+        return true;
     },
 
     async connectDatabase() {
         if (process.env.NODE_ENV !== 'production') {
             mongoose.set('debug', true);
         }
-
-        await mongoose.connect(mongodb_url, { });
+        
+        try {
+            await mongoose.connect(mongodb_url, { });
+        } catch (err) {
+            console.log(`[ERROR] Database connect failed.`);
+            return false;
+        }
+        return true;
     },
 
     async checkUserExists(id) {
@@ -787,45 +794,18 @@ module.exports = {
                 serverLog(`[INFO] Buy future failed. Not enough balance. id: ${id}`);
                 return false;
             }
-            
-            let quantityLeft = quantity;
-            
-            for (let i = 0; i < userAsset.futures.length; i++) {
-                const future = userAsset.futures[i];
-                if ((future.ticker === ticker) && (future.quantity < 0)) {
-                    if (Math.abs(future.quantity) > quantityLeft) {
-                        future.quantity += quantityLeft;
-                        quantityLeft = 0;
-                        break;
-                    } else if (Math.abs(future.quantity) === quantityLeft) {
-                        userAsset.futures.splice(i, 1);
-                        quantityLeft = 0;
-                        break;
-                    } else if (Math.abs(future.quantity) < quantityLeft) {
-                        quantityLeft -= Math.abs(future.quantity);
-                        userAsset.futures.splice(i, 1);
-                        i--;
-                    }
-                }
-            }
 
-            if (quantityLeft > 0) {
-                const expirationDate = getFutureExpirationDate();
-                const purchaseDate = new Date();
-                
-                userAsset.futures.push({
-                    ticker: ticker,
-                    quantity: quantity,
-                    leverage: leverage,
-                    expirationDate: expirationDate,
-                    purchasePrice: currentPrice,
-                    purchaseDate: purchaseDate,
-                });
-            }
-
-            if (userAsset.futures.length !== 0) {
-                module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
-            }
+            const expirationDate = getFutureExpirationDate();
+            const purchaseDate = new Date();
+            
+            userAsset.futures.push({
+                ticker: ticker,
+                quantity: quantity,
+                leverage: leverage,
+                expirationDate: expirationDate,
+                purchasePrice: currentPrice,
+                purchaseDate: purchaseDate,
+            });
             
             userAsset.balance -= margin;
 
@@ -850,15 +830,19 @@ module.exports = {
                 marginCallPrice = (totalInitPositionValue + totalMargin) / totalLevQuantity;
             }
 
-            if (totalLevQuantity > 0) {
-                module.exports.setTransactionSchedule(`${id}-${ticker}_fut`, id, `settle future ${userAsset._id} buy ${totalInitPositionValue} ${Math.abs(totalLevQuantity)} ${totalMargin}`);
-                module.exports.setTransactionSchedule(`${id}-${ticker}_fut_mc`, id, `marginCall future ${userAsset._id} condition ${ticker} low ${marginCallPrice}`);
-            } else if (totalLevQuantity < 0) {
-                module.exports.setTransactionSchedule(`${id}-${ticker}_fut`, id, `settle future ${userAsset._id} sell ${totalInitPositionValue} ${Math.abs(totalLevQuantity)} ${totalMargin}`);
-                module.exports.setTransactionSchedule(`${id}-${ticker}_fut_mc`, id, `marginCall future ${userAsset._id} condition ${ticker} high ${marginCallPrice}`);
-            }
+            // if (totalLevQuantity > 0) {
+            //     module.exports.setTransactionSchedule(`${id}-future_mc-${userAsset.futures.length - 1}`, id, `marginCall future ${userAsset._id} condition ${ticker} low ${marginCallPrice}`);
+            // } else if (totalLevQuantity < 0) {
+            //     module.exports.setTransactionSchedule(`${id}-future_mc-${userAsset.futures.length - 1}`, id, `marginCall future ${userAsset._id} condition ${ticker} high ${marginCallPrice}`);
+            // } else {
+            //     module.exports.deleteTransactionSchedule(`${id}-future_mc-${userAsset.futures.length - 1}`);
+            // }
 
-            module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
+            if (userAsset.futures.length !== 0) {
+                module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
+            } else {
+                module.exports.deleteTransactionSchedule(`${id}_future`);
+            }
 
             const saveResult = await userAsset.save();
             if (!saveResult) {
@@ -892,44 +876,17 @@ module.exports = {
             
             const transactionAmount = currentPrice * quantity;
 
-            let quantityLeft = quantity;
+            const expirationDate = getFutureExpirationDate();
+            const purchaseDate = new Date();
 
-            for (let i = 0; i < userAsset.futures.length; i++) {
-                const future = userAsset.futures[i];
-                if ((future.ticker === ticker) || (future.quantity > 0)) {
-                    if (future.quantity > quantityLeft) {
-                        future.quantity -= quantityLeft;
-                        quantityLeft = 0;
-                        break;
-                    } else if (future.quantity === quantityLeft) {
-                        userAsset.futures.splice(i, 1);
-                        quantityLeft = 0;
-                        break;
-                    } else if (future.quantity < quantityLeft) {
-                        quantityLeft -= future.quantity;
-                        userAsset.futures.splice(i, 1);
-                        i--;
-                    }
-                }
-            }
-
-            if (quantityLeft !== 0) {
-                const expirationDate = getFutureExpirationDate();
-                const purchaseDate = new Date();
-
-                userAsset.futures.push({
-                    ticker: ticker,
-                    quantity: -quantityLeft,
-                    leverage: leverage,
-                    expirationDate: expirationDate,
-                    purchasePrice: currentPrice,
-                    purchaseDate: purchaseDate,
-                });
-            }
-            
-            if (userAsset.futures.length !== 0) {
-                module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
-            }
+            userAsset.futures.push({
+                ticker: ticker,
+                quantity: -quantity,
+                leverage: leverage,
+                expirationDate: expirationDate,
+                purchasePrice: currentPrice,
+                purchaseDate: purchaseDate,
+            });
 
             userAsset.balance += transactionAmount;
 
@@ -954,12 +911,18 @@ module.exports = {
                 marginCallPrice = (totalInitPositionValue + totalMargin) / totalLevQuantity;
             }
 
-            if (totalLevQuantity > 0) {
-                module.exports.setTransactionSchedule(`${id}-${ticker}_fut`, id, `settle future ${userAsset._id} buy ${totalInitPositionValue} ${Math.abs(totalLevQuantity)} ${totalMargin}`);
-                module.exports.setTransactionSchedule(`${id}-${ticker}_fut_mc`, id, `marginCall future ${userAsset._id} condition ${ticker} low ${marginCallPrice}`);
-            } else if (totalLevQuantity < 0) {
-                module.exports.setTransactionSchedule(`${id}-${ticker}_fut`, id, `settle future ${userAsset._id} sell ${totalInitPositionValue} ${Math.abs(totalLevQuantity)} ${totalMargin}`);
-                module.exports.setTransactionSchedule(`${id}-${ticker}_fut_mc`, id, `marginCall future ${userAsset._id} condition ${ticker} high ${marginCallPrice}`);
+            // if (totalLevQuantity > 0) {
+            //     module.exports.setTransactionSchedule(`${id}-future_mc-${userAsset.futures.length - 1}`, id, `marginCall future ${userAsset._id} condition ${ticker} low ${marginCallPrice}`);
+            // } else if (totalLevQuantity < 0) {
+            //     module.exports.setTransactionSchedule(`${id}-future_mc-${userAsset.futures.length - 1}`, id, `marginCall future ${userAsset._id} condition ${ticker} high ${marginCallPrice}`);
+            // } else {
+            //     module.exports.deleteTransactionSchedule(`${id}-future_mc-${userAsset.futures.length - 1}`);
+            // }
+
+            if (userAsset.futures.length !== 0) {
+                module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
+            } else {
+                module.exports.deleteTransactionSchedule(`${id}_future`);
             }
 
             const saveResult = await userAsset.save();
@@ -976,24 +939,81 @@ module.exports = {
         }
     },
 
-    async callOptionBuy(id, ticker, quantity, strikePrice) {
+    async futureLiquidate(id, positionNum) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+            
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return null;
+            }
 
+            const position = userAsset.futures[positionNum - 1];
+            const ticker = position.ticker;
+            const currentPrice = getFuturePrice(ticker);
+            const quantity = position.quantity;
+
+            const transactionAmount = currentPrice * quantity;
+            userAsset.balance += transactionAmount;
+            if (quantity > 0) {
+                
+            } else if (quantity < 0) {
+
+            }
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:futureSell': ${err}`);
+            return null;
+        }
+    },
+
+    async callOptionBuy(id, ticker, quantity, strikePrice) {
+        try {
+
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:callOptionBuy': ${err}`);
+            return null;
+        }
     },
 
     async callOptionSell(id, ticker, quantity, strikePrice) {
+        try {
 
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:callOptionSell': ${err}`);
+            return null;
+        }
     },
 
     async putOptionBuy(id, ticker, quantity, strikePrice) {
+        try {
 
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:putOptionBuy': ${err}`);
+            return null;
+        }
     },
 
     async putOptionSell(id, ticker, quantity, strikePrice) {
+        try {
 
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:putOptionSell': ${err}`);
+            return null;
+        }
     },
 
     async binaryOption(id, ticker, type, amount) {
+        try {
 
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:binaryOption': ${err}`);
+            return null;
+        }
     },
 
     async setTransactionSchedule(identification_code, subject, command) {
@@ -1044,6 +1064,20 @@ module.exports = {
             return true;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:deleteTransactionSchedule': ${err}`);
+            return false;
+        }
+    },
+
+    async getTransactionScheduleData() {
+        try {
+            const data = await TransactionSchedule.find();
+            
+            if (data.length === 0) {
+                return null;
+            }
+            return data;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getTransactionScheduleData': ${err}`);
             return false;
         }
     },

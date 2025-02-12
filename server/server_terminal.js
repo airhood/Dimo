@@ -27,7 +27,7 @@ module.exports = {
                 removeKeyword(keyword.trim());
             });
         
-        program.command('notice "[title...]" "[content...]"')
+        program.command('notice "<title...>" "<content...>"')
             .action((title, content) => {
                 postNotics(title.join(' '), content.join(' '));
             });

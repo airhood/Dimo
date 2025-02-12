@@ -1,8 +1,6 @@
 const axios = require('axios');
 const fs = require('fs');
 const { getStockName } = require('./stock_name');
-// import axios from 'axios';
-// import fs from 'fs';
 
 let index = 0;
 
@@ -14,19 +12,16 @@ async function generateStockChartImage(ticker, timeRangeData, targetMinuteIndex)
     const maxHourIndex = timeRangeData.length - 1;
     const maxMinuteIndex = timeRangeData[maxHourIndex][0].prices.length - 1;
     const currentTime = (maxHourIndex * 60) + maxMinuteIndex;
-
-    console.log('maxHourIndex: ', maxHourIndex);
-    console.log('maxMinuteIndex: ', maxMinuteIndex);
-    console.log('currentTime: ', currentTime);
     
     timeRangeData.forEach((hourData, hour) => {
         hourData.forEach((priceData) => {
             const ticker = priceData.ticker;
-            console.log(`ticker: ${ticker}`);
-            console.log(`hourData.prices: ${priceData.prices}`);
 
             const data = priceData.prices.map((price, minute) => {
-                const time = (hour * 60) + minute;
+                let time = (hour * 60) + minute;
+                if (hour === 0) {
+                    time += targetMinuteIndex;
+                }
                 const relTime = time - currentTime;
                 return [relTime, price];
             });

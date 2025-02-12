@@ -73,7 +73,9 @@ module.exports = {
                 sendErrorLog(message);
             }
         }
-        serverLogBuffer.push(message);
+
+        const formattedDate = moment(new Date()).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+        serverLogBuffer.push(`[${formattedDate}] ${message}`);
 
         if (serverLogBuffer.length >= 20) {
             archiveLog();
