@@ -15,28 +15,9 @@ async function cacheTransactionScheduleData() {
         return false;
     } else if (data !== null) {
         data.forEach((transaction_schedule) => {
-            const command_args = transaction_schedule.command.split(' ');
-            
-            program.command('buyback stock <asset_id> <ticker> <quantity> at <time>')
-                .action((asset_id, ticker, quantity, time) => {
-                    const transaction_schedule = {
-                        asset_id: asset_id,
-                        ticker: ticker,
-                        quantity: quantity,
-                        time: new Date().setTime(time),
-                    };
-
-                    short_buyback_list.push(transaction_schedule);
-                });
-            
-            program.command('settle future <asset_id>')
-                .action((asset_id) => {
-                    const transaction_schedule = {
-                        asset_id: asset_id,
-                    };
-
-                    future_settle_list.push(transaction_schedule);
-                });
+            const commandArgs = transaction_schedule.command.split(' ');
+            const customArgs = ['node', 'index.js', ...commandArgs];
+            program.parse(customArgs);
         });
         return true;
     }
@@ -47,6 +28,27 @@ const Asset = require('../schemas/asset');
 
 module.exports = {
     async initScheduleManager() {
+        program.command('buyback stock <asset_id> <ticker> <quantity> at <time>')
+            .action((asset_id, ticker, quantity, time) => {
+                const transaction_schedule = {
+                    asset_id: asset_id,
+                    ticker: ticker,
+                    quantity: quantity,
+                    time: new Date().setTime(time),
+                };
+        
+                short_buyback_list.push(transaction_schedule);
+            });
+        
+        program.command('settle future <asset_id>')
+            .action((asset_id) => {
+                const transaction_schedule = {
+                    asset_id: asset_id,
+                };
+        
+                future_settle_list.push(transaction_schedule);
+            });
+
         const result = cacheTransactionScheduleData();
         if (!result) return false;
 

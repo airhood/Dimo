@@ -10,7 +10,7 @@ const rl = readline.createInterface({
 });
 
 module.exports = {
-    setTerminal() {
+    initTerminal() {
         program.command('ban <id> "[details...]"')
             .action((id, details) => {
                 const detailsContent = details.join(' ');

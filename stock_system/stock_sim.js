@@ -168,6 +168,8 @@ const newsTextHistory = [];
 let futureTimeLeft = null;
 let optionTimeLeft = null;
 
+let lastContent;
+const hourDataDivider = '---';
 function backupRecentData() {
     let content = '';
     for (const [ticker, stockPrices] of Object.entries(stocksPricesHistory[stocksPricesHistory.length - 1])) {
@@ -175,11 +177,20 @@ function backupRecentData() {
     }
 
     if (content !== '') {
-        fs.writeFile('./data/recent-stock_prices.txt', content, 'utf-8', (err) => {
-            if (err) {
-                serverLog(`[ERROR] Error writing 'recent-stock_prices.txt': ${err}`);
-            }
-        });
+        if (lastContent) {
+            const formattedContent = `${lastContent}\n${hourDataDivider}\n${content}`;
+            fs.writeFile('./data/recent-stock_prices.txt', formattedContent, 'utf-8', (err) => {
+                if (err) {
+                    serverLog(`[ERROR] Error writing 'recent-stock_prices.txt': ${err}`);
+                }
+            });
+        } else {
+            fs.writeFile('./data/recent-stock_prices.txt', content, 'utf-8', (err) => {
+                if (err) {
+                    serverLog(`[ERROR] Error writing 'recent-stock_prices.txt': ${err}`);
+                }
+            });
+        }
 
         fs.appendFile('./data/stock_prices.txt', '<__hr__>\n' + content, 'utf-8', (err) => {
             if (err) {
@@ -187,6 +198,8 @@ function backupRecentData() {
             }
         });
     }
+
+    lastContent = content;
 
     serverLog('[INFO] Back-up recent stock data success');
 }
@@ -244,6 +257,7 @@ async function loadRecentStockData() {
                             return resolve();
                         }
         
+                        const previousHourStockData = {};
                         const newStockData = {};
                         const lines = data.split('\n');
         
@@ -283,27 +297,51 @@ async function loadRecentStockData() {
                             backupRecentData();
                         }
                         else {
+                            let hourIndex = 0;
                             lines.forEach(line => {
                                 if (line.startsWith('[') && line.endsWith(']')) {
                                     if (currentTicker) {
-                                        newStockData[currentTicker] = currentPrices;
+                                        if (hourIndex === 0) {
+                                            previousHourStockData[currentTicker] = currentPrices;
+                                        } else if (hourIndex === 1) {
+                                            newStockData[currentTicker] = currentPrices;
+                                        } else {
+                                            serverLog('[ERROR] Error loading recent stock data: Wrong hour index.');
+                                        }
                                     }
                                     currentTicker = line.slice(1, -1);
                                     currentPrices = [];
+                                } else if (line.trim() === hourDataDivider) {
+                                    if (hourIndex === 0) {
+                                        previousHourStockData[currentTicker] = currentPrices;
+                                    } else if (hourIndex === 1) {
+                                        newStockData[currentTicker] = currentPrices;
+                                    } else {
+                                        serverLog('[ERROR] Error loading recent stock data: Wrong hour index.');
+                                    }
+                                    hourIndex++;
+                                    currentTicker = undefined;
                                 } else if (line.trim() !== '') {
                                     currentPrices.push(parseFloat(line.trim()));
                                 }
                             });
                             
                             if (currentTicker) {
-                                newStockData[currentTicker] = currentPrices;
+                                if (hourIndex === 0) {
+                                    previousHourStockData[currentTicker] = currentPrices;
+                                } else if (hourIndex === 1) {
+                                    newStockData[currentTicker] = currentPrices;
+                                } else {
+                                    serverLog('[ERROR] Error loading recent stock data: Wrong hour index.');
+                                }
                             }
-        
+                            
+                            stocksPricesHistory.push(previousHourStockData);
                             stocksPricesHistory.push(newStockData);
                             serverLog('[INFO] Loaded recent stock price data.');
                         }
 
-                        tickerList = Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]);
+                        tickerList.push(...Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]));
 
                         resolve();
                     });

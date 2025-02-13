@@ -1,7 +1,7 @@
 const { connectDatabase, loadServersideLockData } = require('./database');
 const { serverLog } = require('./server/server_logger');
 const { loadRecentStockData } = require('./stock_system/stock_sim');
-const { setTerminal } = require('./server/server_terminal');
+const { initTerminal } = require('./server/server_terminal');
 const { startBucketCycle } = require('./message_reference_tracker');
 const { initResourceMonitor, checkResource } = require('./server/resource_monitor');
 const { initScheduleManager } = require('./stock_system/transaction_schedule_manager');
@@ -12,7 +12,7 @@ module.exports = {
     async run() {
         initResourceMonitor();
         
-        setTerminal();
+        initTerminal();
         
         const result1 = await connectDatabase();
         if (!result1) return false;
