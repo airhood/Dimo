@@ -185,11 +185,7 @@ function backupRecentData() {
                 }
             });
         } else {
-            fs.writeFile('./data/recent-stock_prices.txt', content, 'utf-8', (err) => {
-                if (err) {
-                    serverLog(`[ERROR] Error writing 'recent-stock_prices.txt': ${err}`);
-                }
-            });
+            serverLog(`[ERROR] Error writing 'recent-stock_prices.txt': lastContent undefined.`);
         }
 
         fs.appendFile('./data/stock_prices.txt', '<__hr__>\n' + content, 'utf-8', (err) => {
@@ -284,22 +280,33 @@ async function loadRecentStockData() {
                             }
         
                             serverLog('[INFO] Loaded stock initial price data.');
-        
+
+                            const fillinStockData = {};
+                            const fillinNewsData = {};
                             const firstStockData = {};
-                            let firstNewsData;
-                            for ([ticker, stockPrices] of Object.entries(newStockData)) {
-                                [new_stockPrices, newsData] = simulateStockPrice(stockPrices[0], sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, false);
+                            const firstNewsData = {};
+                            for (const [ticker, stockPrices] of Object.entries(newStockData)) {
+                                let [new_stockPrices, newsData] = simulateStockPrice(stockPrices[0], sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, false);
+                                fillinStockData[ticker] = new_stockPrices;
+                                fillinNewsData[ticker] = newsData;
+                            }
+                            stocksPricesHistory.push(fillinStockData);
+                            newsDataHistory.push(fillinNewsData);
+
+                            for (const [ticker, stockPrices] of Object.entries(fillinStockData)) {
+                                let [new_stockPrices, newsData] = simulateStockPrice(stockPrices[0], sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, false);
                                 firstStockData[ticker] = new_stockPrices;
-                                firstNewsData = newsData;
+                                firstNewsData[ticker] = newsData;
                             }
                             stocksPricesHistory.push(firstStockData);
                             newsDataHistory.push(firstNewsData);
+                            
                             backupRecentData();
                         }
                         else {
                             let hourIndex = 0;
                             lines.forEach(line => {
-                                if (line.startsWith('[') && line.endsWith(']')) {
+                                if (line.trim().startsWith('[') && line.trim().endsWith(']')) {
                                     if (currentTicker) {
                                         if (hourIndex === 0) {
                                             previousHourStockData[currentTicker] = currentPrices;
@@ -309,7 +316,7 @@ async function loadRecentStockData() {
                                             serverLog('[ERROR] Error loading recent stock data: Wrong hour index.');
                                         }
                                     }
-                                    currentTicker = line.slice(1, -1);
+                                    currentTicker = line.trim().slice(1, -1);
                                     currentPrices = [];
                                 } else if (line.trim() === hourDataDivider) {
                                     if (hourIndex === 0) {
@@ -335,6 +342,7 @@ async function loadRecentStockData() {
                                     serverLog('[ERROR] Error loading recent stock data: Wrong hour index.');
                                 }
                             }
+
                             
                             stocksPricesHistory.push(previousHourStockData);
                             stocksPricesHistory.push(newStockData);
@@ -355,7 +363,7 @@ function calculateNextHourPrice() {
     const newStockData = {};
     const newNewsData = {};
 
-    for (const [ticker, stock_prices] of Object.entries(stocksPricesHistory[stocksPricesHistory.length - 1])) {
+    for (const [ticker, stock_prices] in Object.entries(stocksPricesHistory[stocksPricesHistory.length - 1])) {
         const bigNewsOccurred = Math.random() < 0.00001; // 0.001%
         const [new_stock_prices, _newNewsData] = simulateStockPrice(stock_prices[59], sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, bigNewsOccurred);
         newStockData[ticker] = new_stock_prices;
@@ -474,15 +482,15 @@ const COMPRESSION_CUTOFF = 3;
 const COMPRESSION_RATE = 5;
 
 function compressOldData() {
-    for (const [ticker, stockPrices] of stocksPricesHistory[stocksPricesHistory.length - COMPRESSION_CUTOFF]) {
+    for (const [ticker, stockPrices] in stocksPricesHistory[stocksPricesHistory.length - COMPRESSION_CUTOFF]) {
         stocksPricesHistory[stocksPricesHistory.length - COMPRESSION_CUTOFF][ticker] = stockPrices.filter((_, index) => index % COMPRESSION_RATE === 0);
     }
 
-    for (const [ticker, futurePrices] of futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF]) {
+    for (const [ticker, futurePrices] in futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF]) {
         futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF][ticker] = futurePrices.filter((_, index) => index % COMPRESSION_RATE === 0);
     }
 
-    for (const [ticker, optionPrices] of optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF]) {
+    for (const [ticker, optionPrices] in optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF]) {
         optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF][ticker] = optionPrices.filter((_, index) => index % COMPRESSION_RATE === 0);
     }
 }
@@ -515,7 +523,7 @@ function getStockPrice(ticker) {
     const now = new Date();
     const minutes = now.getMinutes();
     
-    if (ticker in stocksPricesHistory[stocksPricesHistory.length - 1]) {
+    if (tickerList.includes(ticker)) {
         return stocksPricesHistory[stocksPricesHistory.length - 1][ticker][minutes];
     }
     return null;
