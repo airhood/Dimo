@@ -613,7 +613,7 @@ module.exports = {
 
             const currentPrice = getStockPrice(ticker);
             
-            const transactionAmount = currentPrice * quantity;;
+            const transactionAmount = currentPrice * quantity;
 
             let quantityLeft = quantity;
 
@@ -805,6 +805,7 @@ module.exports = {
                 expirationDate: expirationDate,
                 purchasePrice: currentPrice,
                 purchaseDate: purchaseDate,
+                margin: margin,
             });
             
             userAsset.balance -= margin;
@@ -823,12 +824,12 @@ module.exports = {
                 }
             });
             
-            let marginCallPrice;
-            if (totalLevQuantity > 0) {
-                marginCallPrice = (totalInitPositionValue - totalMargin) / totalLevQuantity;
-            } else if (totalLevQuantity < 0) {
-                marginCallPrice = (totalInitPositionValue + totalMargin) / totalLevQuantity;
-            }
+            // let marginCallPrice;
+            // if (totalLevQuantity > 0) {
+            //     marginCallPrice = (totalInitPositionValue - totalMargin) / totalLevQuantity;
+            // } else if (totalLevQuantity < 0) {
+            //     marginCallPrice = (totalInitPositionValue + totalMargin) / totalLevQuantity;
+            // }
 
             // if (totalLevQuantity > 0) {
             //     module.exports.setTransactionSchedule(`${id}-future_mc-${userAsset.futures.length - 1}`, id, `marginCall future ${userAsset._id} condition ${ticker} low ${marginCallPrice}`);
@@ -873,12 +874,17 @@ module.exports = {
             }
 
             const currentPrice = getStockPrice(ticker);
-            
-            const transactionAmount = currentPrice * quantity;
+
+            const margin = currentPrice * quantity;
+
+            if (userAsset.balance < margin) {
+                serverLog(`[INFO] Buy future failed. Not enough balance. id: ${id}`);
+                return false;
+            }
 
             const expirationDate = getFutureExpirationDate();
             const purchaseDate = new Date();
-
+            
             userAsset.futures.push({
                 ticker: ticker,
                 quantity: -quantity,
@@ -886,9 +892,10 @@ module.exports = {
                 expirationDate: expirationDate,
                 purchasePrice: currentPrice,
                 purchaseDate: purchaseDate,
+                margin: margin,
             });
-
-            userAsset.balance += transactionAmount;
+            
+            userAsset.balance -= margin;
 
             let totalQuantity = 0;
             let totalLevQuantity = 0;
@@ -904,12 +911,12 @@ module.exports = {
                 }
             });
             
-            let marginCallPrice;
-            if (totalLevQuantity > 0) {
-                marginCallPrice = (totalInitPositionValue - totalMargin) / totalLevQuantity;
-            } else if (totalLevQuantity < 0) {
-                marginCallPrice = (totalInitPositionValue + totalMargin) / totalLevQuantity;
-            }
+            // let marginCallPrice;
+            // if (totalLevQuantity > 0) {
+            //     marginCallPrice = (totalInitPositionValue - totalMargin) / totalLevQuantity;
+            // } else if (totalLevQuantity < 0) {
+            //     marginCallPrice = (totalInitPositionValue + totalMargin) / totalLevQuantity;
+            // }
 
             // if (totalLevQuantity > 0) {
             //     module.exports.setTransactionSchedule(`${id}-future_mc-${userAsset.futures.length - 1}`, id, `marginCall future ${userAsset._id} condition ${ticker} low ${marginCallPrice}`);
