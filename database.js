@@ -693,7 +693,6 @@ module.exports = {
             });
 
             module.exports.setTransactionSchedule(`${id}-${ticker}_short_${userAsset.stockShortSales.length - 1}`, id, `buyback stock ${userAsset._id} ${ticker} ${quantity} at ${buyBackDate.getTime()}`)
-            module.exports.setTransactionSchedule(`${id}-${ticker}_short_${userAsset.stockShortSales.length - 1}`, id, `marginCall short `)
 
             const saveResult = await userAsset.save();
             if (!saveResult) {

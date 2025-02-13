@@ -7,7 +7,7 @@ const { getInterestRate } = require('./bank_manager');
 
 
 const sigma = 0.004;  // 변동성 (일일 변동성)
-const days = 1440;  // 시뮬레이션 기간 (1440분 = 1일)
+const days = 60;  // 시뮬레이션 기간 (60분 = 1시간)
 const shockProbability = 0.07;  // 급등/급락 확률
 const shockMagnitude = 0.007;  // 급등/급락 폭 (0.08%)
 const newsImpact = 0.01;  // 뉴스 발표 시 가격 변화 (1%)
@@ -16,12 +16,13 @@ const minBigNewsDuration = 20;  // 큰 뉴스가 지속되는 최소 일수
 const maxBigNewsDuration = 50;  // 큰 뉴스가 지속되는 최대 일수
 
 function roundPos(number, pos) {
-    return Math.round(number * Math.pow(pos)) / Math.pow(pos);
+    return Math.round(number * Math.pow(10, pos)) / Math.pow(10, pos);
 }
 
 function simulateStockPrice(initialPrice, sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, bigNews) {
     const prices = [];
     const newsData = [];
+
     let currentPrice = initialPrice;
 
     let newsDuration = 0;
@@ -170,7 +171,7 @@ let optionTimeLeft = null;
 
 let lastContent;
 const hourDataDivider = '---';
-function backupRecentData() {
+function backupRecentData(init) {
     let content = '';
     for (const [ticker, stockPrices] of Object.entries(stocksPricesHistory[stocksPricesHistory.length - 1])) {
         content += `[${ticker}]\n${stockPrices.join('\n')}\n`;
@@ -184,7 +185,7 @@ function backupRecentData() {
                     serverLog(`[ERROR] Error writing 'recent-stock_prices.txt': ${err}`);
                 }
             });
-        } else {
+        } else if (!init) {
             serverLog(`[ERROR] Error writing 'recent-stock_prices.txt': lastContent undefined.`);
         }
 
@@ -285,13 +286,17 @@ async function loadRecentStockData() {
                             const fillinNewsData = {};
                             const firstStockData = {};
                             const firstNewsData = {};
+
                             for (const [ticker, stockPrices] of Object.entries(newStockData)) {
-                                let [new_stockPrices, newsData] = simulateStockPrice(stockPrices[0], sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, false);
+                                const [new_stockPrices, newsData] = simulateStockPrice(stockPrices[0], sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, false);
                                 fillinStockData[ticker] = new_stockPrices;
                                 fillinNewsData[ticker] = newsData;
                             }
                             stocksPricesHistory.push(fillinStockData);
                             newsDataHistory.push(fillinNewsData);
+                            calculateNextHourFuturePrice(fillinStockData);
+                            calculateNextHourOptionPrice(fillinStockData);
+                            backupRecentData(true);
 
                             for (const [ticker, stockPrices] of Object.entries(fillinStockData)) {
                                 let [new_stockPrices, newsData] = simulateStockPrice(stockPrices[0], sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, false);
@@ -300,31 +305,44 @@ async function loadRecentStockData() {
                             }
                             stocksPricesHistory.push(firstStockData);
                             newsDataHistory.push(firstNewsData);
-                            
-                            backupRecentData();
+                            calculateNextHourFuturePrice(firstStockData);
+                            calculateNextHourOptionPrice(firstStockData);
+                            backupRecentData(false);
                         }
                         else {
                             let hourIndex = 0;
                             lines.forEach(line => {
                                 if (line.trim().startsWith('[') && line.trim().endsWith(']')) {
                                     if (currentTicker) {
+                                        if (currentPrices.length !== 60) {
+                                            serverLog(`[ERROR] Wrong price data length. length: ${currentPrices.length}`);
+                                            return reject(new Error('Wrong price data length'));
+                                        } else {
+                                            if (hourIndex === 0) {
+                                                previousHourStockData[currentTicker] = currentPrices;
+                                            } else if (hourIndex === 1) {
+                                                newStockData[currentTicker] = currentPrices;
+                                            } else {
+                                                serverLog('[ERROR] Error loading recent stock data: Wrong hour index.');
+                                                return reject(new Error('Wrong hour index'));
+                                            }
+                                        }
+                                    }
+                                    currentTicker = line.trim().slice(1, -1);
+                                    currentPrices = [];
+                                } else if (line.trim() === hourDataDivider) {
+                                    if (currentPrices.length !== 60) {
+                                        serverLog(`[ERROR] Wrong price data length. length: ${currentPrices.length}`);
+                                        return reject(new Error('Wrong price data length'));
+                                    } else {
                                         if (hourIndex === 0) {
                                             previousHourStockData[currentTicker] = currentPrices;
                                         } else if (hourIndex === 1) {
                                             newStockData[currentTicker] = currentPrices;
                                         } else {
                                             serverLog('[ERROR] Error loading recent stock data: Wrong hour index.');
+                                            return reject(new Error('Wrong hour index'));
                                         }
-                                    }
-                                    currentTicker = line.trim().slice(1, -1);
-                                    currentPrices = [];
-                                } else if (line.trim() === hourDataDivider) {
-                                    if (hourIndex === 0) {
-                                        previousHourStockData[currentTicker] = currentPrices;
-                                    } else if (hourIndex === 1) {
-                                        newStockData[currentTicker] = currentPrices;
-                                    } else {
-                                        serverLog('[ERROR] Error loading recent stock data: Wrong hour index.');
                                     }
                                     hourIndex++;
                                     currentTicker = undefined;
@@ -334,18 +352,30 @@ async function loadRecentStockData() {
                             });
                             
                             if (currentTicker) {
-                                if (hourIndex === 0) {
-                                    previousHourStockData[currentTicker] = currentPrices;
-                                } else if (hourIndex === 1) {
-                                    newStockData[currentTicker] = currentPrices;
+                                if (currentPrices.length !== 60) {
+                                    serverLog(`[ERROR] Wrong price data length. length: ${currentPrices.length}`);
+                                    return reject(new Error('Wrong price data length'));
                                 } else {
-                                    serverLog('[ERROR] Error loading recent stock data: Wrong hour index.');
+                                    if (hourIndex === 0) {
+                                        previousHourStockData[currentTicker] = currentPrices;
+                                    } else if (hourIndex === 1) {
+                                        newStockData[currentTicker] = currentPrices;
+                                    } else {
+                                        serverLog('[ERROR] Error loading recent stock data: Wrong hour index.');
+                                        return reject(new Error('Wrong hour index'));
+                                    }
                                 }
                             }
 
                             
                             stocksPricesHistory.push(previousHourStockData);
+                            calculateNextHourFuturePrice(previousHourStockData);
+                            calculateNextHourOptionPrice(previousHourStockData);
+                            backupRecentData(true);
                             stocksPricesHistory.push(newStockData);
+                            calculateNextHourFuturePrice(newStockData);
+                            calculateNextHourOptionPrice(newStockData);
+                            backupRecentData(false);
                             serverLog('[INFO] Loaded recent stock price data.');
                         }
 
@@ -363,7 +393,9 @@ function calculateNextHourPrice() {
     const newStockData = {};
     const newNewsData = {};
 
-    for (const [ticker, stock_prices] in Object.entries(stocksPricesHistory[stocksPricesHistory.length - 1])) {
+    console.log(`stocksPricesHistory: ${JSON.stringify(stocksPricesHistory)}`);
+
+    for (const [ticker, stock_prices] of Object.entries(stocksPricesHistory[stocksPricesHistory.length - 1])) {
         const bigNewsOccurred = Math.random() < 0.00001; // 0.001%
         const [new_stock_prices, _newNewsData] = simulateStockPrice(stock_prices[59], sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, bigNewsOccurred);
         newStockData[ticker] = new_stock_prices;
@@ -482,16 +514,16 @@ const COMPRESSION_CUTOFF = 3;
 const COMPRESSION_RATE = 5;
 
 function compressOldData() {
-    for (const [ticker, stockPrices] in stocksPricesHistory[stocksPricesHistory.length - COMPRESSION_CUTOFF]) {
+    for (const [ticker, stockPrices] of Object.entries(stocksPricesHistory[stocksPricesHistory.length - COMPRESSION_CUTOFF])) {
         stocksPricesHistory[stocksPricesHistory.length - COMPRESSION_CUTOFF][ticker] = stockPrices.filter((_, index) => index % COMPRESSION_RATE === 0);
     }
 
-    for (const [ticker, futurePrices] in futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF]) {
-        futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF][ticker] = futurePrices.filter((_, index) => index % COMPRESSION_RATE === 0);
+    for (const [ticker, futurePrices] of Object.entries(futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF])) {
+        futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF][ticker] = futurePrices.filter((_, index) => index % COMPRESSION_RATE == 0);
     }
 
-    for (const [ticker, optionPrices] in optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF]) {
-        optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF][ticker] = optionPrices.filter((_, index) => index % COMPRESSION_RATE === 0);
+    for (const [ticker, optionPrices] of Object.entries(optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF])) {
+        optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF][ticker] = optionPrices.filter((_, index) => index % COMPRESSION_RATE == 0);
     }
 }
 
@@ -510,10 +542,18 @@ function updateStockData() {
     updateProductTimeLeft();
 }
 
-schedule.scheduleJob('0 * * * *', () => {
+// schedule.scheduleJob('0 * * * *', () => {
+//     serverLog('[INFO] Update stock data');
+//     updateStockData();
+//     backupRecentData();
+//     compressOldData();
+// });
+
+// test
+schedule.scheduleJob('* * * * *', () => {
     serverLog('[INFO] Update stock data');
     updateStockData();
-    backupRecentData();
+    backupRecentData(false);
     compressOldData();
 });
 

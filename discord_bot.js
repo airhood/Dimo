@@ -84,10 +84,10 @@ module.exports = {
 		
 		client.once(Events.ClientReady, (readyClient) => {
 			serverLog(`[INFO] Bot ready! Logged in as ${readyClient.user.tag}`);
-			setupAdminChannel();
-			setupStatusChannel();
 			setClient_server_logger(client);
 			setClient_status_tracker(client);
+			setupAdminChannel();
+			setupStatusChannel();
 		});
 		
 		client.on(Events.MessageCreate, async (message) => {
