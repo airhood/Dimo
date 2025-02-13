@@ -393,8 +393,6 @@ function calculateNextHourPrice() {
     const newStockData = {};
     const newNewsData = {};
 
-    console.log(`stocksPricesHistory: ${JSON.stringify(stocksPricesHistory)}`);
-
     for (const [ticker, stock_prices] of Object.entries(stocksPricesHistory[stocksPricesHistory.length - 1])) {
         const bigNewsOccurred = Math.random() < 0.00001; // 0.001%
         const [new_stock_prices, _newNewsData] = simulateStockPrice(stock_prices[59], sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, bigNewsOccurred);

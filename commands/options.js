@@ -116,7 +116,7 @@ module.exports = {
                         .addIntegerOption((option) =>
                             option.setName('수량')
                                 .setDescription('매수할 풋옵션의 수량')
-                                .setMinValue(1)
+                                .setMinValue(0)
                                 .setRequired(true)
                         )
                         .addIntegerOption((option) =>
@@ -137,7 +137,7 @@ module.exports = {
                         .addIntegerOption((option) =>
                             option.setName('수량')
                                 .setDescription('매도할 풋옵션의 수량')
-                                .setMinValue(1)
+                                .setMinValue(0)
                                 .setRequired(true)
                         )
                         .addIntegerOption((option) =>

@@ -352,6 +352,7 @@ module.exports = {
             }
 
             userFromAsset.balance -= amount;
+            userFromAsset.balance = Math.round(userFromAsset.balance);
             const saveFromResult = await userFromAsset.save();
 
             if (!saveFromResult) {
@@ -360,12 +361,14 @@ module.exports = {
             }
 
             userToAsset.balance += amount;
+            userToAsset.balance = Math.round(userToAsset.balance);
             const saveToResult = await userToAsset.save();
 
             if (!saveToResult) {
                 serverLog(`[ERROR] Money transfer failed. Failed to save toUser: ${to}. Canceling transaction.`);
 
                 userFromAsset.balance += amount;
+                userFromAsset.balance = Math.round(userFromAsset.balance);
                 const rollbackFromUserResult = await userFromAsset.save();
 
                 if (!rollbackFromUserResult) {
@@ -403,6 +406,7 @@ module.exports = {
             if ((userAsset.balance + amount) < 0) return false;
 
             userAsset.balance += amount;
+            userAsset.balance = Math.round(userAsset.balance);
 
             const saveResult = await userAsset.save();
             if (!saveResult) {
@@ -435,6 +439,7 @@ module.exports = {
             if (balance < 0) return false;
 
             userAsset.balance = balance;
+            userAsset.balance = Math.round(userAsset.balance);
 
             const saveResult = await userAsset.save();
             if (!saveResult) {
@@ -573,6 +578,7 @@ module.exports = {
             }
             
             userAsset.balance -= transactionAmount;
+            userAsset.balance = Math.round(userAsset.balance);
             
             const purchaseDate = new Date();
             
@@ -639,6 +645,7 @@ module.exports = {
             if (quantityLeft !== 0) return false;
 
             userAsset.balance += transactionAmount;
+            userAsset.balance = Math.round(userAsset.balance);
 
             const saveResult = await userAsset.save();
             if (!saveResult) {
@@ -679,7 +686,8 @@ module.exports = {
             }
             
             userAsset.balance += transactionAmount;
-            
+            userAsset.balance = Math.round(userAsset.balance);
+
             const sellDate = new Date();
             const buyBackDate = new Date();
             buyBackDate.setDate(sellDate.getDate() + 5);
@@ -808,6 +816,7 @@ module.exports = {
             });
             
             userAsset.balance -= margin;
+            userAsset.balance = Math.round(userAsset.balance);
 
             let totalQuantity = 0;
             let totalLevQuantity = 0;
@@ -895,6 +904,7 @@ module.exports = {
             });
             
             userAsset.balance -= margin;
+            userAsset.balance = Math.round(userAsset.balance);
 
             let totalQuantity = 0;
             let totalLevQuantity = 0;
@@ -966,6 +976,7 @@ module.exports = {
 
             const transactionAmount = currentPrice * quantity;
             userAsset.balance += transactionAmount;
+            userAsset.balance = Math.round(userAsset.balance);
             if (quantity > 0) {
                 
             } else if (quantity < 0) {

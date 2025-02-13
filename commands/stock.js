@@ -74,7 +74,7 @@ module.exports = {
                 .addIntegerOption((option) =>
                     option.setName('수량')
                         .setDescription('매수할 주식의 수량')
-                        .setMinValue(1)
+                        .setMinValue(0)
                         .setRequired(true)
                 )
         )
@@ -89,7 +89,7 @@ module.exports = {
                 .addIntegerOption((option) =>
                     option.setName('수량')
                         .setDescription('매도할 주식의 수량')
-                        .setMinValue(1)
+                        .setMinValue(0)
                         .setRequired(true)
                 )
         )
@@ -104,7 +104,7 @@ module.exports = {
                 .addIntegerOption((option) =>
                     option.setName('수량')
                         .setDescription('공매도할 주식의 수량')
-                        .setMinValue(1)
+                        .setMinValue(0)
                         .setRequired(true)
                 )
         )
@@ -160,7 +160,7 @@ module.exports = {
                     color = '=';
                     difference_sign = '';
                 }
-                stock_list_format.push(`${getStockName(stock.ticker)} [${stock.ticker}]\n\`\`\`diff\n${color} ${stock.price} (${difference_sign}${Math.abs(stock.difference)})\n\`\`\``);
+                stock_list_format.push(`${getStockName(stock.ticker)} [${stock.ticker}]\n\`\`\`diff\n${color} ${stock.price} (${difference_sign}${Math.abs(stock.difference).toFixed(2)})\n\`\`\``);
                 
                 /*
                 if (stock.difference > 0) {

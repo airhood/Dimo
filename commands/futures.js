@@ -72,7 +72,7 @@ module.exports = {
                 .addIntegerOption((option) =>
                     option.setName('수량')
                         .setDescription('매수할 선물의 계약수')
-                        .setMinValue(1)
+                        .setMinValue(0)
                         .setRequired(true)
                 )
                 .addIntegerOption((option) =>
@@ -97,7 +97,7 @@ module.exports = {
                 .addIntegerOption((option) =>
                     option.setName('수량')
                         .setDescription('매도할 선물의 계약수')
-                        .setMinValue(1)
+                        .setMinValue(0)
                         .setRequired(true)
                 )
         )
@@ -170,6 +170,8 @@ module.exports = {
             const leverage = interaction.options.getInteger('레버리지');
 
             const result = await futureBuy(interaction.user.id, ticker, quantity, leverage);
+
+            console.log(`result: ${result}`);
 
             if (result === null) {
                 await interaction.reply({
