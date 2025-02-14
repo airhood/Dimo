@@ -1,2 +1,0 @@
-clientId = "1328957929117978706";
-// token = "MTMyODk1NzkyOTExNzk3ODcwNg.G6HB6T.VwlW7U_ZEarisbVumz96PE3T5iE4l1acu5RO-A";

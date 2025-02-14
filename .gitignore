@@ -91,4 +91,6 @@ config.json
 stock_prices.txt
 recent-stock_prices.txt
 
+tempCodeRunnerFile.js
+
 .idea/
