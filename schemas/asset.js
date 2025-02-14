@@ -49,6 +49,10 @@ const AssetSchema = new Schema({
         buyBackDate: {
             type: Date,
             required: true,
+        },
+        margin: {
+            type: Number,
+            required: true,
         }
     }],
     futures: [{

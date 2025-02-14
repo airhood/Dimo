@@ -38,6 +38,7 @@ const TransactionSchedule = require('./schemas/transaction_schedule');
 const Notice = require('./schemas/notice');
 
 const fs = require('fs');
+const { getLoanInterestRate } = require('./stock_system/bank_manager');
 
 let serversideLockedAccounts = [];
 
@@ -154,7 +155,7 @@ module.exports = {
             }
 
             const today = new Date();
-            const initDate = new Date(today);
+            const initDate = new Date();
             initDate.setDate(today.getDate() - 1);
 
             const newState = await State.create({
@@ -679,12 +680,17 @@ module.exports = {
             const currentPrice = getStockPrice(ticker);
             const transactionAmount = currentPrice * quantity;
             const margin = currentPrice * quantity * SHORT_SELL_MARGIN_RATE;
+
+            let currentHoldingMargin = 0;
+            userAsset.stockShortSales.forEach((short) => {
+                currentHoldingMargin += short.margin;
+            });
             
-            if (userAsset.balance < margin) {
+            if (userAsset.balance < currentHoldingMargin + margin) {
                 serverLog(`[INFO] Short sell stock failed. Not enough balance. id: ${id}`);
                 return false;
             }
-            
+
             userAsset.balance += transactionAmount;
             userAsset.balance = Math.round(userAsset.balance);
 
@@ -697,16 +703,18 @@ module.exports = {
                 quantity: quantity,
                 sellPrice: currentPrice,
                 sellDate: sellDate,
-                buyBackDate: buyBackDate
+                buyBackDate: buyBackDate,
+                margin: margin,
             });
-
-            module.exports.setTransactionSchedule(`${id}-${ticker}_short_${userAsset.stockShortSales.length - 1}`, id, `buyback stock ${userAsset._id} ${ticker} ${quantity} at ${buyBackDate.getTime()}`)
 
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user asset data. id: ${id}`);
                 return null;
             }
+
+            const result = await module.exports.setTransactionSchedule(`${id}-${ticker}_short_${userAsset.stockShortSales.length - 1}`, id, `buyback stock ${userAsset._id} ${ticker} ${quantity} at ${buyBackDate.getTime()}`)
+            if (!result) return null;
 
             serverLog(`[INFO] Short sell ${quantity}shares of '${ticker}' stock success. id: ${id}`);
             return true;
@@ -767,6 +775,9 @@ module.exports = {
                 return null;
             }
 
+            const result = await module.exports.deleteTransactionSchedule(`${id}-${ticker}_short_${positionNum - 1}`);
+            if (!result) return null;
+
             serverLog(`[INFO] Repay ${quantity}shares of '${ticker}' stock success. id: ${id}`);
 
             return {
@@ -797,7 +808,12 @@ module.exports = {
 
             const margin = currentPrice * quantity;
 
-            if (userAsset.balance < margin) {
+            let currentHoldingMargin = 0;
+            userAsset.futures.forEach((future) => {
+                currentHoldingMargin += future.margin;
+            });
+
+            if (userAsset.balance < currentHoldingMargin + margin) {
                 serverLog(`[INFO] Buy future failed. Not enough balance. id: ${id}`);
                 return false;
             }
@@ -847,18 +863,20 @@ module.exports = {
             //     module.exports.deleteTransactionSchedule(`${id}-future_mc-${userAsset.futures.length - 1}`);
             // }
 
-            if (userAsset.futures.length !== 0) {
-                module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
-            } else {
-                module.exports.deleteTransactionSchedule(`${id}_future`);
-            }
-
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
                 return null;
             }
 
+            if (userAsset.futures.length !== 0) {
+                const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
+                if (!result) return null;
+            } else {
+                const result = await module.exports.deleteTransactionSchedule(`${id}_future`);
+                if (!result) return null;
+            }
+            
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' future success. id: ${id}`);
             return true;
         } catch (err) {
@@ -885,7 +903,12 @@ module.exports = {
 
             const margin = currentPrice * quantity;
 
-            if (userAsset.balance < margin) {
+            let currentHoldingMargin = 0;
+            userAsset.futures.forEach((future) => {
+                currentHoldingMargin += future.margin;
+            });
+
+            if (userAsset.balance < currentHoldingMargin + margin) {
                 serverLog(`[INFO] Buy future failed. Not enough balance. id: ${id}`);
                 return false;
             }
@@ -934,18 +957,15 @@ module.exports = {
             // } else {
             //     module.exports.deleteTransactionSchedule(`${id}-future_mc-${userAsset.futures.length - 1}`);
             // }
-
-            if (userAsset.futures.length !== 0) {
-                module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
-            } else {
-                module.exports.deleteTransactionSchedule(`${id}_future`);
-            }
-
+            
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
                 return null;
             }
+
+            const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
+            if (!result) return null;
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' future success. id: ${id}`);
             return true;
@@ -969,19 +989,35 @@ module.exports = {
                 return null;
             }
 
+            if (userAsset.futures.length < position) {
+                return 'invalid_position';
+            }
+
             const position = userAsset.futures[positionNum - 1];
             const ticker = position.ticker;
             const currentPrice = getFuturePrice(ticker);
-            const quantity = position.quantity;
+            const initValue = position.purchasePrice * position.quantity;
+            const currentValue = currentPrice * position.quantity;
 
-            const transactionAmount = currentPrice * quantity;
+            const transactionAmount = currentValue - initValue;
             userAsset.balance += transactionAmount;
             userAsset.balance = Math.round(userAsset.balance);
-            if (quantity > 0) {
-                
-            } else if (quantity < 0) {
 
+            userAsset.futures.splice(positionNum - 1, 1);
+
+            const saveResult = await userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
+                return null;
             }
+
+            if (userAsset.futures.length === 0) {
+                const result = await module.exports.deleteTransactionSchedule(`${id}_future`);
+                if (!result) return null;
+            }
+            
+            serverLog(`[INFO] Liquidated ${quantity}contracts of '${ticker}' future success. id: ${id}`);
+            return true;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:futureSell': ${err}`);
             return null;
@@ -1031,6 +1067,57 @@ module.exports = {
             serverLog(`[ERROR] Error at 'database.js:binaryOption': ${err}`);
             return null;
         }
+    },
+
+    async loan(id, amount, dueDate, interestType) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return false;
+            }
+            
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return false;
+            }
+
+            let interest;
+            if (interestType === '고정금리') {
+                interest = getLoanInterestRate();
+            } else if (interestType === '변동금리') {
+                interest = 0;
+            } else {
+                serverLog(`[ERROR] Unsupported interest type: ${interestType}`);
+                return false;
+            }
+
+            const now = new Date();
+
+            userAsset.loans.push({
+                amount: amount,
+                interestRate: interest,
+                loanDate: now,
+                dueDate: dueDate,
+            });
+
+            const saveResult = await userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
+                return false;
+            }
+
+            serverLog(`[INFO] Loaned ${amount} amount of money.`);
+            return true;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:loan': ${err}`);
+            return false;
+        }
+    },
+
+    async loanRepay(id) {
+
     },
 
     async setTransactionSchedule(identification_code, subject, command) {
@@ -1143,14 +1230,16 @@ module.exports = {
                 serverLog(`[ERROR] Error finding user profile`);
                 return null;
             }
+
             userProfile.level.state += 1;
             if (userProfile.level.state >= (DEFAULT_POINT_REQUIRED + (LEVEL_UP_POINT_GAP * userProfile.level.level))) {
                 userProfile.level.state = 0;
                 userProfile.level.level += 1;
             }
+
             const saveResult = userProfile.save();
             if (!saveResult) {
-                serverLog(`[ERROR] Error saving user level`);
+                serverLog(`[ERROR] Error saving user profile`);
                 return false;
             }
             return true;
@@ -1182,11 +1271,46 @@ module.exports = {
         }
     },
 
-    async addAchievements(id) {
+    async addAchievements(id, name, description) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) return false;
 
+            const userProfile = await User.findById(user.profile);
+            if (userProfile === null) return false;
+
+            if (!name) return false;
+            if (!description) return false;
+
+            userProfile.achievements.push({
+                name: name,
+                description: description,
+            });
+
+            const saveResult = userProfile.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Error saving user profile`);
+                return false;
+            }
+            return true;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:addAchievements': ${err}`);
+            return false;
+        }
     },
     
     async getAchievements(id) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) return null;
 
+            const userProfile = await User.findById(user.profile);
+            if (userProfile === null) return null;
+
+            return userProfile.achievements;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:addAchievements': ${err}`);
+            return null;
+        }
     },
 }

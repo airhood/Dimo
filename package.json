@@ -4,6 +4,7 @@
     "apexcharts": "^4.4.0",
     "axios": "^1.7.9",
     "commander": "^13.1.0",
+    "crypto": "^1.0.1",
     "discord.js": "^14.17.3",
     "dotenv": "^16.4.7",
     "mathjs": "^14.2.0",

@@ -508,20 +508,25 @@ function setOptionExpireCallback(callback) {
     optionExpireCallback = callback;
 }
 
-const COMPRESSION_CUTOFF = 3;
+const COMPRESSION_CUTOFF = 6;
 const COMPRESSION_RATE = 5;
 
+exports.COMPRESSION_CUTOFF = COMPRESSION_CUTOFF;
+exports.COMPRESSION_RATE = COMPRESSION_RATE;
+
 function compressOldData() {
-    for (const [ticker, stockPrices] of Object.entries(stocksPricesHistory[stocksPricesHistory.length - COMPRESSION_CUTOFF])) {
-        stocksPricesHistory[stocksPricesHistory.length - COMPRESSION_CUTOFF][ticker] = stockPrices.filter((_, index) => index % COMPRESSION_RATE === 0);
-    }
-
-    for (const [ticker, futurePrices] of Object.entries(futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF])) {
-        futuresPricesHistory[futuresPricesHistory.length - COMPRESSION_CUTOFF][ticker] = futurePrices.filter((_, index) => index % COMPRESSION_RATE == 0);
-    }
-
-    for (const [ticker, optionPrices] of Object.entries(optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF])) {
-        optionsPricesHistory[optionsPricesHistory.length - COMPRESSION_CUTOFF][ticker] = optionPrices.filter((_, index) => index % COMPRESSION_RATE == 0);
+    if (stocksPricesHistory.length - 1 - COMPRESSION_CUTOFF >= 0) {
+        for (const [ticker, stockPrices] of Object.entries(stocksPricesHistory[stocksPricesHistory.length - 1 - COMPRESSION_CUTOFF])) {
+            stocksPricesHistory[stocksPricesHistory.length - 1 - COMPRESSION_CUTOFF][ticker] = stockPrices.filter((_, index) => index % COMPRESSION_RATE === 0);
+        }
+    
+        for (const [ticker, futurePrices] of Object.entries(futuresPricesHistory[futuresPricesHistory.length - 1 - COMPRESSION_CUTOFF])) {
+            futuresPricesHistory[futuresPricesHistory.length - 1 - COMPRESSION_CUTOFF][ticker] = futurePrices.filter((_, index) => index % COMPRESSION_RATE == 0);
+        }
+    
+        for (const [ticker, optionPrices] of Object.entries(optionsPricesHistory[optionsPricesHistory.length - 1 - COMPRESSION_CUTOFF])) {
+            optionsPricesHistory[optionsPricesHistory.length - 1 - COMPRESSION_CUTOFF][ticker] = optionPrices.filter((_, index) => index % COMPRESSION_RATE == 0);
+        }
     }
 }
 
@@ -540,20 +545,20 @@ function updateStockData() {
     updateProductTimeLeft();
 }
 
-// schedule.scheduleJob('0 * * * *', () => {
-//     serverLog('[INFO] Update stock data');
-//     updateStockData();
-//     backupRecentData();
-//     compressOldData();
-// });
-
-// test
-schedule.scheduleJob('* * * * *', () => {
+schedule.scheduleJob('0 * * * *', () => {
     serverLog('[INFO] Update stock data');
     updateStockData();
-    backupRecentData(false);
+    backupRecentData();
     compressOldData();
 });
+
+// test
+// schedule.scheduleJob('* * * * *', () => {
+//     serverLog('[INFO] Update stock data');
+//     updateStockData();
+//     backupRecentData(false);
+//     compressOldData();
+// });
 
 exports.updateStockData = updateStockData;
 
@@ -688,26 +693,58 @@ function getTimeRangeData(tickerList, hoursAgo, minutesAgo) {
             } else {
                 const stockPrices = stocksPricesHistory[hourIndex][ticker];
                 
-                if (targetHourIndex === currentHourIndex) {
-                    return {
-                        ticker: ticker,
-                        prices: stockPrices.slice(targetMinuteIndex, currentMinuteIndex + 1)
-                    };
-                } else if (hourIndex === targetHourIndex) {
-                    return {
-                        ticker: ticker,
-                        prices: stockPrices.slice(targetMinuteIndex, 60)
-                    };
-                } else if (hourIndex === currentHourIndex) {
-                    return {
-                        ticker: ticker,
-                        prices: stockPrices.slice(0, currentMinuteIndex + 1)
-                    };
+                if (hourIndex <= currentHourIndex - COMPRESSION_CUTOFF) {
+                    if (targetHourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(Math.floor(targetMinuteIndex / COMPRESSION_RATE), currentMinuteIndex + 1),
+                            compressed: true,
+                        };
+                    } else if (hourIndex === targetHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(Math.floor(targetMinuteIndex / COMPRESSION_RATE), Math.floor(59 / COMPRESSION_RATE) + 1),
+                            compressed: true,
+                        };
+                    } else if (hourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, Math.floor(59 / COMPRESSION_RATE) + 1),
+                            compressed: true,
+                        };
+                    } else {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, Math.floor()),
+                            compressed: true,
+                        };
+                    }
                 } else {
-                    return {
-                        ticker: ticker,
-                        prices: stockPrices.slice(0, 60)
-                    };
+                    if (targetHourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(targetMinuteIndex, currentMinuteIndex + 1),
+                            compressed: false,
+                        };
+                    } else if (hourIndex === targetHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(targetMinuteIndex, 60),
+                            compressed: false,
+                        };
+                    } else if (hourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, currentMinuteIndex + 1),
+                            compressed: false,
+                        };
+                    } else {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, 60),
+                            compressed: false,
+                        };
+                    }
                 }
             }
 

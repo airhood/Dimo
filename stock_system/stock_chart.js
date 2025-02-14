@@ -1,6 +1,7 @@
 const axios = require('axios');
 const fs = require('fs');
 const { getStockName } = require('./stock_name');
+const { COMPRESSION_RATE } = require('./stock_sim');
 
 let index = 0;
 
@@ -18,7 +19,7 @@ async function generateStockChartImage(ticker, timeRangeData, targetMinuteIndex)
             const ticker = priceData.ticker;
 
             const data = priceData.prices.map((price, minute) => {
-                let time = (hour * 60) + minute;
+                let time = (hour * 60) + (priceData.compressed === true ? minute * COMPRESSION_RATE : minute);
                 if (hour === 0) {
                     time += targetMinuteIndex;
                 }

@@ -1,4 +1,5 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { loan } = require('../database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,7 +11,7 @@ module.exports = {
                 .addIntegerOption((option) =>
                     option.setName('금액')
                         .setDescription('대출할 액수')
-                        .setMinValue(1000000) // 100만원
+                        .setMinValue(100000) // 10만원
                         .setRequired(true)
                 )
                 .addIntegerOption((option) =>
@@ -27,6 +28,7 @@ module.exports = {
                             { name: '고정금리', value: '고정금리' },
                             { name: '변동금리', value: '변동금리' },
                         )
+                        .setRequired(true)
                 )
         )
         .addSubcommand((subCommand) =>
@@ -51,6 +53,7 @@ module.exports = {
                     option.setName('금액')
                         .setDescription('예금할 액수')
                         .setMinValue(1000000) // 100만원
+                        .setRequired(true)
                 )
         )
         .addSubcommand((subCommand) =>
@@ -71,6 +74,7 @@ module.exports = {
                     option.setName('금액')
                         .setDescription('매달 납입할 액수')
                         .setMinValue(1000000) // 100만원
+                        .setRequired(true)
                 )
         )
         .addSubcommand((subCommand) =>
@@ -86,7 +90,35 @@ module.exports = {
         const subCommand = interaction.options.getSubcommand();
 
         if (subCommand === '대출') {
+            const amount = interaction.options.getInteger('금액');
+            const dueDateRel = interaction.options.getInteger('상환일');
+            const interestType = interaction.options.getString('금리종류');
 
+            const now = new Date();
+            const dueDate = new Date();
+            dueDate.setDate(now.getDate() + dueDateRel);
+
+            const result = await loan(interaction.user.id, amount, dueDate, interestType);
+
+            if (result) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ecc71)
+                            .setTitle(':white_check_mark:  대출 승인')
+                            .setDescription(`은행으로부터 ${amount}원을 대출했습니다.`)
+                    ]
+                });
+            } else {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('오류가 발생했습니다')
+                            .setDescription('공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.')
+                    ]
+                });
+            }
         }
         else if (subCommand === '대출금리') {
             

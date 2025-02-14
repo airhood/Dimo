@@ -34,6 +34,8 @@ module.exports = {
 
         const levelInfo = await getLevelInfo(targetUser.id);
 
+        const avatarURL = interaction.user.displayAvatarURL({ format: 'png', size: 1024 });
+
         await interaction.reply({
             embeds: [
                 new EmbedBuilder()
@@ -42,6 +44,7 @@ module.exports = {
                     .addFields(
                         { name: '레벨', value: `${levelInfo.level}레벨 (${levelInfo.state}/${levelInfo.target})` },
                     )
+                    .setThumbnail(avatarURL)
             ],
         });
     }

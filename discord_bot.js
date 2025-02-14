@@ -6,14 +6,18 @@ const { token } = require('./config.json');
 const { increaseLevelPoint, checkUserExists } = require('./database');
 const { addInteractionHandler } = require('./interaction');
 const { serverLog, setClient_server_logger, setupAdminChannel } = require('./server/server_logger');
-const { loadRecentStockData } = require('./stock_system/stock_sim');
 const { setClient_status_tracker, setupStatusChannel } = require('./server/status_tracker');
-const { setTerminal } = require('./server/server_terminal');
 const { dimoChat } = require('./chat_bot/chat_bot');
-const { startBucketCycle, addToBucket, existsInCurrentBucket } = require('./message_reference_tracker');
+const { addToBucket, existsInCurrentBucket } = require('./message_reference_tracker');
 const { filterMessage } = require('./chat_bot/message_filter');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+const client = new Client({
+	intents: [
+		GatewayIntentBits.Guilds,
+		GatewayIntentBits.GuildMessages,
+		GatewayIntentBits.MessageContent,
+	],
+});
 
 client.commands = new Collection();
 
@@ -77,7 +81,7 @@ module.exports = {
 						try {
 							await interaction.editReply({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
 						} catch (err) {
-							
+
 						}
 					}
 				}

@@ -3,7 +3,7 @@ const { tryGetTicker, getFutureList, getFutureExpirationDate } = require('../sto
 const { getStockName } = require('../stock_system/stock_name');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
-const { checkUserExists, futureBuy } = require('../database');
+const { checkUserExists, futureBuy, futureLiquidate } = require('../database');
 const { generateStockChartImage } = require('../stock_system/stock_chart');
 
 module.exports = {
@@ -98,6 +98,16 @@ module.exports = {
                     option.setName('수량')
                         .setDescription('매도할 선물의 계약수')
                         .setMinValue(0)
+                        .setRequired(true)
+                )
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('청산')
+                .setDescription('선물 포지션을 청산합니다.')
+                .addIntegerOption((option) =>
+                    option.setName('포지션번호')
+                        .setDescription('청산할 선물 포지션의 번호 (1부터 시작 / **/자산** 을 통해 확인)')
+                        .setMinValue(1)
                         .setRequired(true)
                 )
         )
@@ -222,7 +232,37 @@ module.exports = {
                 });
                 return;
             }
-        } else if (subCommand === '만기일') {
+        } else if (subCommand === '청산') {
+            const positionNum = interaction.options.getInteger('포지션번호');
+
+            const result = await futureLiquidate(interaction.user.id, positionNum);
+
+            if (result === true) {
+
+            } else if (result === 'invalid_position') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  상환 실패')
+                            .setDescription(`존재하지 않는 포지션입니다.`)
+                            .setTimestamp()
+                    ],
+                });
+            } else if (result === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  주문 실패')
+                            .setDescription(`오류가 발생하였습니다.
+                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+            }
+        }
+        else if (subCommand === '만기일') {
             const expirationDate = getFutureExpirationDate();
             
             await interaction.reply({
