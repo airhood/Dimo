@@ -663,7 +663,7 @@ function getTickerList() {
     return tickerList;
 }
 
-function getTimeRangeData(tickerList, hoursAgo, minutesAgo) {
+function getStockTimeRangeData(tickerList, hoursAgo, minutesAgo) {
     const currentHourIndex = stocksPricesHistory.length - 1;
     const currentMinuteIndex = new Date().getMinutes();
 
@@ -758,6 +758,101 @@ function getTimeRangeData(tickerList, hoursAgo, minutesAgo) {
     return timeRangeData;
 }
 
+function getFutureTimeRangeData(tickerList, hoursAgo, minutesAgo) {
+    const currentHourIndex = stocksPricesHistory.length - 1;
+    const currentMinuteIndex = new Date().getMinutes();
+
+    let targetHourIndex = currentHourIndex - hoursAgo;
+    let targetMinuteIndex = currentMinuteIndex - minutesAgo;
+
+    if (targetMinuteIndex < 0) {
+        targetHourIndex -= 1;
+        targetMinuteIndex = 60 + targetMinuteIndex;
+    }
+
+    if (targetHourIndex < 0) {
+        targetHourIndex = 0;
+        targetMinuteIndex = 0;
+    }
+
+    const timeRangeData = [];
+
+    for (let hourIndex = targetHourIndex; (hourIndex <= currentHourIndex) && (hourIndex < futuresPricesHistory.length); hourIndex++) {
+        const hourData = Object.keys(futuresPricesHistory[hourIndex]).map(ticker => {
+            const result = tickerList.filter((val) => {
+                return val == ticker
+            });
+
+            if (Array.isArray(result) && result.length === 0) {
+
+            } else {
+                const stockPrices = futuresPricesHistory[hourIndex][ticker];
+                
+                if (hourIndex <= currentHourIndex - COMPRESSION_CUTOFF) {
+                    if (targetHourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(Math.floor(targetMinuteIndex / COMPRESSION_RATE), currentMinuteIndex + 1),
+                            compressed: true,
+                        };
+                    } else if (hourIndex === targetHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(Math.floor(targetMinuteIndex / COMPRESSION_RATE), Math.floor(59 / COMPRESSION_RATE) + 1),
+                            compressed: true,
+                        };
+                    } else if (hourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, Math.floor(59 / COMPRESSION_RATE) + 1),
+                            compressed: true,
+                        };
+                    } else {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, Math.floor()),
+                            compressed: true,
+                        };
+                    }
+                } else {
+                    if (targetHourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(targetMinuteIndex, currentMinuteIndex + 1),
+                            compressed: false,
+                        };
+                    } else if (hourIndex === targetHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(targetMinuteIndex, 60),
+                            compressed: false,
+                        };
+                    } else if (hourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, currentMinuteIndex + 1),
+                            compressed: false,
+                        };
+                    } else {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, 60),
+                            compressed: false,
+                        };
+                    }
+                }
+            }
+
+        }).filter(element => element);
+
+        if (hourData) {
+            timeRangeData.push(hourData);
+        }
+    }
+
+    return timeRangeData;
+}
+
 exports.loadRecentStockData = loadRecentStockData;
 
 exports.getStockPrice = getStockPrice;
@@ -774,4 +869,6 @@ exports.setOptionExpireCallback = setOptionExpireCallback;
 
 exports.tryGetTicker = tryGetTicker;
 exports.getTickerList = getTickerList;
-exports.getTimeRangeData = getTimeRangeData;
+
+exports.getStockTimeRangeData = getStockTimeRangeData;
+exports.getFutureTimeRangeData = getFutureTimeRangeData;

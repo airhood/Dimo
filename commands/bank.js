@@ -1,10 +1,15 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { loan } = require('../database');
+const { loan, loanRepay } = require('../database');
+const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint } = require('../stock_system/bank_manager');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('은행')
         .setDescription('은행은 금융 기관 중 하나이다.')
+        .addSubcommand((subCommand) =>
+            subCommand.setName('기준금리')
+                .setDescription('기준금리는 변동될 수 있습니다.')
+        )
         .addSubcommand((subCommand) =>
             subCommand.setName('대출')
                 .setDescription('은행에서 돈을 대출을 받습니다. 매달 이자가 상환되며 원금은 만기일에 상환됩니다.')
@@ -29,6 +34,16 @@ module.exports = {
                             { name: '변동금리', value: '변동금리' },
                         )
                         .setRequired(true)
+                )
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('상환')
+                .setDescription('대출을 상환합니다. 하나의 대출은 한 번에 상환해야 합니다.')
+                .addIntegerOption((option) =>
+                    option.setName('대출번호')
+                        .setDescription('상환할 대출의 번호 (1부터 시작 / **/자산** 을 통해 확인)')
+                        .setMinValue(1)
+                        .setRequired(true),
                 )
         )
         .addSubcommand((subCommand) =>
@@ -88,8 +103,19 @@ module.exports = {
     
     async execute(interaction) {
         const subCommand = interaction.options.getSubcommand();
+        
+        if (subCommand === '기준금리') {
+            const interestRatePoint = getInterestRatePoint();
 
-        if (subCommand === '대출') {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle('기준금리')
+                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\``)
+                ],
+            });
+        } else if (subCommand === '대출') {
             const amount = interaction.options.getInteger('금액');
             const dueDateRel = interaction.options.getInteger('상환일');
             const interestType = interaction.options.getString('금리종류');
@@ -119,21 +145,76 @@ module.exports = {
                     ]
                 });
             }
-        }
-        else if (subCommand === '대출금리') {
+        } else if (subCommand === '상환') {
+            const loanNumber = interaction.options.getInteger('대출번호');
+
+            const result = await loanRepay(interaction.user.id, loanNumber);
+
+            if (result === true) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ecc71)
+                            .setTitle(':white_check_mark:  상환 완료')
+                            .setDescription(`대출받은 ${amount}원을 상환했습니다.`)
+                    ]
+                });
+            } else if (result === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                        .setColor(0xEA4144)
+                        .setTitle('오류가 발생했습니다')
+                        .setDescription('공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.')
+                    ]
+                });
+            } else {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('대출 상환 실패')
+                            .setDescription(`잔액이 부족합니다.\n현재 이자를 포함하여 상환해야 할 금액은 \`${result}원\` 입니다.`)
+                    ]
+                });
+            }
+        } else if (subCommand === '대출금리') {
+            const interestRatePoint = getLoanInterestRatePoint();
+
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle('대출금리')
+                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\``)
+                ],
+            });
+        } else if (subCommand === '예금') {
+
+        } else if (subCommand === '적금') {
             
-        }
-        else if (subCommand === '예금') {
+        } else if (subCommand === '예금금리') {
+            const interestRatePoint = getFixedDepositInterestRatePoint();
 
-        }
-        else if (subCommand === '적금') {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle('예금금리')
+                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\``)
+                ],
+            });
+        } else if (subCommand === '적금금리') {
+            const interestRatePoint = getSavingsAccountInterestRatePoint();
 
-        }
-        else if (subCommand === '예금금리') {
-
-        }
-        else if (subCommand === '적금금리') {
-
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle('적금금리')
+                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\``)
+                ],
+            });
         }
     }
 }

@@ -74,7 +74,7 @@ module.exports = {
             
             const futuresMap = new Map();
             result.asset.futures.forEach(future => {
-                const key = `${future.contract}-${future.expirationDate}`;
+                const key = `${future.ticker}-${future.expirationDate}`;
                 if (futuresMap.has(key)) {
                     const existingFuture = futuresMap.get(key);
                     existingFuture.quantity += future.quantity;
@@ -86,7 +86,7 @@ module.exports = {
             
             const optionsMap = new Map();
             result.asset.options.forEach(option => {
-                const key = `${option.contract}-${option.optionType}-${option.strikePrice}`;
+                const key = `${option.ticker}-${option.optionType}-${option.strikePrice}`;
                 if (optionsMap.has(key)) {
                     const existingOption = optionsMap.get(key);
                     existingOption.quantity += option.quantity;
@@ -248,7 +248,14 @@ module.exports = {
                     earnSign = '';
                 }
 
-                future_format += `${future.contract} ${future.quantity}계약
+                let positionType;
+                if (future.quantity > 0) {
+                    positionType = '롱';
+                } else if (future.quantity < 0) {
+                    positionType = '숏';
+                }
+
+                future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity)}계약
 | 현재가격: ${getFuturePrice(future.ticker)}원
 | 매수가격: ${future.purchasePrice}원
 | 평가손익: ${(future.quantity * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2)}원 (${earnSign}${((Math.round(((getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
@@ -270,7 +277,14 @@ module.exports = {
                     earnSign = '';
                 }
 
-                future_format += `${future.contract} ${future.quantity}계약 (평가손익: ${(future.quantity * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2)}원 (${earnSign}${((Math.round(((getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%))`;
+                let positionType;
+                if (future.quantity > 0) {
+                    positionType = '롱';
+                } else if (future.quantity < 0) {
+                    positionType = '숏';
+                }
+
+                future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity)}계약 (평가손익: ${(future.quantity * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2)}원 (${earnSign}${((Math.round(((getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%))`;
             }
         }
 
@@ -308,7 +322,7 @@ module.exports = {
                 }
                 const formattedExpirationDate = moment(option.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(option.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
-                option_format += `${option.contract} ${formattedOptionType}옵션 ${option.quantity}계약
+                option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity}계약
 | 현재가격: ${currentPrice}원
 | 매수가격: ${option.purchasePrice}원
 | 평가손익: ${(option.quantity (currentPrice - option.purchasePrice)).toFixed(2)}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
@@ -343,7 +357,7 @@ module.exports = {
                 else if (option.optionType === 'put') formattedOptionType = '풋';
                 const formattedExpirationDate = moment(option.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(option.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
-                option_format += `${option.contract} ${formattedOptionType}옵션 ${option.quantity}계약 (평가손익: ${(option.quantity * (currentPrice - option.purchasePrice)).toFixed(2)}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%))`;
+                option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity}계약 (평가손익: ${(option.quantity * (currentPrice - option.purchasePrice)).toFixed(2)}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%))`;
             }
         }
 
@@ -358,19 +372,32 @@ module.exports = {
         if (loadDetails) {
             for (fixed_deposit of result.asset.fixed_deposits) {
                 if (deposit_format !== '') deposit_format += '\n';
+                const formatted_depositDate = moment(fixed_deposit.depositDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                const formatted_maturityDate = moment(fixed_deposit.maturityDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 deposit_format += `예금 ${fixed_deposit.amount}원
 | 상품: ${fixed_deposit.product}
-| 이자율: ${fixed_deposit.interestRate}%
-| 예금일: ${fixed_deposit.depositDate}
-| 만기일: ${fixed_deposit.maturityDate})`;
+| 이자율: ${(fixed_deposit.interestRate * 100).toFixed(2)}%
+| 예금일: ${formatted_depositDate}
+| 만기일: ${formatted_maturityDate}`;
             }
             for (savings_account of result.asset.savings_accounts) {
                 if (deposit_format !== '') deposit_format += '\n';
+                const formatted_startDate = moment(savings_account.startDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                const formatted_endDate = moment(savings_account.endDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 deposit_format += `적금 ${savings_account.amount}원
 | 상품: ${savings_account.product}
-| 이자율: ${savings_account.interestRate}%
-| 가입일: ${savings_account.startDate}
-| 만기일: ${savings_account.endDate})`;
+| 이자율: ${(savings_account.interestRate * 100).toFixed(2)}%
+| 가입일: ${formatted_startDate}
+| 만기일: ${formatted_endDate}`;
+            }
+        } else {
+            for (fixed_deposit of result.asset.fixed_deposits) {
+                if (deposit_format !== '') deposit_format += '\n';
+                deposit_format += `예금 ${fixed_deposit.amount}원 (이자율: ${(fixed_deposit.interestRate * 100).toFixed(2)})`;
+            }
+            for (savings_account of result.asset.savings_accounts) {
+                if (deposit_format !== '') deposit_format += '\n';
+                deposit_format += `적금 ${savings_account.amount}원 (이자율: ${(savings_account.interestRate * 100).toFixed(2)})`;
             }
         }
 
@@ -382,12 +409,21 @@ module.exports = {
         }
 
         let loan_format = '';
-        for (loan of result.asset.loans) {
-            if (loan_format !== '') loan_format += '\n\n';
-            loan_format += `대출 ${loan.amount}원
-| 이자율: ${loan.interestRate}%
-| 대출일: ${loan.loanDate}
-| 상환일: ${loan.dueDate})`;
+        if (loadDetails) {
+            for (loan of result.asset.loans) {
+                if (loan_format !== '') loan_format += '\n';
+                const formatted_loanDate = moment(loan.loanDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                const formatted_dueDate = moment(loan.dueDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                loan_format += `대출 ${loan.amount}원
+| 이자율: ${(loan.interestRate * 100).toFixed(2)}%
+| 대출일: ${formatted_loanDate}
+| 상환일: ${formatted_dueDate}`;
+            }
+        } else {
+            for (loan of result.asset.loans) {
+                if (loan_format !== '') loan_format += '\n';
+                loan_format += `대출 ${loan.amount}원 (이자율: ${(loan.interestRate * 100).toFixed(2)}%)`;
+            }
         }
 
         if (loan_format !== '') {

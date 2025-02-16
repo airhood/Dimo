@@ -8,7 +8,7 @@ function getInterestRate() {
     const numericHash = parseInt(hash.substring(0, 8), 16);
     const rangeValue = (numericHash / 0xFFFFFFFF) * 4 + 1;
 
-    return (rangeValue.toFixed(2) / 100);
+    return Number((Number(rangeValue.toFixed(2)) / 100).toFixed(4));
 }
 
 function getInterestRatePoint() {
@@ -19,43 +19,43 @@ function getInterestRatePoint() {
     const numericHash = parseInt(hash.substring(0, 8), 16);
     const rangeValue = (numericHash / 0xFFFFFFFF) * 4 + 1;
 
-    return rangeValue.toFixed(2);
+    return Number(rangeValue.toFixed(2));
 }
 
 function getLoanInterestRate() {
     const r = getInterestRate();
     const a = 0.02;
-    return r + a;
+    return Number((r + a).toFixed(4));
 }
 
 function getLoanInterestRatePoint() {
     const r = getInterestRatePoint();
     const a = 2.00;
-    return r + a;
+    return Number((r + a).toFixed(2));
 }
 
 function getFixedDepositInterestRate() {
     const r = getInterestRate();
     const a = 0.01;
-    return r + a;
+    return Number((r + a).toFixed(4));
 }
 
 function getFixedDepositInterestRatePoint() {
     const r = getInterestRate();
     const a = 1.00;
-    return r + a;
+    return Number((r + a).toFixed(2));
 }
 
 function getSavingsAccountInterestRate() {
     const r = getInterestRate();
     const a = 0.015;
-    return r + a;
+    return Number((r + a).toFixed(4));
 }
 
 function getSavingsAccountInterestRatePoint() {
     const r = getInterestRate();
     const a = 1.50;
-    return r + a;
+    return Number((r + a).toFixed(2));
 }
 
 exports.getInterestRate = getInterestRate;

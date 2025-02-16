@@ -56,7 +56,7 @@ const AssetSchema = new Schema({
         }
     }],
     futures: [{
-        contract: {
+        ticker: {
             type: String,
             required: true,
         },
@@ -80,9 +80,13 @@ const AssetSchema = new Schema({
             type: Date,
             required: true,
         },
+        margin: {
+            type: Number,
+            required: true,
+        }
     }],
     options: [{
-        contract: {
+        ticker: {
             type: String,
             required: true,
         },
@@ -113,7 +117,7 @@ const AssetSchema = new Schema({
         },
     }],
     binary_options: [{
-        contract: {
+        ticker: {
             type: String,
             required: true,
         },

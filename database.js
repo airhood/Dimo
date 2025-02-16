@@ -7,23 +7,19 @@ require('dotenv').config();
 
 
 mongoose.connection.on('connected', () => {
-    console.log('Database connected');
-
+    console.log('[MONGO_DB] Database connected');
 });
 
 mongoose.connection.on('disconnected', () => {
-    console.log('Database disconnected');
-
+    console.log('[MONGO_DB] Database disconnected');
 });
 
 mongoose.connection.on('reconnected', () => {
-    console.log('Database reconnected');
-
+    console.log('[MONGO_DB] Database reconnected');
 });
 
 mongoose.connection.on('reconnectFailed', () => {
-    console.log('Database reconnectFailed');
-
+    console.log('[MONGO_DB] Database reconnectFailed');
 });
 
 
@@ -790,7 +786,7 @@ module.exports = {
         }
     },
 
-    async futureBuy(id, ticker, quantity, leverage) {
+    async futureLong(id, ticker, quantity, leverage) {
         try {
             const user = await User.findOne({ userID: id });
             if (user === null) {
@@ -880,12 +876,12 @@ module.exports = {
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' future success. id: ${id}`);
             return true;
         } catch (err) {
-            serverLog(`[ERROR] Error at 'database.js:futureBuy': ${err}`);
+            serverLog(`[ERROR] Error at 'database.js:futureLong': ${err}`);
             return null;
         }
     },
 
-    async futureSell(id, ticker, quantity) {
+    async futureShort(id, ticker, quantity, leverage) {
         try {
             const user = await User.findOne({ userID: id });
             if (user === null) {
@@ -970,7 +966,7 @@ module.exports = {
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' future success. id: ${id}`);
             return true;
         } catch (err) {
-            serverLog(`[ERROR] Error at 'database.js:futureSell': ${err}`);
+            serverLog(`[ERROR] Error at 'database.js:futureShort': ${err}`);
             return null;
         }
     },
@@ -989,15 +985,16 @@ module.exports = {
                 return null;
             }
 
-            if (userAsset.futures.length < position) {
+            if (userAsset.futures.length < positionNum) {
                 return 'invalid_position';
             }
 
             const position = userAsset.futures[positionNum - 1];
             const ticker = position.ticker;
+            const quantity = position.quantity;
             const currentPrice = getFuturePrice(ticker);
-            const initValue = position.purchasePrice * position.quantity;
-            const currentValue = currentPrice * position.quantity;
+            const initValue = position.purchasePrice * quantity;
+            const currentValue = currentPrice * quantity;
 
             const transactionAmount = currentValue - initValue;
             userAsset.balance += transactionAmount;
@@ -1017,7 +1014,7 @@ module.exports = {
             }
             
             serverLog(`[INFO] Liquidated ${quantity}contracts of '${ticker}' future success. id: ${id}`);
-            return true;
+            return position;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:futureSell': ${err}`);
             return null;
@@ -1083,11 +1080,11 @@ module.exports = {
                 return false;
             }
 
-            let interest;
+            let interestRate;
             if (interestType === '고정금리') {
-                interest = getLoanInterestRate();
+                interestRate = getLoanInterestRate();
             } else if (interestType === '변동금리') {
-                interest = 0;
+                interestRate = 0;
             } else {
                 serverLog(`[ERROR] Unsupported interest type: ${interestType}`);
                 return false;
@@ -1095,9 +1092,11 @@ module.exports = {
 
             const now = new Date();
 
+            userAsset.balance += amount;
+
             userAsset.loans.push({
                 amount: amount,
-                interestRate: interest,
+                interestRate: interestRate,
                 loanDate: now,
                 dueDate: dueDate,
             });
@@ -1108,6 +1107,9 @@ module.exports = {
                 return false;
             }
 
+            const result = await module.exports.setTransactionSchedule(`${id}-loan_${userAsset.loans.length - 1}`, id, `repay money ${userAsset._id} ${amount} at ${dueDate.getTime()}`);
+            if (!result) return false;
+
             serverLog(`[INFO] Loaned ${amount} amount of money.`);
             return true;
         } catch (err) {
@@ -1116,8 +1118,59 @@ module.exports = {
         }
     },
 
-    async loanRepay(id) {
+    async loanRepay(id, loanNumber) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+            
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return null;
+            }
 
+            if (userAsset.loans.length < loanNumber) return 'invalid_loan_number';
+
+            const loan = userAsset.loans[loanNumber - 1];
+            
+            let interest;
+
+            if (loan.interestRate === 0) {
+                interest = getLoanInterestRate();
+            } else {
+                interest = loan.interestRate;
+            }
+
+            const amount = loan.amount;
+
+            const transactionAmount = amount * (1 + interest);
+
+            if (userAsset.balance < transactionAmount) {
+                return transactionAmount;
+            }
+
+            userAsset.balance -= transactionAmount;
+
+            userAsset.loans.splice(loanNumber - 1, 1);
+
+            const saveResult = await userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
+                return null;
+            }
+
+            const result = await module.exports.deleteTransactionSchedule(`${id}-loan_${loanNumber - 1}`);
+            if (!result) return null;
+
+            serverLog(`[INFO] Repayed ${amount} amount of loaned money.`);
+            return true;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:loanRepay': ${err}`);
+            return null;
+        }
     },
 
     async setTransactionSchedule(identification_code, subject, command) {

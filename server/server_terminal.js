@@ -28,15 +28,20 @@ module.exports = {
             });
         
         program.command('notice "<title...>" "<content...>"')
-            .action((title, content) => {
+            .action(async (title, content) => {
                 postNotics(title.join(' '), content.join(' '));
             });
         
-        rl.on('line', (line) => {
+        rl.on('line', async (line) => {
             const parsedArgs = yargsParser(line);
             const commandArgs = parsedArgs._;
             const customArgs = ['node', 'index.js', ...commandArgs];
-            program.parse(customArgs);
+
+            try {
+                await program.parseAsync(customArgs);
+            } catch (err) {
+                console.log(`[COMMAND_ERROR] ${err}`);
+            }
         });
     }
 }

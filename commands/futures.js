@@ -1,10 +1,13 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { tryGetTicker, getFutureList, getFutureExpirationDate } = require('../stock_system/stock_sim');
+const { tryGetTicker, getFutureList, getFutureExpirationDate, getFutureTimeRangeData } = require('../stock_system/stock_sim');
 const { getStockName } = require('../stock_system/stock_name');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
-const { checkUserExists, futureBuy, futureLiquidate } = require('../database');
+const { checkUserExists, futureLiquidate, futureLong, futureShort } = require('../database');
 const { generateStockChartImage } = require('../stock_system/stock_chart');
+const { serverLog } = require('../server/server_logger');
+const fs = require('fs');
+const moment = require('moment-timezone');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -62,16 +65,16 @@ module.exports = {
                 )
         )
         .addSubcommand((subCommand) =>
-            subCommand.setName('매수')
-                .setDescription('선물을 매수합니다. 만기일은 /선물 만기일 을 통해 확인할 수 있습니다.')
+            subCommand.setName('롱')
+                .setDescription('선물 롱 포지션을 취합니다. 만기일은 /선물 만기일 을 통해 확인할 수 있습니다.')
                 .addStringOption((option) =>
                     option.setName('종목')
-                        .setDescription('선물을 매수할 종목 코드 또는 종목명')
+                        .setDescription('선물의 종목 코드 또는 종목명')
                         .setRequired(true)
                 )
                 .addIntegerOption((option) =>
                     option.setName('수량')
-                        .setDescription('매수할 선물의 계약수')
+                        .setDescription('선물의 계약수')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -84,20 +87,32 @@ module.exports = {
                             { name: '5배', value: 5 },
                             { name: '10배', value: 10 },
                         )
+                        .setRequired(true)
                 )
         )
         .addSubcommand((subCommand) =>
-            subCommand.setName('매도')
-                .setDescription('선물을 매도합니다.')
+            subCommand.setName('숏')
+                .setDescription('선물 숏 포지션을 잡습니다. 만기일은 /선물 만기일 을 통해 확인할 수 있습니다.')
                 .addStringOption((option) =>
                     option.setName('종목')
-                        .setDescription('선물을 매도할 종목 코드 또는 종목명')
+                        .setDescription('선물의 종목 코드 또는 종목명')
                         .setRequired(true)
                 )
                 .addIntegerOption((option) =>
                     option.setName('수량')
-                        .setDescription('매도할 선물의 계약수')
+                        .setDescription('선물의 계약수')
                         .setMinValue(0)
+                        .setRequired(true)
+                )
+                .addIntegerOption((option) =>
+                    option.setName('레버리지')
+                        .setDescription('레버리지 배율')
+                        .setChoices(
+                            { name: '2배', value: 2 },
+                            { name: '3배', value: 3 },
+                            { name: '5배', value: 5 },
+                            { name: '10배', value: 10 },
+                        )
                         .setRequired(true)
                 )
         )
@@ -117,7 +132,7 @@ module.exports = {
         ),
     
     async execute(interaction) {
-        const subCommand = interaction.options.getSubcommand;
+        const subCommand = interaction.options.getSubcommand();
 
         if (subCommand === '목록') {
             let sortingOption = interaction.options.getString('정렬기준');
@@ -127,11 +142,7 @@ module.exports = {
             }
 
             const future_list = getFutureList();
-            let stock_list_format = [];
-
-            const ticker_list = [];
-            const price_list = [];
-            const difference_list = [];
+            let future_list_format = [];
 
             let sorted_future_list;
             if (sortingOption === '가격순(높은)') {
@@ -143,6 +154,61 @@ module.exports = {
             } else if (sortingOption === '하락순') {
                 sorted_future_list = [...future_list].sort((a, b) => a.difference - b.difference);
             }
+
+            for (const future of sorted_future_list) {
+                let color;
+                let difference_sign;
+
+                if (future.difference > 0) {
+                    color = '+';
+                    difference_sign = '+';
+                } else if (future.difference < 0) {
+                    color = '-';
+                    difference_sign = '-';
+                } else {
+                    color = '=';
+                    difference_sign = '';
+                }
+                future_list_format.push(`${getStockName(future.ticker)} [${future.ticker}]\n\`\`\`diff\n${color} ${future.price} (${difference_sign}${Math.abs(future.difference).toFixed(2)})\n\`\`\``);
+            }
+
+            const pages = [];
+            const ITEMS_PER_PAGE = 5;
+            for (let i = 0; i < future_list_format.length; i += ITEMS_PER_PAGE) {
+                pages.push(future_list_format.slice(i, i + ITEMS_PER_PAGE));
+            }
+
+            const uid = uuidv4().replace(/-/g, '');
+            const cacheData = { pages: pages, currentPage: 0 };
+            createCache(uid, 15);
+            saveCache(uid, cacheData);
+
+            const previousPage = new ButtonBuilder()
+                .setCustomId(`future_previous_page-${interaction.user.id}-${uid}`)
+                .setLabel('이전')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(true);
+            
+            const nextPage = new ButtonBuilder()
+                .setCustomId(`future_next_page-${interaction.user.id}-${uid}`)
+                .setLabel('다음')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(false);
+
+            const row = new ActionRowBuilder()
+                .addComponents(previousPage, nextPage);
+            
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                    .setColor(0xF1C40F)
+                    .setTitle(':chart_with_upwards_trend:  선물 목록')
+                    .setDescription(`${pages[0].join('\n')}`)
+                    .setTimestamp()
+                ],
+                components: [row],
+                fetchReply: true
+            });
         } else if (subCommand === '차트') {
             let ticker = interaction.options.getString('종목');
             ticker = tryGetTicker(ticker.trim());
@@ -159,7 +225,61 @@ module.exports = {
                 });
                 return;
             }
-        } else if (subCommand === '매수') {
+
+            let days = interaction.options.getInteger('일');
+            let hours = interaction.options.getInteger('시간');
+            let minutes = interaction.options.getInteger('분');
+
+            if ((days === null) && (hours === null) && (minutes === null)) {
+                days = 0;
+                hours = 6;
+                minutes = 0;
+            } else {
+                if (days === null) days = 0;
+                if (hours === null) hours = 0;
+                if (minutes === null) minutes = 0;
+            }
+
+            const result = await generateStockChartImage(ticker, getFutureTimeRangeData([ticker], (days * 24) + hours, minutes), minutes);
+
+            try {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle(':chart_with_upwards_trend:  선물 차트')
+                            .setImage(`attachment://${result.filename}`)
+                    ],
+                    files: [{
+                        attachment: await result.filepath,
+                        name: result.filename,
+                     }],
+                });
+
+                try {
+                    fs.unlink(result.filepath,  (err) => {
+                        if (err) {
+                            serverLog(`[ERROR] Error deleting chart image file: ${err}`);
+                        }
+                    });
+                } catch (err) {
+                    serverLog(`[ERROR] Error deleting chart image file: ${err}`);
+                }
+            } catch (err) {
+                serverLog(`[ERROR] Error uploading chart image: ${err}`);
+
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.
+                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
+        } else if (subCommand === '롱') {
             let ticker = interaction.options.getString('종목');
             ticker = tryGetTicker(ticker.trim());
             
@@ -179,7 +299,7 @@ module.exports = {
             const quantity = interaction.options.getInteger('수량');
             const leverage = interaction.options.getInteger('레버리지');
 
-            const result = await futureBuy(interaction.user.id, ticker, quantity, leverage);
+            const result = await futureLong(interaction.user.id, ticker, quantity, leverage);
 
             console.log(`result: ${result}`);
 
@@ -216,7 +336,7 @@ module.exports = {
                     ],
                 });
             }
-        } else if (subCommand === '매도') {
+        } else if (subCommand === '숏') {
             let ticker = interaction.options.getString('종목');
             ticker = tryGetTicker(ticker.trim());
             
@@ -232,14 +352,53 @@ module.exports = {
                 });
                 return;
             }
+
+            const quantity = interaction.options.getInteger('수량');
+            const leverage = interaction.options.getInteger('레버리지');
+
+            const result = await futureShort(interaction.user.id, ticker, quantity, leverage);
+
+            console.log(`result: ${result}`);
+
+            if (result === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  주문 실패')
+                            .setDescription(`오류가 발생하였습니다.
+                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else if (result === false) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  주문 실패')
+                            .setDescription(`잔액이 부족합니다.`)
+                            .setTimestamp()
+                    ],
+                });
+            } else if (result === true) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x448FE6)
+                            .setTitle(':white_check_mark:  주문 체결 완료')
+                            .setDescription(`${ticker} 선물 ${quantity}계약 매도 주문이 체결되었습니다.`)
+                            .setTimestamp()
+                    ],
+                });
+            }
         } else if (subCommand === '청산') {
             const positionNum = interaction.options.getInteger('포지션번호');
 
             const result = await futureLiquidate(interaction.user.id, positionNum);
 
-            if (result === true) {
-
-            } else if (result === 'invalid_position') {
+            if (result === 'invalid_position') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -257,6 +416,22 @@ module.exports = {
                             .setTitle(':x:  주문 실패')
                             .setDescription(`오류가 발생하였습니다.
                                 공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+            } else {
+                let positionType;
+                if (result.quantity > 0) {
+                    positionType = '롱';
+                } else if (result.quantity < 0) {
+                    positionType = '숏';
+                }
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x448FE6)
+                            .setTitle(':white_check_mark:  포지션 청산 완료')
+                            .setDescription(`${result.ticker} 선물 ${positionType} 포지션 ${Math.abs(result.quantity)}계약이 청산되었습니다.`)
                             .setTimestamp()
                     ],
                 });

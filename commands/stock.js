@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { getStockList, tryGetTicker, getTimeRangeData, getStockInfo } = require('../stock_system/stock_sim');
+const { getStockList, tryGetTicker, getStockTimeRangeData, getStockInfo } = require('../stock_system/stock_sim');
 const { getStockName } = require('../stock_system/stock_name');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
@@ -132,10 +132,6 @@ module.exports = {
             const stock_list = getStockList();
             let stock_list_format = [];
 
-            const ticker_list = [];
-            const price_list = [];
-            const difference_list = [];
-
             let sorted_stock_list;
             if (sortingOption === '가격순(높은)') {
                 sorted_stock_list = [...stock_list].sort((a, b) => b.price - a.price);
@@ -147,7 +143,7 @@ module.exports = {
                 sorted_stock_list = [...stock_list].sort((a, b) => a.difference - b.difference);
             }
 
-            for (stock of sorted_stock_list) {
+            for (const stock of sorted_stock_list) {
                 let color;
                 let difference_sign;
                 if (stock.difference > 0) {
@@ -303,7 +299,7 @@ module.exports = {
                 if (minutes === null) minutes = 0;
             }
 
-            const result = await generateStockChartImage(ticker, getTimeRangeData([ticker], (days * 24) + hours, minutes), minutes)
+            const result = await generateStockChartImage(ticker, getStockTimeRangeData([ticker], (days * 24) + hours, minutes), minutes);
             
             try {
                 await interaction.reply({

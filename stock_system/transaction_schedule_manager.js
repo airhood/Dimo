@@ -7,6 +7,7 @@ const { serverLog } = require("../server/server_logger");
 const short_buyback_list = [];
 const future_settle_list = [];
 const option_settle_list = [];
+const loan_repay_list = [];
 
 async function cacheTransactionScheduleData() {
     const data = await getTransactionScheduleData();
@@ -14,11 +15,16 @@ async function cacheTransactionScheduleData() {
     if (data === false) {
         return false;
     } else if (data !== null) {
-        data.forEach((transaction_schedule) => {
+        const result = Promise.all(data.map(async (transaction_schedule) => {
             const commandArgs = transaction_schedule.command.split(' ');
             const customArgs = ['node', 'index.js', ...commandArgs];
-            program.parse(customArgs);
-        });
+
+            try {
+                await program.parseAsync(customArgs);
+            } catch (err) {
+                serverLog(`[ERROR] Error at 'transaction_schedule_manager.js:cacheTransactionScheduleData': ${err}`);
+            }
+        }));
         return true;
     }
     return false;
@@ -28,13 +34,13 @@ const Asset = require('../schemas/asset');
 
 module.exports = {
     async initScheduleManager() {
-        program.command('buyback stock <asset_id> <ticker> <quantity> at <time>')
-            .action((asset_id, ticker, quantity, time) => {
+        program.command('buyback stock <asset_id> <ticker> <quantity> at <date>')
+            .action((asset_id, ticker, quantity, date) => {
                 const transaction_schedule = {
                     asset_id: asset_id,
                     ticker: ticker,
                     quantity: quantity,
-                    time: new Date().setTime(time),
+                    date: new Date().setTime(date),
                 };
         
                 short_buyback_list.push(transaction_schedule);
@@ -47,6 +53,17 @@ module.exports = {
                 };
         
                 future_settle_list.push(transaction_schedule);
+            });
+        
+        program.command('repay money <asset_id> <amount> at <date>')
+            .action((asset_id, amount, date) => {
+                const transaction_schedule = {
+                    asset_id: asset_id,
+                    amount: amount,
+                    date: new Date().setTime(date),
+                };
+
+                loan_repay_list.push(transaction_schedule);
             });
 
         const result = cacheTransactionScheduleData();
@@ -121,7 +138,7 @@ module.exports = {
         });
 
         setOptionExpireCallback(async () => {
-
+            
         });
 
         return true;
