@@ -1,10 +1,21 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { checkUserExists, getUserAsset } = require('../database');
+const { checkUserExists, getUserAsset, binaryOption } = require('../database');
 const moment = require('moment-timezone');
 const { getStockPrice, getFuturePrice, getCallOptionPrice, getPutOptionPrice } = require('../stock_system/stock_sim');
 const asset = require('../schemas/asset');
 
 const ROUND_POS = 3;
+
+function mergePositions(existingQuantity, existingPurchasePrice, newQuantity, newPurchasePrice) {
+    // 총 수량
+    const totalQuantity = existingQuantity + newQuantity;
+    
+    // 내분하여 계산된 새로운 평균 구매 가격
+    const newAveragePrice = (existingPurchasePrice * existingQuantity + newPurchasePrice * newQuantity) / totalQuantity;
+
+    // 새로운 총 수량과 평균 구매 가격 반환
+    return { totalQuantity, newAveragePrice };
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -65,7 +76,9 @@ module.exports = {
             result.asset.stocks.forEach(stock => {
                 if (stocksMap.has(stock.ticker)) {
                     const existingStock = stocksMap.get(stock.ticker);
-                    existingStock.quantity += stock.quantity;
+                    const [totalQuantity, newPurchasePrice] = mergePositions(existingStock.quantity, existingStock.purchasePrice, stock.quantity, stock.purchasePrice);
+                    existingStock.quantity = totalQuantity;
+                    existingStock.purchasePrice = newPurchasePrice;
                 } else {
                     stocksMap.set(stock.ticker, JSON.parse(JSON.stringify(stock)));
                 }
@@ -74,10 +87,12 @@ module.exports = {
             
             const futuresMap = new Map();
             result.asset.futures.forEach(future => {
-                const key = `${future.ticker}-${future.expirationDate}`;
+                const key = `${future.ticker}-${future.leverage}`;
                 if (futuresMap.has(key)) {
                     const existingFuture = futuresMap.get(key);
-                    existingFuture.quantity += future.quantity;
+                    const [totalQuantity, newPurchasePrice] = mergePositions(existingFuture.quantity, existingFuture.purchasePrice, stock.quantity, stock.purchasePrice);
+                    existingFuture.quantity = totalQuantity;
+                    existingFuture.purchasePrice = newPurchasePrice;
                 } else {
                     futuresMap.set(key, JSON.parse(JSON.stringify(future)));
                 }
@@ -89,13 +104,16 @@ module.exports = {
                 const key = `${option.ticker}-${option.optionType}-${option.strikePrice}`;
                 if (optionsMap.has(key)) {
                     const existingOption = optionsMap.get(key);
-                    existingOption.quantity += option.quantity;
+                    const [totalQuantity, newPurchasePrice] = mergePositions(existingOption.quantity, existingOption.purchasePrice, stock.quantity, stock.purchasePrice);
+                    existingOption.quantity = totalQuantity;
+                    existingOption.purchasePrice = newPurchasePrice;
                 } else {
                     optionsMap.set(key, JSON.parse(JSON.stringify(option)));
                 }
             });
             const mergedOptions = [...optionsMap.values()];
 
+            const binary_options = [...result.asset.binary_options];
             const mergedFixedDeposits = [...result.asset.fixed_deposits];
             const mergedSavingsAccounts = [...result.asset.savings_accounts];
             const mergedLoans = [...result.asset.loans];
@@ -107,6 +125,7 @@ module.exports = {
                 stockShortSales: result.asset.stockShortSales,
                 futures: mergedFutures,
                 options: mergedOptions,
+                binary_options: binary_options,
                 fixed_deposits: mergedFixedDeposits,
                 savings_accounts: mergedSavingsAccounts,
                 loans: mergedLoans,
@@ -238,7 +257,7 @@ module.exports = {
                 const formattedExpirationDate = moment(future.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(future.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
 
-                const earn = (getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate;
+                const earn = (getFuturePrice(future.ticker) - future.purchasePrice) / future.purchasePrice;
                 let earnSign;
                 if (earn > 0) {
                     earnSign = '+';
@@ -258,7 +277,7 @@ module.exports = {
                 future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity)}계약
 | 현재가격: ${getFuturePrice(future.ticker)}원
 | 매수가격: ${future.purchasePrice}원
-| 평가손익: ${(future.quantity * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2)}원 (${earnSign}${((Math.round(((getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
+| 평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2)}원 (${earnSign}${((Math.round((((getFuturePrice(future.ticker) - future.purchasePrice) * future.leverage) / future.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
 | 만기일: ${formattedExpirationDate}
 | 매수날짜: ${formattedPurchaseDate})`;
             }
@@ -267,7 +286,7 @@ module.exports = {
             for (future of result.asset.futures) {
                 if (future_format !== '') future_format += '\n';
 
-                const earnRate = (getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate;
+                const earnRate = (getFuturePrice(future.ticker) - future.purchasePrice) / future.purchasePrice;
                 let earnSign;
                 if (earnRate > 0) {
                     earnSign = '+';
@@ -284,7 +303,7 @@ module.exports = {
                     positionType = '숏';
                 }
 
-                future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity)}계약 (평가손익: ${(future.quantity * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2)}원 (${earnSign}${((Math.round(((getFuturePrice(future.ticker) - future.purchasePrice) / future.purchaseDate) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%))`;
+                future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity)}계약 (평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2)}원 (${earnSign}${((Math.round(((getFuturePrice(future.ticker) - future.purchasePrice) / future.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%))`;
             }
         }
 
@@ -325,7 +344,7 @@ module.exports = {
                 option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity}계약
 | 현재가격: ${currentPrice}원
 | 매수가격: ${option.purchasePrice}원
-| 평가손익: ${(option.quantity (currentPrice - option.purchasePrice)).toFixed(2)}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
+| 평가손익: ${(option.quantity * (currentPrice - option.purchasePrice)).toFixed(2)}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
 | 행사가격: ${option.strikePrice}원
 | 만기일: ${formattedExpirationDate}
 | 매수날짜: ${formattedPurchaseDate})`;
@@ -367,6 +386,53 @@ module.exports = {
                 value: `\`\`\`${option_format}\`\`\``,
             });
         }
+
+
+        let binary_option_format = '';
+        if (loadDetails) {
+            for (binary_option of result.asset.binary_options) {
+                if (binary_option_format !== '') binary_option_format += '\n';
+
+                let direction;
+                if (prediction === 'call') {
+                    direction = '상승';
+                } else if (prediction === 'put') {
+                    direction = '하락';
+                }
+
+                const currentPrice = getStockPrice(binary_option.ticker);
+
+                const formattedExpirationDate = moment(binary_option.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                const formattedPurchaseDate = moment(binary_option.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+
+                binary_option_format += `${binary_option.ticker} ${direction} ${binary_option.amount}원 배팅
+| 현재가격: ${currentPrice}원
+| 기준가격: ${binary_option.strikePrice}원
+| 만기일: ${formattedExpirationDate}
+| 배팅날짜: ${formattedPurchaseDate})`;
+            }
+        } else {
+            for (binary_option of result.asset.binary_options) {
+                if (binary_option_format !== '') binary_option_format += '\n';
+
+                let direction;
+                if (prediction === 'call') {
+                    direction = '상승';
+                } else if (prediction === 'put') {
+                    direction = '하락';
+                }
+
+                binary_option_format += `${binary_option.ticker} ${direction} ${binary_option.amount}원 배팅`;
+            }
+        }
+
+        if (binary_option_format !== '') {
+            fields.push({
+                name: ':dart:  바이너리 옵션',
+                value: `\`\`\`${binary_option_format}\`\`\``,
+            });
+        }
+
 
         let deposit_format = '';
         if (loadDetails) {

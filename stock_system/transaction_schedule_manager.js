@@ -5,8 +5,9 @@ const { serverLog } = require("../server/server_logger");
 
 
 const short_buyback_list = [];
-const future_settle_list = [];
-const option_settle_list = [];
+const future_execute_list = [];
+const option_execute_list = [];
+const binary_option_execute_list = [];
 const loan_repay_list = [];
 
 async function cacheTransactionScheduleData() {
@@ -46,13 +47,27 @@ module.exports = {
                 short_buyback_list.push(transaction_schedule);
             });
         
-        program.command('settle future <asset_id>')
+        program.command('execute_future <asset_id>')
             .action((asset_id) => {
                 const transaction_schedule = {
                     asset_id: asset_id,
                 };
         
-                future_settle_list.push(transaction_schedule);
+                future_execute_list.push(transaction_schedule);
+            });
+        
+        program.command('execute_binary_option <asset_id> <ticker> <prediction> <expiration_date> <amount> <strike_price>')
+            .action((asset_id, ticker, prediction, expiration_date, amount, strike_price) => {
+                const transaction_schedule = {
+                    asset_id: asset_id,
+                    ticker: ticker,
+                    prediction: prediction,
+                    expiration_date: new Date().setTime(expiration_date),
+                    amount: amount,
+                    strike_price: strike_price,
+                };
+
+                binary_option_execute_list.push(transaction_schedule);
             });
         
         program.command('repay money <asset_id> <amount> at <date>')
@@ -62,7 +77,7 @@ module.exports = {
                     amount: amount,
                     date: new Date().setTime(date),
                 };
-
+                
                 loan_repay_list.push(transaction_schedule);
             });
 
@@ -70,7 +85,7 @@ module.exports = {
         if (!result) return false;
 
         setFutureExpireCallback(async () => {
-            const results = await Promise.all(future_settle_list.map(async (transaction_schedule) => {
+            const results = await Promise.all(future_execute_list.map(async (transaction_schedule) => {
                 const userAsset = await Asset.findById(transaction_schedule.asset_id);
                 if (!userAsset) {
                     serverLog('[ERROR] Error finding user');
@@ -130,7 +145,7 @@ module.exports = {
                 }));
 
                 if (!error) {
-                    serverLog(`[ERROR] Failed to settle future. asset_id: ${transaction_schedule.asset_id}`);
+                    serverLog(`[ERROR] Failed to execute future. asset_id: ${transaction_schedule.asset_id}`);
                 } else {
                     userAsset.futures = [];
                 }

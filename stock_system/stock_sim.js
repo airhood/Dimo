@@ -413,7 +413,7 @@ function calculateNextHourFuturePrice(stockData) {
         const newFuturePrices = [];
         for (const stock_price of stock_prices) {
             const result = calculateFuturePrice(stock_price, getInterestRate(), convertToSimTime(futureTimeLeft / 24));
-            newFuturePrices.push(result);
+            newFuturePrices.push(roundPos(result, 2));
         }
         newFutureData[ticker] = newFuturePrices;
     }
@@ -433,8 +433,8 @@ function calculateNextHourOptionPrice(stockData) {
             for (const strikePrice of optionsStrikePricesList) {
                 const callPrice = calculateCallOptionPrice(stock_price, strikePrice, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
                 const putPrice = calculatePutOptionPrice(stock_price, strikePrice, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
-                call.push(callPrice);
-                put.push(putPrice);
+                call.push(roundPos(callPrice, 2));
+                put.push(roundPos(putPrice, 2));
             }
 
             newOptionPrices.push({

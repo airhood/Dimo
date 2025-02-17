@@ -126,7 +126,11 @@ const AssetSchema = new Schema({
             enum: ['call', 'put'],
             required: true,
         },
-        quantity: {
+        amount: {
+            type: Number,
+            required: true,
+        },
+        strikePrice: {
             type: Number,
             required: true,
         },

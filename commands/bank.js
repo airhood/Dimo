@@ -15,7 +15,7 @@ module.exports = {
                 .setDescription('은행에서 돈을 대출을 받습니다. 매달 이자가 상환되며 원금은 만기일에 상환됩니다.')
                 .addIntegerOption((option) =>
                     option.setName('금액')
-                        .setDescription('대출할 액수')
+                        .setDescription('대출할 액수 (최소 10만원)')
                         .setMinValue(100000) // 10만원
                         .setRequired(true)
                 )

@@ -866,7 +866,7 @@ module.exports = {
             }
 
             if (userAsset.futures.length !== 0) {
-                const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
+                const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `execute_future ${userAsset._id}`);
                 if (!result) return null;
             } else {
                 const result = await module.exports.deleteTransactionSchedule(`${id}_future`);
@@ -960,7 +960,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `settle future ${userAsset._id}`);
+            const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `execute_future ${userAsset._id}`);
             if (!result) return null;
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' future success. id: ${id}`);
@@ -1023,6 +1023,17 @@ module.exports = {
 
     async callOptionBuy(id, ticker, quantity, strikePrice) {
         try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+            
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return null;
+            }
 
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:callOptionBuy': ${err}`);
@@ -1032,7 +1043,17 @@ module.exports = {
 
     async callOptionSell(id, ticker, quantity, strikePrice) {
         try {
-
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+            
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return null;
+            }
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:callOptionSell': ${err}`);
             return null;
@@ -1041,7 +1062,17 @@ module.exports = {
 
     async putOptionBuy(id, ticker, quantity, strikePrice) {
         try {
-
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+            
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return null;
+            }
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:putOptionBuy': ${err}`);
             return null;
@@ -1050,16 +1081,65 @@ module.exports = {
 
     async putOptionSell(id, ticker, quantity, strikePrice) {
         try {
-
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+            
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return null;
+            }
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:putOptionSell': ${err}`);
             return null;
         }
     },
 
-    async binaryOption(id, ticker, type, amount) {
+    async binaryOption(id, ticker, prediction, time, amount) {
         try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+            
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return null;
+            }
 
+            if (userAsset.balance < amount) return false;
+
+            const now  = new Date();
+            const expirationDate = new Date();
+            expirationDate.setHours(now.getHours() + time);
+
+            const currentPrice = getStockPrice(ticker);
+
+            userAsset.binary_options.push({
+                ticker: ticker,
+                optionType: prediction,
+                amount: amount,
+                strikePrice: currentPrice,
+                expirationDate: expirationDate,
+                purchaseDate: now,
+            });
+
+            const saveResult = await userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
+                return null;
+            }
+
+            const result = await module.exports.setTransactionSchedule(`${id}_binary_option`, id, `execute_binary_option ${userAsset._id} ${ticker} ${prediction} ${expirationDate.getTime()} ${amount} ${currentPrice}`);
+            if (!result) return null;
+            
+            serverLog(`[INFO] Binary option. ticker: ${ticker}, prediction: ${prediction}, time: ${time}, amount: ${amount}. id: ${id}`);
+            return true;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:binaryOption': ${err}`);
             return null;
