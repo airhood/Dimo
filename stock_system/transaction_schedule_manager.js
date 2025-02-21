@@ -1,5 +1,5 @@
-const { getTransactionScheduleData, deleteTransactionSchedule } = require("../database");
-const { setFutureExpireCallback, setOptionExpireCallback } = require("./stock_sim");
+const { getTransactionScheduleData, deleteTransactionSchedule, OPTION_UNIT_QUANTITY } = require("../database");
+const { setFutureExpireCallback, setOptionExpireCallback, getStockPrice } = require("./stock_sim");
 const { program } = require('commander');
 const { serverLog } = require("../server/server_logger");
 const schedule = require('node-schedule');
@@ -136,7 +136,7 @@ module.exports = {
                         const transactionAmount = currentPrice * future.quantity;
                         
                         if (userAsset.balance < transactionAmount) {
-                            serverLog(`[INFO] Buy stock failed. Not enough balance. asset_id: ${asset_id}`);
+                            serverLog(`[INFO] Buy stock failed. Not enough balance. asset_id: ${transaction_schedule.asset_id}`);
                             error = true;
                             return false;
                         }
@@ -152,30 +152,16 @@ module.exports = {
                             purchaseDate: purchaseDate,
                         });
         
-                        const saveResult = await userAsset.save();
-                        if (!saveResult) {
-                            serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
-                            error = true;
-                            return null;
-                        }
-        
-                        serverLog(`[INFO] Buy ${quantity}shares of '${ticker}' stock success. asset_id: ${asset_id}`);
+                        serverLog(`[INFO] Buy ${future.quantity}shares of '${future.ticker}' stock by future success. asset_id: ${transaction_schedule.asset_id}`);
                         return true;
                     } else if (future.quantity < 0) {
-                        const currentPrice = getStockPrice(ticker);
+                        const currentPrice = getStockPrice(future.ticker);
                         
                         const transactionAmount = currentPrice * Math.abs(future.quantity);
 
                         userAsset.balance -= transactionAmount;
 
-                        const saveResult = await userAsset.save();
-                        if (!saveResult) {
-                            serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
-                            error = true;
-                            return null;
-                        }
-
-                        serverLog(`[INFO] Sell ${quantity}shares of '${ticker}' stock success. asset_id: ${asset_id}`);
+                        serverLog(`[INFO] Sell ${future.quantity}shares of '${future.ticker}' stock by future success. asset_id: ${transaction_schedule.asset_id}`);
                         return true;
                     }
                 }));
@@ -184,6 +170,15 @@ module.exports = {
                     serverLog(`[ERROR] Failed to execute future. asset_id: ${transaction_schedule.asset_id}`);
                 } else {
                     userAsset.futures = [];
+
+                    const saveResult = await userAsset.save();
+                    if (!saveResult) {
+                        serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${transaction_schedule.asset_id}`);
+                        error = true;
+                        return null;
+                    }
+
+                    serverLog(`[INFO] Future execute process success. asset_id: ${transaction_schedule.asset_id}}`);
                 }
             }));
         });
@@ -198,16 +193,99 @@ module.exports = {
 
                 let error = false;
 
-                const optionResults = await Promise.all(userAsset.options.map(async (option) => {
+                const optionResults = await Promise.all(userAsset.options.map(async (option, index) => {
+                    if (option.optionType === 'call') {
+                        const currentPrice = getStockPrice(option.ticker);
+                        if (currentPrice > option.strikePrice) {
+                            const transactionAmount = option.strikePrice * option.quantity * OPTION_UNIT_QUANTITY;
+                            if (userAsset.balance >= transactionAmount) {
+                                const purchaseDate = new Date();
 
+                                userAsset.stocks.push({
+                                    ticker: option.ticker,
+                                    quantity: option.quantity * OPTION_UNIT_QUANTITY,
+                                    purchasePrice: option.strikePrice,
+                                    purchaseDate: purchaseDate,
+                                });
+    
+                                userAsset.balance -= transactionAmount;
+                                userAsset.balance = Math.round(userAsset.balance);
+        
+                                serverLog(`[INFO] Buy ${option.quantity * OPTION_UNIT_QUANTITY}shares of '${option.ticker}' stock at price ${option.strikePrice} by option success. asset_id: ${transaction_schedule.asset_id}`);
+                            }
+                        }
+                    } else if (option.optionType === 'put') {
+                        const currentPrice = getStockPrice(option.ticker);
+                        if (currentPrice > option.strikePrice) {
+                            let holdingStockQuantity = 0;
+                            userAsset.stocks.forEach((stock) => {
+                                if (stock.ticker === option.ticker) {
+                                    holdingStockQuantity += stock.quantity;
+                                }
+                            });
+                            
+                            let optionExecuteQuantity;
+                            const optionExecuteLimit = holdingStockQuantity % OPTION_UNIT_QUANTITY;
+                            if (optionExecuteLimit > option.quantity) {
+                                optionExecuteQuantity = option.quantity;
+                            } else {
+                                optionExecuteQuantity = optionExecuteLimit;
+                            }
+
+                            const transactionQuantity = optionExecuteQuantity * OPTION_UNIT_QUANTITY;
+                            const transactionAmount = option.strikePrice * transactionQuantity;
+
+                            let quantityLeft = transactionQuantity;
+
+                            for (let i = 0; i < userAsset.stocks.length; i++) {
+                                const stock = userAsset.stocks[i];
+                                if (stock.ticker === option.ticker) {
+                                    if (stock.quantity > quantityLeft) {
+                                        stock.quantity -= quantityLeft;
+                                        quantityLeft = 0;
+                                        break;
+                                    } else if (stock.quantity === quantityLeft) {
+                                        userAsset.stocks.splice(i, 1);
+                                        quantityLeft = 0;
+                                        break;
+                                    } else if (stock.quantity < quantityLeft) {
+                                        quantityLeft -= stock.quantity;
+                                        userAsset.stocks.splice(i, 1);
+                                        i--;
+                                    }
+                                }
+                            }
+
+                            if (quantityLeft !== 0) {
+                                serverLog(`[ERROR] Option execute optionExecuteQuantity calculation error. Wrong value. asset_id: ${transaction_schedule.asset_id}`);
+                                return null;
+                            }
+
+                            userAsset.balance += transactionAmount;
+                            userAsset.balance = Math.round(userAsset.balance);
+
+                            serverLog(`[INFO] Buy ${option.quantity * OPTION_UNIT_QUANTITY}shares of '${option.ticker}' stock at price ${option.strikePrice} by option success. asset_id: ${transaction_schedule.asset_id}`);
+                        }
+                    }
+
+                    userAsset.options.splice(index, 1);
                 }));
-
-                if (!error) {
-                    serverLog(`[ERROR] Failed to execute option. asset_id: ${transaction_schedule.asset_id}`);
-                } else {
-                    userAsset.options = [];
-                }
             }));
+
+            if (!error) {
+                serverLog(`[ERROR] Failed to execute option. asset_id: ${transaction_schedule.asset_id}`);
+            } else {
+                userAsset.options = [];
+
+                const saveResult = await userAsset.save();
+                if (!saveResult) {
+                    serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${transaction_schedule.asset_id}`);
+                    error = true;
+                    return null;
+                }
+
+                serverLog(`[INFO] Option execute process success. asset_id: ${transaction_schedule.asset_id}}`);
+            }
         });
 
         return true;

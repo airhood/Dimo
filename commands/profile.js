@@ -33,8 +33,7 @@ module.exports = {
         }
 
         const levelInfo = await getLevelInfo(targetUser.id);
-
-        const avatarURL = interaction.user.displayAvatarURL({ format: 'png', size: 1024 });
+        const avatarURL = targetUser.displayAvatarURL({ format: 'png', size: 512 });
 
         await interaction.reply({
             embeds: [
