@@ -1052,9 +1052,7 @@ module.exports = {
 
             const transactionAmount = currentPrice * quantity * OPTION_UNIT_QUANTITY;
 
-            const margin = transactionAmount * OPTION_BUY_MARGIN_RATE;
-
-            if (userAsset.balance < margin) return false;
+            if (userAsset.balance < transactionAmount) return false;
             
             const expirationDate = getOptionExpirationDate();
             const purchaseDate = new Date();
@@ -1110,9 +1108,7 @@ module.exports = {
 
             const transactionAmount = currentPrice * Math.abs(quantity) * OPTION_UNIT_QUANTITY;
 
-            const margin = transactionAmount * OPTION_SELL_MARGIN_RATE;
-
-            if (userAsset.balance < margin) return false;
+            if (userAsset.balance < transactionAmount) return false;
             
             const expirationDate = getOptionExpirationDate();
             const purchaseDate = new Date();
@@ -1168,9 +1164,7 @@ module.exports = {
 
             const transactionAmount = currentPrice * quantity * OPTION_UNIT_QUANTITY;
 
-            const margin = transactionAmount * OPTION_BUY_MARGIN_RATE;
-
-            if (userAsset.balance < margin) return false;
+            if (userAsset.balance < transactionAmount) return false;
             
             const expirationDate = getOptionExpirationDate();
             const purchaseDate = new Date();
@@ -1226,9 +1220,7 @@ module.exports = {
 
             const transactionAmount = currentPrice * Math.abs(quantity) * OPTION_UNIT_QUANTITY;
 
-            const margin = transactionAmount * OPTION_SELL_MARGIN_RATE;
-
-            if (userAsset.balance < margin) return false;
+            if (userAsset.balance < transactionAmount) return false;
             
             const expirationDate = getOptionExpirationDate();
             const purchaseDate = new Date();
@@ -1284,20 +1276,10 @@ module.exports = {
             const ticker = position.ticker;
             const optionType = position.optionType;
             const quantity = position.quantity;
-            const currentPrice = getFuturePrice(ticker);
-            const initValue = position.purchasePrice * quantity * OPTION_UNIT_QUANTITY;
+            const currentPrice = getOptionPrice(ticker);
             const currentValue = currentPrice * quantity * OPTION_UNIT_QUANTITY;
-            const margin = position.margin;
 
-            let transactionAmount;
-            if (optionType === 'call') {
-                transactionAmount = (currentValue - initValue) + margin;
-            } else if (optionType === 'put') {
-                transactionAmount = (initValue - currentValue) + margin;
-            } else {
-                serverLog(`[ERROR] invalid option type: ${optionType}`);
-                return null;
-            }
+            const transactionAmount = currentValue;
 
             userAsset.balance += transactionAmount;
             userAsset.balance = Math.round(userAsset.balance);

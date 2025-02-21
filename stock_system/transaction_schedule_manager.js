@@ -27,7 +27,7 @@ async function cacheTransactionScheduleData() {
     } else if (data !== null) {
         const result = Promise.all(data.map(async (transaction_schedule) => {
             const commandArgs = transaction_schedule.command.split(' ');
-            commandArgs.push(transaction_schedule.identification_code);
+            commandArgs.push('|', transaction_schedule.identification_code);
 
             try {
                 await program.parseAsync(commandArgs, { from: 'user' });
@@ -216,7 +216,7 @@ module.exports = {
     async addTransactionScheduleData(transaction_schedule) {
         if (!transaction_schedule) return;
         const commandArgs = transaction_schedule.command.split(' ');
-        commandArgs.push(transaction_schedule.identification_code);
+        commandArgs.push('|', transaction_schedule.identification_code);
 
         try {
             await program.parseAsync(commandArgs, { from: 'user' });

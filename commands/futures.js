@@ -404,7 +404,7 @@ module.exports = {
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle(':x:  상환 실패')
+                            .setTitle(':x:  청산 실패')
                             .setDescription(`존재하지 않는 포지션입니다.`)
                             .setTimestamp()
                     ],
@@ -414,9 +414,8 @@ module.exports = {
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle(':x:  주문 실패')
-                            .setDescription(`오류가 발생하였습니다.
-                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTitle(':x:  청산 실패')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
                             .setTimestamp()
                     ],
                 });

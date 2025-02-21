@@ -3,7 +3,7 @@ const { tryGetTicker, getTickerList, getTimeRangeData, getOptionPrice, getOption
 const { getStockName } = require('../stock_system/stock_name');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
-const { checkUserExists, callOptionBuy, callOptionSell, putOptionBuy, putOptionSell } = require('../database');
+const { checkUserExists, callOptionBuy, callOptionSell, putOptionBuy, putOptionSell, optionLiquidate } = require('../database');
 const { generateStockChartImage } = require('../stock_system/stock_chart');
 
 module.exports = {
@@ -151,6 +151,16 @@ module.exports = {
                                 .setMinValue(1)
                                 .setRequired(true)
                         )
+                )
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('청산')
+                .setDescription('옵션 포지션을 청산합니다.')
+                .addIntegerOption((option) =>
+                    option.setName('포지션번호')
+                        .setDescription('청산할 옵션 포지션의 번호 (1부터 시작 / **/자산** 을 통해 확인)')
+                        .setMinValue(1)
+                        .setRequired(true)
                 )
         )
         .addSubcommand((subCommand) =>
@@ -310,6 +320,55 @@ module.exports = {
                 });
                 return;
             }
+        } else if (subCommand === '청산') {
+            const positionNum = interaction.options.getInteger('포지션번호');
+
+            const result = await optionLiquidate(interaction.user.id, positionNum);
+
+            if (result === 'invalid_position') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  청산 실패')
+                            .setDescription(`존재하지 않는 포지션입니다.`)
+                            .setTimestamp()
+                    ],
+                });
+            } else if (result === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  청산 실패')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+            } else {
+                let formattedOptionType;
+                if (result.optionType === 'call') {
+                    formattedOptionType = '콜';
+                } else if (result.optionType === 'put') {
+                    formattedOptionType = '풋';
+                }
+
+                let positionType;
+                if (result.quantity > 0) {
+                    positionType = '매수';
+                } else if (result.quantity < 0) {
+                    positionType = '매도';
+                }
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x448FE6)
+                            .setTitle(':white_check_mark:  포지션 청산 완료')
+                            .setDescription(`${result.ticker} 옵션 ${formattedOptionType} ${positionType} 포지션 ${Math.abs(result.quantity)}계약이 청산되었습니다.`)
+                            .setTimestamp()
+                    ],
+                });
+            }
         } else if (subCommand === '만기일') {
             const expirationDate = getFutureExpirationDate();
             
@@ -340,7 +399,7 @@ module.exports = {
                             ],
                         });
                     }
-                    
+
                     const quantity = interaction.options.getInteger('수량');
                     const strikePrice = interaction.options.getInteger('행사가격');
 
