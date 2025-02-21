@@ -1,10 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { tryGetTicker, getTickerList, getTimeRangeData, getOptionPrice, getOptionStrikePriceList, getOptionTimeRangeData, getOptionStrikePriceIndex } = require('../stock_system/stock_sim');
-const { getStockName } = require('../stock_system/stock_name');
-const { createCache, saveCache } = require('../cache');
-const { v4: uuidv4 } = require('uuid');
-const { checkUserExists, callOptionBuy, callOptionSell, putOptionBuy, putOptionSell, optionLiquidate } = require('../database');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { tryGetTicker, getOptionPrice, getOptionStrikePriceList, getOptionTimeRangeData, getOptionStrikePriceIndex, getOptionExpirationDate } = require('../stock_system/stock_sim');
+const { callOptionBuy, callOptionSell, putOptionBuy, putOptionSell, optionLiquidate } = require('../database');
 const { generateStockChartImage } = require('../stock_system/stock_chart');
+const { serverLog } = require('../server/server_logger');
+const fs = require('fs');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -34,6 +33,15 @@ module.exports = {
                 .addStringOption((option) =>
                     option.setName('종목')
                         .setDescription('차트에 표시할 종목 코드 또는 종목명의 목록. ex) AAPL, TSLA, GME ...')
+                        .setRequired(true)
+                )
+                .addStringOption((option) =>
+                    option.setName('종류')
+                        .setDescription('옵션의 종류 (콜 or 풋)')
+                        .setChoices(
+                            { name: '콜(Call)', value: 'call'},
+                            { name: '풋(Put)', value: 'put'},
+                        )
                         .setRequired(true)
                 )
                 .addIntegerOption((option) =>
@@ -239,7 +247,6 @@ module.exports = {
             }
         } else if (subCommand === '차트') {
             let ticker = interaction.options.getString('종목');
-            const strikePrice = interaction.options.getInteger('행사가격');
             ticker = tryGetTicker(ticker.trim());
             
             if (ticker === null) {
@@ -254,6 +261,9 @@ module.exports = {
                 });
                 return;
             }
+
+            const direction = interaction.options.getString('종류');
+            const strikePrice = interaction.options.getInteger('행사가격');
 
             if (getOptionStrikePriceIndex(ticker, strikePrice) === null) {
                 await interaction.reply({
@@ -281,8 +291,8 @@ module.exports = {
                 if (hours === null) hours = 0;
                 if (minutes === null) minutes = 0;
             }
-
-            const result = await generateStockChartImage(ticker, getOptionTimeRangeData([ticker], (days * 24) + hours, minutes), minutes);
+            
+            const result = await generateStockChartImage(ticker, getOptionTimeRangeData([ticker], (days * 24) + hours, minutes, direction, strikePrice), minutes);
 
             try {
                 await interaction.reply({
@@ -370,7 +380,7 @@ module.exports = {
                 });
             }
         } else if (subCommand === '만기일') {
-            const expirationDate = getFutureExpirationDate();
+            const expirationDate = getOptionExpirationDate();
             
             await interaction.reply({
                 embeds: [

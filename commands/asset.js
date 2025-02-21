@@ -338,6 +338,8 @@ module.exports = {
                 let formattedOptionType;
                 const optionPrices = getOptionPrice(option.ticker);
                 const strikePriceIndex = getOptionStrikePriceIndex(option.ticker, option.strikePrice);
+                if (strikePriceIndex === null) continue;
+
                 let currentPrice;
                 if (option.optionType === 'call') {
                     formattedOptionType = '콜';
@@ -372,6 +374,8 @@ module.exports = {
                 let formattedOptionType;
                 const optionPrices = getOptionPrice(option.ticker);
                 const strikePriceIndex = getOptionStrikePriceIndex(option.ticker, option.strikePrice);
+                if (strikePriceIndex === null) continue;
+                
                 let currentPrice;
                 if (option.optionType === 'call') {
                     formattedOptionType = '콜';
@@ -413,9 +417,9 @@ module.exports = {
                 if (binary_option_format !== '') binary_option_format += '\n';
 
                 let direction;
-                if (prediction === 'call') {
+                if (binary_option.optionType === 'call') {
                     direction = '상승';
-                } else if (prediction === 'put') {
+                } else if (binary_option.optionType === 'put') {
                     direction = '하락';
                 }
 
@@ -435,9 +439,9 @@ module.exports = {
                 if (binary_option_format !== '') binary_option_format += '\n';
 
                 let direction;
-                if (prediction === 'call') {
+                if (binary_option.optionType === 'call') {
                     direction = '상승';
-                } else if (prediction === 'put') {
+                } else if (binary_option.optionType === 'put') {
                     direction = '하락';
                 }
 

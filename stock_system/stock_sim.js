@@ -491,6 +491,7 @@ function updateOptionStrikePriceList() {
 }
 
 function getOptionStrikePriceIndex(ticker, strikePrice) {
+    if (optionsStrikePricesList[ticker] === undefined) return null;
     const index = optionsStrikePricesList[ticker].indexOf(strikePrice);
     if (index === -1) return null;
     return index;
@@ -880,8 +881,18 @@ function getFutureTimeRangeData(tickerList, hoursAgo, minutesAgo) {
 function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, strikePrice) {
     if (!(direction === 'call') && !(direction === 'put')) return null;
 
-    const strikePriceIndex = getOptionStrikePriceIndex(strikePrice);
-    if (strikePriceIndex === null) return null;
+    let error = false;
+    const strikePriceIndexList = {};
+    tickerList.forEach((ticker) => {
+        const value = getOptionStrikePriceIndex(ticker, strikePrice);
+        if (value === null) {
+            error = true;
+            return;
+        }
+        strikePriceIndexList[ticker] = value;
+    });
+
+    if (error) return null;
 
     const currentHourIndex = stocksPricesHistory.length - 1;
     const currentMinuteIndex = new Date().getMinutes();
@@ -917,8 +928,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(Math.floor(targetMinuteIndex / COMPRESSION_RATE), currentMinuteIndex + 1).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndex];
-                                else if (direction === 'put') return k.put[strikePriceIndex];
+                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
+                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
                             }),
                             compressed: true,
                         };
@@ -926,8 +937,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(Math.floor(targetMinuteIndex / COMPRESSION_RATE), Math.floor(59 / COMPRESSION_RATE) + 1).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndex];
-                                else if (direction === 'put') return k.put[strikePriceIndex];
+                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
+                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
                             }),
                             compressed: true,
                         };
@@ -935,8 +946,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(0, Math.floor(59 / COMPRESSION_RATE) + 1).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndex];
-                                else if (direction === 'put') return k.put[strikePriceIndex];
+                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
+                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
                             }),
                             compressed: true,
                         };
@@ -944,8 +955,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(0, Math.floor()).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndex];
-                                else if (direction === 'put') return k.put[strikePriceIndex];
+                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
+                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
                             }),
                             compressed: true,
                         };
@@ -955,8 +966,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(targetMinuteIndex, currentMinuteIndex + 1).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndex];
-                                else if (direction === 'put') return k.put[strikePriceIndex];
+                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
+                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
                             }),
                             compressed: false,
                         };
@@ -964,8 +975,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(targetMinuteIndex, 60).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndex];
-                                else if (direction === 'put') return k.put[strikePriceIndex];
+                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
+                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
                             }),
                             compressed: false,
                         };
@@ -973,8 +984,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(0, currentMinuteIndex + 1).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndex];
-                                else if (direction === 'put') return k.put[strikePriceIndex];
+                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
+                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
                             }),
                             compressed: false,
                         };
@@ -982,8 +993,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(0, 60).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndex];
-                                else if (direction === 'put') return k.put[strikePriceIndex];
+                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
+                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
                             }),
                             compressed: false,
                         };
