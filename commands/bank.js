@@ -140,10 +140,12 @@ module.exports = {
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle('오류가 발생했습니다')
-                            .setDescription('공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.')
-                    ]
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
                 });
+                return;
             }
         } else if (subCommand === '상환') {
             const loanNumber = interaction.options.getInteger('대출번호');
@@ -163,11 +165,13 @@ module.exports = {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
-                        .setColor(0xEA4144)
-                        .setTitle('오류가 발생했습니다')
-                        .setDescription('공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.')
-                    ]
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
                 });
+                return;
             } else {
                 await interaction.reply({
                     embeds: [

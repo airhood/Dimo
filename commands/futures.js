@@ -86,6 +86,9 @@ module.exports = {
                             { name: '3배', value: 3 },
                             { name: '5배', value: 5 },
                             { name: '10배', value: 10 },
+                            { name: '20배', value: 20 },
+                            { name: '50배', value: 50 },
+                            { name: '100배', value: 100 },
                         )
                         .setRequired(true)
                 )
@@ -112,6 +115,9 @@ module.exports = {
                             { name: '3배', value: 3 },
                             { name: '5배', value: 5 },
                             { name: '10배', value: 10 },
+                            { name: '20배', value: 20 },
+                            { name: '50배', value: 50 },
+                            { name: '100배', value: 100 },
                         )
                         .setRequired(true)
                 )
@@ -272,8 +278,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle('서버 오류')
-                            .setDescription(`오류가 발생하였습니다.
-                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
                             .setTimestamp()
                     ],
                 });
@@ -308,9 +313,8 @@ module.exports = {
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle(':x:  주문 실패')
-                            .setDescription(`오류가 발생하였습니다.
-                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
                             .setTimestamp()
                     ],
                 });
@@ -363,9 +367,8 @@ module.exports = {
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle(':x:  주문 실패')
-                            .setDescription(`오류가 발생하였습니다.
-                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
                             .setTimestamp()
                     ],
                 });

@@ -134,23 +134,10 @@ function calculatePutOptionPrice(S, K, r, T, sigma) {
     return K * Math.exp(-r * T) * N_d2 - S * N_d1;
 }
 
-// 예시: 주식 가격, 이자율, 만기까지 남은 시간, 변동성, 행사가격 설정
 // const S = 100;  // 주식 가격 (현물 가격)
 // const K = 100;  // 행사가격
 // const r = 0.05; // 무위험 이자율 (5%: 고금리, 3%: 중간, 1%: 저금리)
 // const T = 1;    // 만기까지 남은 시간 (1년)
-
-// 선물 가격 계산
-// const futurePrice = calculateFuturePrice(S, r, T);
-// console.log('선물 가격:', futurePrice);
-
-// // 콜옵션 가격 계산
-// const callOptionPrice = calculateCallOptionPrice(S, K, r, T, sigma);
-// console.log('콜옵션 가격:', callOptionPrice);
-
-// // 풋옵션 가격 계산
-// const putOptionPrice = calculatePutOptionPrice(S, K, r, T, sigma);
-// console.log('풋옵션 가격:', putOptionPrice);
 
 const tickerList = [];
 
@@ -294,6 +281,8 @@ async function loadRecentStockData() {
                             }
                             stocksPricesHistory.push(fillinStockData);
                             newsDataHistory.push(fillinNewsData);
+                            tickerList.push(...Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]));
+                            updateOptionStrikePriceList();
                             calculateNextHourFuturePrice(fillinStockData);
                             calculateNextHourOptionPrice(fillinStockData);
                             backupRecentData(true);
@@ -305,11 +294,11 @@ async function loadRecentStockData() {
                             }
                             stocksPricesHistory.push(firstStockData);
                             newsDataHistory.push(firstNewsData);
+                            updateOptionStrikePriceList();
                             calculateNextHourFuturePrice(firstStockData);
                             calculateNextHourOptionPrice(firstStockData);
                             backupRecentData(false);
-                        }
-                        else {
+                        } else {
                             let hourIndex = 0;
                             lines.forEach(line => {
                                 if (line.trim().startsWith('[') && line.trim().endsWith(']')) {
@@ -369,17 +358,20 @@ async function loadRecentStockData() {
 
                             
                             stocksPricesHistory.push(previousHourStockData);
+                            tickerList.push(...Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]));
+                            updateOptionStrikePriceList();
                             calculateNextHourFuturePrice(previousHourStockData);
                             calculateNextHourOptionPrice(previousHourStockData);
                             backupRecentData(true);
                             stocksPricesHistory.push(newStockData);
+                            updateOptionStrikePriceList();
                             calculateNextHourFuturePrice(newStockData);
                             calculateNextHourOptionPrice(newStockData);
                             backupRecentData(false);
                             serverLog('[INFO] Loaded recent stock price data.');
                         }
 
-                        tickerList.push(...Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]));
+                        updateProductTimeLeft();
 
                         resolve();
                     });
@@ -430,7 +422,7 @@ function calculateNextHourOptionPrice(stockData) {
             const call = [];
             const put = [];
 
-            for (const strikePrice of optionsStrikePricesList) {
+            for (const strikePrice of optionsStrikePricesList[ticker]) {
                 const callPrice = calculateCallOptionPrice(stock_price, strikePrice, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
                 const putPrice = calculatePutOptionPrice(stock_price, strikePrice, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
                 call.push(roundPos(callPrice, 2));
@@ -452,7 +444,16 @@ const HOURS_IN_A_WEEK = 24 * 7; // 1주일
 
 function updateFutureTimeLeft() {
     if (futureTimeLeft === null) {
-        futureTimeLeft = HOURS_IN_A_WEEK;
+        const now = new Date();
+        const friday = new Date(now);
+
+        friday.setDate(now.getDate() + (6 - now.getDay() + 7) % 7);
+        friday.setHours(0, 0, 0, 0);
+
+        // 금요일의 00:00에서 금요일 23:59까지 남은 시간 계산
+        const remainingTime = (friday - now) / (1000 * 60 * 60);
+
+        futureTimeLeft = Math.ceil(remainingTime);
         return;
     }
 
@@ -478,6 +479,7 @@ function calculateOptionStrikePriceDist(price) {
     for (let diff = UNIT_DIFF * (-3); diff <= UNIT_DIFF * 3; diff += UNIT_DIFF) {
         strikePrice.push(standardPrice + diff);
     }
+    strikePrice.reverse();
     return strikePrice;
 }
 
@@ -488,16 +490,36 @@ function updateOptionStrikePriceList() {
     }
 }
 
+function getOptionStrikePriceIndex(ticker, strikePrice) {
+    const index = optionsStrikePricesList[ticker].indexOf(strikePrice);
+    if (index === -1) return null;
+    return index;
+}
+
+function getOptionStrikePriceList(ticker) {
+    return optionsStrikePricesList[ticker];
+}
+
 function updateOptionTimeLeft() {
     if (optionTimeLeft === null) {
-        optionTimeLeft = HOURS_IN_A_WEEK;
+        const now = new Date();
+        const friday = new Date(now);
+
+        friday.setDate(now.getDate() + (6 - now.getDay() + 7) % 7);
+        friday.setHours(0, 0, 0, 0);
+
+        // 금요일의 00:00에서 금요일 23:59까지 남은 시간 계산
+        const remainingTime = (friday - now) / (1000 * 60 * 60);
+
+        optionTimeLeft = Math.ceil(remainingTime);
+        return;
     }
 
     optionTimeLeft--;
 
     if (optionTimeLeft === 0) {
         optionExpireCallback();
-
+        updateOptionStrikePriceList();
         optionTimeLeft = HOURS_IN_A_WEEK;
     }
 }
@@ -600,7 +622,8 @@ function getFuturePrice(ticker) {
 
 function getFutureExpirationDate() {
     const date = new Date();
-    date.setTime(date.getTime() - (futureTimeLeft * 60 * 60 * 1000));
+    date.setMinutes(0, 0, 0);
+    date.setHours(date.getHours() + futureTimeLeft);
     return date;
 }
 
@@ -632,7 +655,8 @@ function getOptionPrice(ticker) {
 
 function getOptionExpirationDate() {
     const date = new Date();
-    date.setTime(date.getTime() - (optionTimeLeft * 60 * 60 * 1000));
+    date.setMinutes(0, 0, 0);
+    date.setHours(date.getHours() + optionTimeLeft);
     return date;
 }
 
@@ -685,7 +709,7 @@ function getStockTimeRangeData(tickerList, hoursAgo, minutesAgo) {
     for (let hourIndex = targetHourIndex; (hourIndex <= currentHourIndex) && (hourIndex < stocksPricesHistory.length); hourIndex++) {
         const hourData = Object.keys(stocksPricesHistory[hourIndex]).map(ticker => {
             const result = tickerList.filter((val) => {
-                return val == ticker
+                return val == ticker;
             });
 
             if (Array.isArray(result) && result.length === 0) {
@@ -780,7 +804,7 @@ function getFutureTimeRangeData(tickerList, hoursAgo, minutesAgo) {
     for (let hourIndex = targetHourIndex; (hourIndex <= currentHourIndex) && (hourIndex < futuresPricesHistory.length); hourIndex++) {
         const hourData = Object.keys(futuresPricesHistory[hourIndex]).map(ticker => {
             const result = tickerList.filter((val) => {
-                return val == ticker
+                return val == ticker;
             });
 
             if (Array.isArray(result) && result.length === 0) {
@@ -849,7 +873,131 @@ function getFutureTimeRangeData(tickerList, hoursAgo, minutesAgo) {
             timeRangeData.push(hourData);
         }
     }
+    
+    return timeRangeData;
+}
 
+function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, strikePrice) {
+    if (!(direction === 'call') && !(direction === 'put')) return null;
+
+    const strikePriceIndex = getOptionStrikePriceIndex(strikePrice);
+    if (strikePriceIndex === null) return null;
+
+    const currentHourIndex = stocksPricesHistory.length - 1;
+    const currentMinuteIndex = new Date().getMinutes();
+
+    let targetHourIndex = currentHourIndex - hoursAgo;
+    let targetMinuteIndex = currentMinuteIndex - minutesAgo;
+
+    if (targetMinuteIndex < 0) {
+        targetHourIndex -= 1;
+        targetMinuteIndex = 60 + targetMinuteIndex;
+    }
+
+    if (targetHourIndex < 0) {
+        targetHourIndex = 0;
+        targetMinuteIndex = 0;
+    }
+
+    const timeRangeData = [];
+
+    for (let hourIndex = targetHourIndex; (hourIndex <= currentHourIndex) && (hourIndex < optionsPricesHistory.length); hourIndex++) {
+        const hourData = Object.keys(optionsPricesHistory[hourIndex]).map(ticker => {
+            const result = tickerList.filter((val) => {
+                return val == ticker;
+            });
+
+            if (Array.isArray(result) && result.length === 0) {
+
+            } else {
+                const stockPrices = optionsPricesHistory[hourIndex][ticker];
+                
+                if (hourIndex <= currentHourIndex - COMPRESSION_CUTOFF) {
+                    if (targetHourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(Math.floor(targetMinuteIndex / COMPRESSION_RATE), currentMinuteIndex + 1).map((k) => {
+                                if (direction === 'call') return k.call[strikePriceIndex];
+                                else if (direction === 'put') return k.put[strikePriceIndex];
+                            }),
+                            compressed: true,
+                        };
+                    } else if (hourIndex === targetHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(Math.floor(targetMinuteIndex / COMPRESSION_RATE), Math.floor(59 / COMPRESSION_RATE) + 1).map((k) => {
+                                if (direction === 'call') return k.call[strikePriceIndex];
+                                else if (direction === 'put') return k.put[strikePriceIndex];
+                            }),
+                            compressed: true,
+                        };
+                    } else if (hourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, Math.floor(59 / COMPRESSION_RATE) + 1).map((k) => {
+                                if (direction === 'call') return k.call[strikePriceIndex];
+                                else if (direction === 'put') return k.put[strikePriceIndex];
+                            }),
+                            compressed: true,
+                        };
+                    } else {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, Math.floor()).map((k) => {
+                                if (direction === 'call') return k.call[strikePriceIndex];
+                                else if (direction === 'put') return k.put[strikePriceIndex];
+                            }),
+                            compressed: true,
+                        };
+                    }
+                } else {
+                    if (targetHourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(targetMinuteIndex, currentMinuteIndex + 1).map((k) => {
+                                if (direction === 'call') return k.call[strikePriceIndex];
+                                else if (direction === 'put') return k.put[strikePriceIndex];
+                            }),
+                            compressed: false,
+                        };
+                    } else if (hourIndex === targetHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(targetMinuteIndex, 60).map((k) => {
+                                if (direction === 'call') return k.call[strikePriceIndex];
+                                else if (direction === 'put') return k.put[strikePriceIndex];
+                            }),
+                            compressed: false,
+                        };
+                    } else if (hourIndex === currentHourIndex) {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, currentMinuteIndex + 1).map((k) => {
+                                if (direction === 'call') return k.call[strikePriceIndex];
+                                else if (direction === 'put') return k.put[strikePriceIndex];
+                            }),
+                            compressed: false,
+                        };
+                    } else {
+                        return {
+                            ticker: ticker,
+                            prices: stockPrices.slice(0, 60).map((k) => {
+                                if (direction === 'call') return k.call[strikePriceIndex];
+                                else if (direction === 'put') return k.put[strikePriceIndex];
+                            }),
+                            compressed: false,
+                        };
+                    }
+                }
+            }
+
+        }).filter(element => element);
+
+        if (hourData) {
+            timeRangeData.push(hourData);
+        }
+    }
+    
     return timeRangeData;
 }
 
@@ -872,3 +1020,7 @@ exports.getTickerList = getTickerList;
 
 exports.getStockTimeRangeData = getStockTimeRangeData;
 exports.getFutureTimeRangeData = getFutureTimeRangeData;
+exports.getOptionTimeRangeData = getOptionTimeRangeData;
+
+exports.getOptionStrikePriceIndex = getOptionStrikePriceIndex;
+exports.getOptionStrikePriceList = getOptionStrikePriceList;

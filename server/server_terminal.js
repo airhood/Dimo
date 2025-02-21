@@ -13,8 +13,8 @@ module.exports = {
     initTerminal() {
         program.command('ban <id> "[details...]"')
             .action((id, details) => {
-                const detailsContent = details.join(' ');
-                banUser(id, detailsContent);
+                const cleanedDetails = details.replace(/^"|"$/g, '');
+                banUser(id, cleanedDetails);
             });
         
         program.command('add_keyword <keyword>')
@@ -29,16 +29,17 @@ module.exports = {
         
         program.command('notice "<title...>" "<content...>"')
             .action(async (title, content) => {
-                postNotics(title.join(' '), content.join(' '));
+                const cleanedTitle = title.replace(/^"|"$/g, '');
+                const cleanedContent = content.replace(/^"|"$/g, '');
+                postNotics(cleanedTitle, cleanedContent);
             });
         
         rl.on('line', async (line) => {
             const parsedArgs = yargsParser(line);
             const commandArgs = parsedArgs._;
-            const customArgs = ['node', 'index.js', ...commandArgs];
 
             try {
-                await program.parseAsync(customArgs);
+                await program.parseAsync(commandArgs, { from: 'user' });
             } catch (err) {
                 console.log(`[COMMAND_ERROR] ${err}`);
             }

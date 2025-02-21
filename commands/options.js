@@ -1,9 +1,9 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { tryGetTicker, getTickerList, getTimeRangeData, getOptionPrice } = require('../stock_system/stock_sim');
+const { tryGetTicker, getTickerList, getTimeRangeData, getOptionPrice, getOptionStrikePriceList, getOptionTimeRangeData, getOptionStrikePriceIndex } = require('../stock_system/stock_sim');
 const { getStockName } = require('../stock_system/stock_name');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
-const { checkUserExists } = require('../database');
+const { checkUserExists, callOptionBuy, callOptionSell, putOptionBuy, putOptionSell } = require('../database');
 const { generateStockChartImage } = require('../stock_system/stock_chart');
 
 module.exports = {
@@ -34,6 +34,11 @@ module.exports = {
                 .addStringOption((option) =>
                     option.setName('종목')
                         .setDescription('차트에 표시할 종목 코드 또는 종목명의 목록. ex) AAPL, TSLA, GME ...')
+                        .setRequired(true)
+                )
+                .addIntegerOption((option) =>
+                    option.setName('행사가격')
+                        .setDescription('차트에 표시할 옵션의 행사 가격')
                         .setRequired(true)
                 )
                 .addIntegerOption((option) =>
@@ -149,16 +154,12 @@ module.exports = {
                 )
         )
         .addSubcommand((subCommand) =>
-            subCommand.setName('행사가격')
-                .setDescription('현재 존재하는 옵션들의 행사가격을 가져옵니다.')
-        )
-        .addSubcommand((subCommand) =>
             subCommand.setName('만기일')
                 .setDescription('옵션의 만기일을 가져옵니다.')
         ),
     
     async execute(interaction) {
-        const subCommand = interaction.options.getSubcommand;
+        const subCommand = interaction.options.getSubcommand();
 
         if (subCommand === '가격') {
             let ticker = interaction.options.getString('종목');
@@ -177,41 +178,411 @@ module.exports = {
                 return;
             }
 
-            const optionPrice = getOptionPrice(ticker);
+            const optionPrices = getOptionPrice(ticker);
 
-            if (optionPrice === null) {
+            if (optionPrices === null) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle('서버 오류')
-                            .setDescription(`오류가 발생하였습니다.
-                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else {
+                const strikePriceList = getOptionStrikePriceList(ticker);
+                const call = optionPrices.call;
+                const put = optionPrices.put;
+
+                const fields = [];
+
+                let callFormat = '';
+                for (let i = 0; i < call.length; i++) {
+                    callFormat += `\n${strikePriceList[i]}원: ${call[i]}`;
+                }
+
+                fields.push({
+                    name: ':chart_with_upwards_trend:  풋옵션',
+                    value: `\`\`\`${callFormat}\`\`\``,
+                });
+                
+                let putFormat = '';
+                for (let i = 0; i < put.length; i++) {
+                    putFormat += `\n${strikePriceList[i]}원: ${put[i]}`;
+                }
+
+                fields.push({
+                    name: ':chart_with_downwards_trend:  콜옵션',
+                    value: `\`\`\`${putFormat}\`\`\``,
+                });
+
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xF1C40F)
+                            .setTitle(`${ticker} 옵션 가격`)
+                            .setFields(fields)
+                    ],
+                });
+            }
+        } else if (subCommand === '차트') {
+            let ticker = interaction.options.getString('종목');
+            const strikePrice = interaction.options.getInteger('행사가격');
+            ticker = tryGetTicker(ticker.trim());
+            
+            if (ticker === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  차트 불러오기 실패')
+                            .setDescription(`존재하지 않는 종목입니다.`)
                             .setTimestamp()
                     ],
                 });
                 return;
             }
-        } else if (subCommand === '차트') {
 
-        } else if (subCommand === '행사가격') {
+            if (getOptionStrikePriceIndex(ticker, strikePrice) === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  차트 불러오기 실패')
+                            .setDescription(`존재하지 않는 행사가격입니다.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
 
+            let days = interaction.options.getInteger('일');
+            let hours = interaction.options.getInteger('시간');
+            let minutes = interaction.options.getInteger('분');
+
+            if ((days === null) && (hours === null) && (minutes === null)) {
+                days = 0;
+                hours = 6;
+                minutes = 0;
+            } else {
+                if (days === null) days = 0;
+                if (hours === null) hours = 0;
+                if (minutes === null) minutes = 0;
+            }
+
+            const result = await generateStockChartImage(ticker, getOptionTimeRangeData([ticker], (days * 24) + hours, minutes), minutes);
+
+            try {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle(':chart_with_upwards_trend:  옵션 차트')
+                            .setImage(`attachment://${result.filename}`)
+                    ],
+                    files: [{
+                        attachment: await result.filepath,
+                        name: result.filename,
+                     }],
+                });
+
+                try {
+                    fs.unlink(result.filepath,  (err) => {
+                        if (err) {
+                            serverLog(`[ERROR] Error deleting chart image file: ${err}`);
+                        }
+                    });
+                } catch (err) {
+                    serverLog(`[ERROR] Error deleting chart image file: ${err}`);
+                }
+            } catch (err) {
+                serverLog(`[ERROR] Error uploading chart image: ${err}`);
+
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
         } else if (subCommand === '만기일') {
+            const expirationDate = getFutureExpirationDate();
             
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle('옵션 만기일')
+                        .setDescription(`${moment(expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm')}`)
+                ],
+            });
         } else {
             const subCommandGroup = interaction.options.getSubcommandGroup();
 
             if (subCommandGroup === '콜') {
                 if (subCommand === '매수') {
-
-                } else if (subCommand === '매도') {
+                    let ticker = interaction.options.getString('종목');
+                    ticker = tryGetTicker(ticker.trim());
                     
+                    if (ticker === null) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x:  주문 실패')
+                                    .setDescription(`존재하지 않는 종목입니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    }
+                    
+                    const quantity = interaction.options.getInteger('수량');
+                    const strikePrice = interaction.options.getInteger('행사가격');
+
+                    const result = await callOptionBuy(interaction.user.id, ticker, quantity, strikePrice);
+
+                    if (result === 'invalid_strikePrice') {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x: 주문 실패')
+                                    .setDescription('현재 거래되고 있지 않는 상품입니다.')
+                                    .setTimestamp()
+                            ],
+                        });
+                        return;
+                    } else if (result === false) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x:  주문 실패')
+                                    .setDescription(`잔액이 부족합니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    } else if (result === true) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0x448FE6)
+                                    .setTitle(':white_check_mark:  주문 체결 완료')
+                                    .setDescription(`콜옵션 ${quantity}계약 매수 주문이 체결되었습니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    } else {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle('서버 오류')
+                                    .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                        return;
+                    }
+                } else if (subCommand === '매도') {
+                    let ticker = interaction.options.getString('종목');
+                    ticker = tryGetTicker(ticker.trim());
+                    
+                    if (ticker === null) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x:  주문 실패')
+                                    .setDescription(`존재하지 않는 종목입니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    }
+
+                    const quantity = interaction.options.getInteger('수량');
+                    const strikePrice = interaction.options.getInteger('행사가격');
+
+                    const result = await callOptionSell(interaction.user.id, ticker, quantity, strikePrice);
+
+                    if (result === 'invalid_strikePrice') {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x: 주문 실패')
+                                    .setDescription('현재 거래되고 있지 않는 상품입니다.')
+                                    .setTimestamp()
+                            ],
+                        });
+                        return;
+                    } else if (result === false) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x:  주문 실패')
+                                    .setDescription(`잔액이 부족합니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    } else if (result === true) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0x448FE6)
+                                    .setTitle(':white_check_mark:  주문 체결 완료')
+                                    .setDescription(`콜옵션 ${quantity}계약 매도 주문이 체결되었습니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    } else {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle('서버 오류')
+                                    .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                        return;
+                    }
                 }
             } else if (subCommandGroup === '풋') {
                 if (subCommand === '매수') {
-
-                } else if (subCommand === '매도') {
+                    let ticker = interaction.options.getString('종목');
+                    ticker = tryGetTicker(ticker.trim());
                     
+                    if (ticker === null) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x:  주문 실패')
+                                    .setDescription(`존재하지 않는 종목입니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    }
+                    
+                    const quantity = interaction.options.getInteger('수량');
+                    const strikePrice = interaction.options.getInteger('행사가격');
+
+                    const result = await putOptionBuy(interaction.user.id, ticker, quantity, strikePrice);
+
+                    if (result === 'invalid_strikePrice') {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x: 주문 실패')
+                                    .setDescription('현재 거래되고 있지 않는 상품입니다.')
+                                    .setTimestamp()
+                            ],
+                        });
+                        return;
+                    } else if (result === false) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x:  주문 실패')
+                                    .setDescription(`잔액이 부족합니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    } else if (result === true) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0x448FE6)
+                                    .setTitle(':white_check_mark:  주문 체결 완료')
+                                    .setDescription(`풋옵션 ${quantity}계약 매수 주문이 체결되었습니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    } else {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle('서버 오류')
+                                    .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                        return;
+                    }
+                } else if (subCommand === '매도') {
+                    let ticker = interaction.options.getString('종목');
+                    ticker = tryGetTicker(ticker.trim());
+                    
+                    if (ticker === null) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x:  주문 실패')
+                                    .setDescription(`존재하지 않는 종목입니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    }
+
+                    const quantity = interaction.options.getInteger('수량');
+                    const strikePrice = interaction.options.getInteger('행사가격');
+
+                    const result = await putOptionSell(interaction.user.id, ticker, quantity, strikePrice);
+
+                    if (result === 'invalid_strikePrice') {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x: 주문 실패')
+                                    .setDescription('현재 거래되고 있지 않는 상품입니다.')
+                                    .setTimestamp()
+                            ],
+                        });
+                        return;
+                    } else if (result === false) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle(':x:  주문 실패')
+                                    .setDescription(`잔액이 부족합니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    } else if (result === true) {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0x448FE6)
+                                    .setTitle(':white_check_mark:  주문 체결 완료')
+                                    .setDescription(`풋옵션 ${quantity}계약 매도 주문이 체결되었습니다.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                    } else {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle('서버 오류')
+                                    .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                        return;
+                    }
                 }
             }
         }

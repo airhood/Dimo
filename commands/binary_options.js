@@ -68,9 +68,8 @@ module.exports = {
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0xEA4144)
-                        .setTitle(':x:  주문 실패')
-                        .setDescription(`오류가 발생하였습니다.
-                            공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTitle('서버 오류')
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
                         .setTimestamp()
                 ],
             });

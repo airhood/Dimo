@@ -2,7 +2,7 @@ const { MongoClient, ServerApiVersion } = require('mongodb');
 const mongoose = require('mongoose');
 const { mongodb_url }  = require('./config.json');
 const { serverLog } = require('./server/server_logger');
-const { getStockPrice, getFuturePrice, getFutureExpirationDate } = require('./stock_system/stock_sim');
+const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionStrikePriceIndex, getOptionExpirationDate } = require('./stock_system/stock_sim');
 require('dotenv').config();
 
 
@@ -21,6 +21,12 @@ mongoose.connection.on('reconnected', () => {
 mongoose.connection.on('reconnectFailed', () => {
     console.log('[MONGO_DB] Database reconnectFailed');
 });
+
+
+const SHORT_SELL_MARGIN_RATE = 1.4;
+const OPTION_BUY_MARGIN_RATE = 1;
+const OPTION_SELL_MARGIN_RATE = 1.5;
+const OPTION_UNIT_QUANTITY = 100;
 
 
 const User = require('./schemas/user');
@@ -659,7 +665,6 @@ module.exports = {
     },
 
     async stockShortSell(id, ticker, quantity) {
-        const SHORT_SELL_MARGIN_RATE = 1.4;
         try {
             const user = await User.findOne({ userID: id });
             if (user === null) {
@@ -688,6 +693,7 @@ module.exports = {
             }
 
             userAsset.balance += transactionAmount;
+            userAsset.balance -= margin;
             userAsset.balance = Math.round(userAsset.balance);
 
             const sellDate = new Date();
@@ -763,6 +769,7 @@ module.exports = {
 
             if (quantityLeft !== 0) return false;
 
+            userAsset.balance += userAsset.stockShortSales[positionNum - 1].margin;
             userAsset.stockShortSales.splice(positionNum - 1, 1);
             
             const saveResult = await userAsset.save();
@@ -992,11 +999,13 @@ module.exports = {
             const position = userAsset.futures[positionNum - 1];
             const ticker = position.ticker;
             const quantity = position.quantity;
+            const leverage = position.leverage;
             const currentPrice = getFuturePrice(ticker);
-            const initValue = position.purchasePrice * quantity;
-            const currentValue = currentPrice * quantity;
+            const initValue = position.purchasePrice * quantity * leverage;
+            const currentValue = currentPrice * quantity * leverage;
+            const margin = position.margin;
 
-            const transactionAmount = currentValue - initValue;
+            const transactionAmount = (currentValue - initValue) + margin;
             userAsset.balance += transactionAmount;
             userAsset.balance = Math.round(userAsset.balance);
 
@@ -1016,7 +1025,7 @@ module.exports = {
             serverLog(`[INFO] Liquidated ${quantity}contracts of '${ticker}' future success. id: ${id}`);
             return position;
         } catch (err) {
-            serverLog(`[ERROR] Error at 'database.js:futureSell': ${err}`);
+            serverLog(`[ERROR] Error at 'database.js:futureLiquidate': ${err}`);
             return null;
         }
     },
@@ -1035,6 +1044,44 @@ module.exports = {
                 return null;
             }
 
+            const optionPrices = getOptionPrice(ticker);
+            const callOptionPrice = optionPrices.call;
+            const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
+            if (strikePriceIndex === null) return 'invalid_strikePrice';
+            const currentPrice = callOptionPrice[strikePriceIndex];
+
+            const transactionAmount = currentPrice * quantity * OPTION_UNIT_QUANTITY;
+
+            const margin = transactionAmount * OPTION_BUY_MARGIN_RATE;
+
+            if (userAsset.balance < margin) return false;
+            
+            const expirationDate = getOptionExpirationDate();
+            const purchaseDate = new Date();
+
+            userAsset.options.push({
+                ticker: ticker,
+                optionType: 'call',
+                quantity: quantity,
+                strikePrice: strikePrice,
+                expirationDate: expirationDate,
+                purchasePrice: currentPrice,
+                purchaseDate: purchaseDate,
+            });
+
+            userAsset.balance -= transactionAmount;
+
+            const saveResult = await userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
+                return null;
+            }
+
+            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${userAsset._id}`);
+            if (!result) return null;
+
+            serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' call option success. id: ${id}`);
+            return true;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:callOptionBuy': ${err}`);
             return null;
@@ -1054,6 +1101,45 @@ module.exports = {
                 serverLog('[ERROR] Error finding user asset');
                 return null;
             }
+
+            const optionPrices = getOptionPrice(ticker);
+            const callOptionPrice = optionPrices.call;
+            const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
+            if (strikePriceIndex === null) return 'invalid_strikePrice';
+            const currentPrice = callOptionPrice[strikePriceIndex];
+
+            const transactionAmount = currentPrice * Math.abs(quantity) * OPTION_UNIT_QUANTITY;
+
+            const margin = transactionAmount * OPTION_SELL_MARGIN_RATE;
+
+            if (userAsset.balance < margin) return false;
+            
+            const expirationDate = getOptionExpirationDate();
+            const purchaseDate = new Date();
+
+            userAsset.options.push({
+                ticker: ticker,
+                optionType: 'call',
+                quantity: quantity,
+                strikePrice: strikePrice,
+                expirationDate: expirationDate,
+                purchasePrice: currentPrice,
+                purchaseDate: purchaseDate,
+            });
+
+            userAsset.balance += transactionAmount;
+
+            const saveResult = await userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
+                return null;
+            }
+
+            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${userAsset._id}`);
+            if (!result) return null;
+
+            serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' call option success. id: ${id}`);
+            return true;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:callOptionSell': ${err}`);
             return null;
@@ -1073,6 +1159,45 @@ module.exports = {
                 serverLog('[ERROR] Error finding user asset');
                 return null;
             }
+
+            const optionPrices = getOptionPrice(ticker);
+            const putOptionPrice = optionPrices.put;
+            const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
+            if (strikePriceIndex === null) return 'invalid_strikePrice';
+            const currentPrice = putOptionPrice[strikePriceIndex];
+
+            const transactionAmount = currentPrice * quantity * OPTION_UNIT_QUANTITY;
+
+            const margin = transactionAmount * OPTION_BUY_MARGIN_RATE;
+
+            if (userAsset.balance < margin) return false;
+            
+            const expirationDate = getOptionExpirationDate();
+            const purchaseDate = new Date();
+
+            userAsset.options.push({
+                ticker: ticker,
+                optionType: 'put',
+                quantity: quantity,
+                strikePrice: strikePrice,
+                expirationDate: expirationDate,
+                purchasePrice: currentPrice,
+                purchaseDate: purchaseDate,
+            });
+
+            userAsset.balance -= transactionAmount;
+
+            const saveResult = await userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
+                return null;
+            }
+
+            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${userAsset._id}`);
+            if (!result) return null;
+
+            serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' put option success. id: ${id}`);
+            return true;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:putOptionBuy': ${err}`);
             return null;
@@ -1092,8 +1217,108 @@ module.exports = {
                 serverLog('[ERROR] Error finding user asset');
                 return null;
             }
+
+            const optionPrices = getOptionPrice(ticker);
+            const putOptionPrice = optionPrices.put;
+            const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
+            if (strikePriceIndex === null) return 'invalid_strikePrice';
+            const currentPrice = putOptionPrice[strikePriceIndex];
+
+            const transactionAmount = currentPrice * Math.abs(quantity) * OPTION_UNIT_QUANTITY;
+
+            const margin = transactionAmount * OPTION_SELL_MARGIN_RATE;
+
+            if (userAsset.balance < margin) return false;
+            
+            const expirationDate = getOptionExpirationDate();
+            const purchaseDate = new Date();
+
+            userAsset.options.push({
+                ticker: ticker,
+                optionType: 'put',
+                quantity: quantity,
+                strikePrice: strikePrice,
+                expirationDate: expirationDate,
+                purchasePrice: currentPrice,
+                purchaseDate: purchaseDate,
+            });
+
+            userAsset.balance += transactionAmount;
+
+            const saveResult = await userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
+                return null;
+            }
+
+            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${userAsset._id}`);
+            if (!result) return null;
+
+            serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' put option success. id: ${id}`);
+            return true;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:putOptionSell': ${err}`);
+            return null;
+        }
+    },
+
+    async optionLiquidate(id, positionNum) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+            
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return null;
+            }
+
+            if (userAsset.options.length < positionNum) {
+                return 'invalid_position';
+            }
+
+            const position = userAsset.options[positionNum - 1];
+            const ticker = position.ticker;
+            const optionType = position.optionType;
+            const quantity = position.quantity;
+            const currentPrice = getFuturePrice(ticker);
+            const initValue = position.purchasePrice * quantity * OPTION_UNIT_QUANTITY;
+            const currentValue = currentPrice * quantity * OPTION_UNIT_QUANTITY;
+            const margin = position.margin;
+
+            let transactionAmount;
+            if (optionType === 'call') {
+                transactionAmount = (currentValue - initValue) + margin;
+            } else if (optionType === 'put') {
+                transactionAmount = (initValue - currentValue) + margin;
+            } else {
+                serverLog(`[ERROR] invalid option type: ${optionType}`);
+                return null;
+            }
+
+            userAsset.balance += transactionAmount;
+            userAsset.balance = Math.round(userAsset.balance);
+
+            userAsset.options.splice(positionNum - 1, 1);
+
+            const saveResult = await userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
+                return null;
+            }
+
+            if (userAsset.options.length === 0) {
+                const result = await module.exports.deleteTransactionSchedule(`${id}_option`);
+                if (!result) return null;
+            }
+            
+            serverLog(`[INFO] Liquidated ${quantity}contracts of '${ticker}' ${optionType} option success. id: ${id}`);
+            return position;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:optionLiquidate': ${err}`);
             return null;
         }
     },

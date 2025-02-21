@@ -12,11 +12,10 @@ module.exports = {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
-                        .setColor(0xEA4144)
-                        .setTitle('서버 오류')
-                        .setDescription(`오류가 발생하였습니다.
-                            공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                ],
+                    .setColor(0xEA4144)
+                    .setTitle('오류가 발생했습니다')
+                    .setDescription('공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.')
+                ]
             });
             return;
         }
@@ -26,8 +25,7 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xEA4144)
                         .setTitle('지원금 없음')
-                        .setDescription(`오늘 이미 지원금을 수령했습니다.
-                            지원금은 하루에 한 번만 수령할 수 있습니다.`)
+                        .setDescription(`오늘 이미 지원금을 수령했습니다.\n지원금은 하루에 한 번만 수령할 수 있습니다.`)
                 ],
             });
             return;
@@ -40,8 +38,8 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xEA4144)
                         .setTitle('서버 오류')
-                        .setDescription(`오류가 발생하였습니다.
-                            공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTimestamp()
                 ],
             });
             return;
@@ -54,8 +52,8 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xEA4144)
                         .setTitle('서버 오류')
-                        .setDescription(`오류가 발생하였습니다.
-                            공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTimestamp()
                 ],
             });
             return;
