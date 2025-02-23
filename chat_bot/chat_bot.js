@@ -45,8 +45,6 @@ module.exports = {
         try {
             const messageID = params.messageID;
             const referenceMessageID = params.referenceMessageID;
-            console.log('messageID: ', messageID);
-            console.log('referenceMessageID: ', referenceMessageID);
             if (referenceMessageID === null) {
                 const chat = model.startChat();
                 const result = await chat.sendMessage(userChat);

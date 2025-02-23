@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getUserAsset, resetAsset, addAchievements } = require('../database');
 const { serverLog } = require('../server/server_logger');
 
@@ -10,13 +10,25 @@ module.exports = {
     async execute(interaction) {
         const user = await getUserAsset(interaction.user.id);
 
-        if (user.asset.balance >= 0) {
+        let loanTotal = 0;
+        user.asset.loans.forEach((loan) => {
+            loanTotal += loan.amount;
+        });
+
+        if (user.asset.balance >= loanTotal) {
+            if ((user.asset.stocks.length !== 0) ||
+                (user.asset.stockShortSales.length !== 0) ||
+                (user.asset.futures.length !== 0) ||
+                (user.asset.options.length !== 0) ||
+                (user.asset.binary_options.length !== 0) ||
+                (user.asset.fixed_deposits.length !== 0) ||
+                (user.asset.savings_accounts.length !== 0))
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0xEA4144)
                         .setTitle(':x: 파산신청 거절')
-                        .setDescription('파산 상태가 아닙니다.\n\n**파산신청**\n```조건: 주식, 선물, 옵션, 바이너리 옵션, 예금, 적금 등 대출을 제외한 모든 금융상품을 소유하지 않은 상태이어야 합니다.\ㅜ불이익: 프로필에 파산한 횟수가 표시됩니다.```')
+                        .setDescription('파산 상태가 아닙니다.\n\n**파산신청**\n```조건: 주식, 선물, 옵션, 바이너리 옵션, 예금, 적금 등 대출을 제외한 모든 금융상품을 소유하지 않은 상태이어야 합니다.\n불이익: 프로필에 파산한 횟수가 표시됩니다.```')
                 ],
             });
             return;
@@ -32,8 +44,7 @@ module.exports = {
                             new EmbedBuilder()
                                 .setColor(0x448FE6)
                                 .setTitle(':white_check_mark:  파산신청 승인')
-                                .setDescription(`<@${from.id}> :arrow_right: <@${to.id}>
-                                        \`${amount}\`원이 송금되었습니다.`)
+                                .setDescription(`파산신청이 승인되었습니다.`)
                         ],
                     });
                 } else {

@@ -40,7 +40,7 @@ const TransactionSchedule = require('./schemas/transaction_schedule');
 const Notice = require('./schemas/notice');
 
 const fs = require('fs');
-const { getLoanInterestRate } = require('./stock_system/bank_manager');
+const { getLoanInterestRate, getFixedDepositInterestRate } = require('./stock_system/bank_manager');
 
 let serversideLockedAccounts = [];
 
@@ -715,7 +715,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}-${ticker}_short_${userAsset.stockShortSales.length - 1}`, id, `buyback stock ${userAsset._id} ${ticker} ${quantity} at ${buyBackDate.getTime()}`)
+            const result = await module.exports.setTransactionSchedule(`${id}-${ticker}_short_${userAsset.stockShortSales.length - 1}`, id, `buyback stock ${userAsset._id} ${userAsset.stockShortSales.length - 1} at ${buyBackDate.getTime()}`)
             if (!result) return null;
 
             serverLog(`[INFO] Short sell ${quantity}shares of '${ticker}' stock success. id: ${id}`);
@@ -811,12 +811,7 @@ module.exports = {
 
             const margin = currentPrice * quantity;
 
-            let currentHoldingMargin = 0;
-            userAsset.futures.forEach((future) => {
-                currentHoldingMargin += future.margin;
-            });
-
-            if (userAsset.balance < currentHoldingMargin + margin) {
+            if (userAsset.balance < margin) {
                 serverLog(`[INFO] Buy future failed. Not enough balance. id: ${id}`);
                 return false;
             }
@@ -906,12 +901,7 @@ module.exports = {
 
             const margin = currentPrice * quantity;
 
-            let currentHoldingMargin = 0;
-            userAsset.futures.forEach((future) => {
-                currentHoldingMargin += future.margin;
-            });
-
-            if (userAsset.balance < currentHoldingMargin + margin) {
+            if (userAsset.balance < margin) {
                 serverLog(`[INFO] Buy future failed. Not enough balance. id: ${id}`);
                 return false;
             }
@@ -1342,7 +1332,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}_binary_option`, id, `execute_binary_option ${userAsset._id} ${ticker} ${prediction} ${expirationDate.getTime()} ${amount} ${currentPrice}`);
+            const result = await module.exports.setTransactionSchedule(`${id}_binary_option`, id, `execute_binary_option ${userAsset._id} ${userAsset.binary_options.length - 1} ${expirationDate.getTime()}`);
             if (!result) return null;
             
             serverLog(`[INFO] Binary option. ticker: ${ticker}, prediction: ${prediction}, time: ${time}, amount: ${amount}. id: ${id}`);
@@ -1394,7 +1384,7 @@ module.exports = {
                 return false;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}-loan_${userAsset.loans.length - 1}`, id, `repay money ${userAsset._id} ${amount} at ${dueDate.getTime()}`);
+            const result = await module.exports.setTransactionSchedule(`${id}-loan_${userAsset.loans.length - 1}`, id, `repay_loan ${userAsset._id} ${userAsset.loans.length - 1} at ${dueDate.getTime()}`);
             if (!result) return false;
 
             serverLog(`[INFO] Loaned ${amount} amount of money.`);
@@ -1565,6 +1555,11 @@ module.exports = {
 
         try {
             const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+
             const userProfile = await Profile.findById(user.profile);
             if (userProfile === null) {
                 serverLog(`[ERROR] Error finding user profile`);
@@ -1595,10 +1590,16 @@ module.exports = {
 
         try {
             const user = await User.findOne({ userID: id });
-            if (user === null) return null;
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
 
             const userProfile = await Profile.findById(user.profile);
-            if (userProfile === null) return null;
+            if (userProfile === null) {
+                serverLog(`[ERROR] Error finding user profile`);
+                return null;
+            }
 
             return {
                 level: userProfile.level.level,
@@ -1614,10 +1615,16 @@ module.exports = {
     async addAchievements(id, name, description) {
         try {
             const user = await User.findOne({ userID: id });
-            if (user === null) return false;
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
 
-            const userProfile = await User.findById(user.profile);
-            if (userProfile === null) return false;
+            const userProfile = await Profile.findById(user.profile);
+            if (userProfile === null) {
+                serverLog(`[ERROR] Error finding user profile`);
+                return null;
+            }
 
             if (!name) return false;
             if (!description) return false;
@@ -1642,10 +1649,16 @@ module.exports = {
     async getAchievements(id) {
         try {
             const user = await User.findOne({ userID: id });
-            if (user === null) return null;
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
 
-            const userProfile = await User.findById(user.profile);
-            if (userProfile === null) return null;
+            const userProfile = await Profile.findById(user.profile);
+            if (userProfile === null) {
+                serverLog(`[ERROR] Error finding user profile`);
+                return null;
+            }
 
             return userProfile.achievements;
         } catch (err) {
@@ -1653,6 +1666,101 @@ module.exports = {
             return null;
         }
     },
+
+    async openFixedDeposit(id, amount, product, days) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return null;
+            }
+
+            if (userAsset.balance < amount) return false;
+
+            const interestRate = getFixedDepositInterestRate();
+            const depositDate = new Date();
+            const maturityDate = depositDate;
+            maturityDate.setDate(depositDate.getDate() + days);
+
+            userAsset.fixed_deposits.push({
+                amount: amount,
+                product: {
+                    type: String,
+                    required: true,
+                },
+                interestRate: interestRate,
+                depositDate: depositDate,
+                maturityDate: maturityDate,
+            });
+
+            userAsset.balance -= amount;
+
+            const result = await module.exports.setTransactionSchedule(`${id}-fixed_deposit_${userAsset.fixed_deposits.length - 1}`, id, `pay_interest_fixed_deposit ${userAsset._id} ${amount} at ${maturityDate.getTime()}`);
+            if (!result) return null;
+
+            const saveResult = userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Error saving user asset`);
+                return false;
+            }
+            return true;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:openFixedDeposit': ${err}`);
+            return null;
+        }
+    },
+
+    async openSavingsAccount(id, amount, product, days) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+
+            const userAsset = await Asset.findById(user.asset);
+            if (userAsset === null) {
+                serverLog('[ERROR] Error finding user asset');
+                return null;
+            }
+
+            if (userAsset.balance < amount) return false;
+
+            const interestRate = getFixedDepositInterestRate();
+            const startDate = new Date();
+            const endDate = startDate;
+            endDate.setDate(startDate.getDate() + days);
+
+            userAsset.fixed_deposits.push({
+                amount: amount,
+                product: product,
+                interestRate: interestRate,
+                startDate: startDate,
+                endDate: endDate,
+            });
+
+            userAsset.balance -= amount;
+
+            const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${userAsset.savings_accounts.length - 1}`, id, `pay_interest_savings_account ${userAsset._id} ${amount} at ${maturityDate.getTime()}`);
+            if (!result) return null;
+
+            const saveResult = userAsset.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Error saving user asset`);
+                return false;
+            }
+            return true;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:openSavingsAccount': ${err}`);
+            return null;
+        }
+    }
 }
 
 exports.OPTION_UNIT_QUANTITY = OPTION_UNIT_QUANTITY;

@@ -41,7 +41,7 @@ function getFixedDepositInterestRate() {
 }
 
 function getFixedDepositInterestRatePoint() {
-    const r = getInterestRate();
+    const r = getInterestRatePoint();
     const a = 1.00;
     return Number((r + a).toFixed(2));
 }
@@ -53,7 +53,7 @@ function getSavingsAccountInterestRate() {
 }
 
 function getSavingsAccountInterestRatePoint() {
-    const r = getInterestRate();
+    const r = getInterestRatePoint();
     const a = 1.50;
     return Number((r + a).toFixed(2));
 }

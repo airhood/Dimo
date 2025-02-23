@@ -473,10 +473,11 @@ function setFutureExpireCallback(callback) {
 }
 
 function calculateOptionStrikePriceDist(price) {
-    const standardPrice = roundPos(price, -2);
+    const roundPrice = roundPos(price, -2);
+    const standardPrice = roundPrice - (roundPrice % 200);
     const strikePrice = [];
-    const UNIT_DIFF = 100;
-    for (let diff = UNIT_DIFF * (-3); diff <= UNIT_DIFF * 3; diff += UNIT_DIFF) {
+    const UNIT_DIFF = 200;
+    for (let diff = UNIT_DIFF * (-7); diff <= UNIT_DIFF * 7; diff += UNIT_DIFF) {
         strikePrice.push(standardPrice + diff);
     }
     strikePrice.reverse();
@@ -674,8 +675,8 @@ function getStockInfo(ticker) {
 }
 
 function tryGetTicker(str) {
-    if (str in stocksPricesHistory[stocksPricesHistory.length - 1]) {
-        return str;
+    if (str.trim().toUpperCase() in stocksPricesHistory[stocksPricesHistory.length - 1]) {
+        return str.trim().toUpperCase();
     }
     const ticker = getTicker(str);
     if (ticker in stocksPricesHistory[stocksPricesHistory.length - 1]) {

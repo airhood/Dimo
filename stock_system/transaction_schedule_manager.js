@@ -44,14 +44,20 @@ const Asset = require('../schemas/asset');
 
 module.exports = {
     async initScheduleManager() {
-        program.command('buyback stock <asset_id> <ticker> <quantity> at <date> | <identification_code>')
-            .action((asset_id, ticker, quantity, date, identification_code) => {                
-                const job = schedule.scheduleJob(dateToCron(new Date().setTime(date)), async () => {
+        program.command('buyback stock <asset_id> <index> at <date> | <identification_code>')
+            .action((asset_id, index, date, identification_code) => {      
+                const dateObj = new Date();
+                dateObj.setTime(date);
+                const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
                     const userAsset = await Asset.findById(asset_id);
                     if (!userAsset) {
                         serverLog('[ERROR] Error finding user');
                         return null;
                     }
+
+                    const short = await userAsset.stockShortSales[index]
+                    const ticker = short.ticker;
+                    const quantity = short.quantity;
 
                     
                 });
@@ -77,24 +83,34 @@ module.exports = {
                 option_execute_list[identification_code] = transaction_schedule;
             });
         
-        program.command('execute_binary_option <asset_id> <ticker> <prediction> <expiration_date> <amount> <strike_price> | <identification_code>')
-            .action((asset_id, ticker, prediction, expiration_date, amount, strike_price, identification_code) => {
-                const job = schedule.scheduleJob(dateToCron(new Date().setDate(expiration_date)), async () => {
+        program.command('execute_binary_option <asset_id> <index> <expiration_date> | <identification_code>')
+            .action((asset_id, index, expiration_date, identification_code) => {
+                const dateObj = new Date();
+                dateObj.setTime(expiration_date);
+                const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
                     const userAsset = await Asset.findById(asset_id);
                     if (!userAsset) {
                         serverLog('[ERROR] Error finding user');
                         return null;
                     }
 
+                    const binaryOption = userAsset.binary_options[index];
+                    const ticker = binaryOption.ticker;
+                    const amount = binaryOption.amount;
+                    const optionType = binaryOption.optionType;
+                    const expirationDate = binaryOption.expirationDate;
+                    const strikePrice = binaryOption.strikePrice;
 
                 });
 
                 schedule_job_list[identification_code] = job;
             });
         
-        program.command('repay money <asset_id> <amount> at <date> | <identification_code>')
-            .action((asset_id, amount, date, identification_code) => {
-                const job = schedule.scheduleJob(dateToCron(new Date().setDate(date)), async () => {
+        program.command('repay_loan <asset_id> <index> at <date> | <identification_code>')
+            .action((asset_id, index, date, identification_code) => {
+                const dateObj = new Date();
+                dateObj.setTime(date);
+                const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
                     const userAsset = await Asset.findById(asset_id);
                     if (!userAsset) {
                         serverLog('[ERROR] Error finding user');
@@ -299,7 +315,7 @@ module.exports = {
         try {
             await program.parseAsync(commandArgs, { from: 'user' });
         } catch (err) {
-            serverLog(`[ERROR] Error at 'transaction_schedule_manager.js:cacheTransactionScheduleData': ${err}`);
+            serverLog(`[ERROR] Error at 'transaction_schedule_manager.js:addTransactionScheduleData': ${err}`);
         }
     },
 
