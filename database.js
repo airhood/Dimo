@@ -1759,7 +1759,7 @@ module.exports = {
             serverLog(`[ERROR] Error at 'database.js:openSavingsAccount': ${err}`);
             return null;
         }
-    }
-}
+    },
 
-exports.OPTION_UNIT_QUANTITY = OPTION_UNIT_QUANTITY;
+    OPTION_UNIT_QUANTITY: OPTION_UNIT_QUANTITY,
+}
