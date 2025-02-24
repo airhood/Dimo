@@ -1,5 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { loan, loanRepay } = require('../database');
+const { SlashCommandBuilder, EmbedBuilder, CommandInteractionOptionResolver } = require('discord.js');
+const { loan, loanRepay, openFixedDeposit, openSavingsAccount } = require('../database');
 const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint } = require('../stock_system/bank_manager');
 
 module.exports = {
@@ -177,7 +177,7 @@ module.exports = {
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle('대출 상환 실패')
+                            .setTitle(':x:  대출 상환 실패')
                             .setDescription(`잔액이 부족합니다.\n현재 이자를 포함하여 상환해야 할 금액은 \`${result}원\` 입니다.`)
                     ]
                 });
@@ -194,9 +194,77 @@ module.exports = {
                 ],
             });
         } else if (subCommand === '예금') {
+            const product = interaction.options.getString('상품');
+            const amount = interaction.options.getInteger('금액');
 
+            const result = await openFixedDeposit(interaction.user.id, amount, parseInt(product));
+
+            if (result === true) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ecc71)
+                            .setTitle(':white_check_mark:  예금 완료')
+                            .setDescription(`은행에 ${amount}원이 예금되었습니다.`)
+                    ]
+                });
+            } else if (result === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  예금 실패')
+                            .setDescription(`잔액이 부족합니다.`)
+                    ]
+                });
+            }
         } else if (subCommand === '적금') {
-            
+            const product = interaction.options.getString('상품');
+            const amount = interaction.options.getInteger('금액');
+
+            const result = await openSavingsAccount(interaction.user.id, amount, parseInt(product));
+
+            if (result === true) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ecc71)
+                            .setTitle(':white_check_mark:  적금 신청 완료')
+                            .setDescription(`은행에 적금 신청이 완료되었습니다.\n매일 자정에 ${amount}원이 자동으로 적금 계좌로 송금됩니다.\n중간에 잔액 부족으로 송금을 실패하면 원금은 반환받되, 이자는 지급받지 못합니다.`)
+                    ]
+                });
+            } else if (result === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  적금 신청 실패')
+                            .setDescription(`잔액이 부족합니다.`)
+                    ]
+                });
+            }
         } else if (subCommand === '예금금리') {
             const interestRatePoint = getFixedDepositInterestRatePoint();
 

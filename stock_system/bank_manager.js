@@ -48,14 +48,18 @@ function getFixedDepositInterestRatePoint() {
 
 function getSavingsAccountInterestRate() {
     const r = getInterestRate();
-    const a = 0.015;
+    const a = 0.012;
     return Number((r + a).toFixed(4));
 }
 
 function getSavingsAccountInterestRatePoint() {
     const r = getInterestRatePoint();
-    const a = 1.50;
+    const a = 1.20;
     return Number((r + a).toFixed(2));
+}
+
+function calculateCompoundInterestRate(r, n) {
+    return r * (Math.pow(r, n) - 1) / (r - 1);
 }
 
 exports.getInterestRate = getInterestRate;
@@ -66,3 +70,5 @@ exports.getFixedDepositInterestRate = getFixedDepositInterestRate;
 exports.getFixedDepositInterestRatePoint = getFixedDepositInterestRatePoint;
 exports.getSavingsAccountInterestRate = getSavingsAccountInterestRate;
 exports.getSavingsAccountInterestRatePoint = getSavingsAccountInterestRatePoint;
+
+exports.calculateCompoundInterestRate = calculateCompoundInterestRate;

@@ -23,6 +23,8 @@ mongoose.connection.on('reconnectFailed', () => {
 });
 
 
+const INITIAL_BALANCE = 1000000; // 100만운
+
 const SHORT_SELL_MARGIN_RATE = 1.4;
 const OPTION_BUY_MARGIN_RATE = 1;
 const OPTION_SELL_MARGIN_RATE = 1.5;
@@ -141,7 +143,7 @@ module.exports = {
 
             const newAsset = await Asset.create({
                 user: newUser._id,
-                balance: 0,
+                balance: INITIAL_BALANCE,
                 stocks: [],
                 stockShortSales: [],
                 futures: [],
@@ -1667,7 +1669,7 @@ module.exports = {
         }
     },
 
-    async openFixedDeposit(id, amount, product, days) {
+    async openFixedDeposit(id, amount, product) {
         try {
             const user = await User.findOne({ userID: id });
             if (user === null) {
@@ -1686,14 +1688,11 @@ module.exports = {
             const interestRate = getFixedDepositInterestRate();
             const depositDate = new Date();
             const maturityDate = depositDate;
-            maturityDate.setDate(depositDate.getDate() + days);
+            maturityDate.setDate(depositDate.getDate() + product);
 
             userAsset.fixed_deposits.push({
                 amount: amount,
-                product: {
-                    type: String,
-                    required: true,
-                },
+                product: product,
                 interestRate: interestRate,
                 depositDate: depositDate,
                 maturityDate: maturityDate,
@@ -1701,7 +1700,7 @@ module.exports = {
 
             userAsset.balance -= amount;
 
-            const result = await module.exports.setTransactionSchedule(`${id}-fixed_deposit_${userAsset.fixed_deposits.length - 1}`, id, `pay_interest_fixed_deposit ${userAsset._id} ${amount} at ${maturityDate.getTime()}`);
+            const result = await module.exports.setTransactionSchedule(`${id}-fixed_deposit_${userAsset.fixed_deposits.length - 1}`, id, `pay_interest_fixed_deposit ${userAsset._id} ${userAsset.fixed_deposits.length - 1} at ${maturityDate.getTime()}`);
             if (!result) return null;
 
             const saveResult = userAsset.save();
@@ -1716,7 +1715,7 @@ module.exports = {
         }
     },
 
-    async openSavingsAccount(id, amount, product, days) {
+    async openSavingsAccount(id, amount, product) {
         try {
             const user = await User.findOne({ userID: id });
             if (user === null) {
@@ -1735,7 +1734,7 @@ module.exports = {
             const interestRate = getFixedDepositInterestRate();
             const startDate = new Date();
             const endDate = startDate;
-            endDate.setDate(startDate.getDate() + days);
+            endDate.setDate(startDate.getDate() + product);
 
             userAsset.fixed_deposits.push({
                 amount: amount,
@@ -1747,7 +1746,7 @@ module.exports = {
 
             userAsset.balance -= amount;
 
-            const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${userAsset.savings_accounts.length - 1}`, id, `pay_interest_savings_account ${userAsset._id} ${amount} at ${maturityDate.getTime()}`);
+            const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${userAsset.savings_accounts.length - 1}`, id, `pay_interest_savings_account ${userAsset._id} ${userAsset.savings_accounts.length - 1} at ${maturityDate.getTime()}`);
             if (!result) return null;
 
             const saveResult = userAsset.save();

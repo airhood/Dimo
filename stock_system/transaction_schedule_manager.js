@@ -41,6 +41,7 @@ async function cacheTransactionScheduleData() {
 }
 
 const Asset = require('../schemas/asset');
+const { calculateCompoundInterestRate } = require("./bank_manager");
 
 module.exports = {
     async initScheduleManager() {
@@ -55,11 +56,50 @@ module.exports = {
                         return null;
                     }
 
-                    const short = await userAsset.stockShortSales[index]
-                    const ticker = short.ticker;
+                    const short = await userAsset.stockShortSales[index];
                     const quantity = short.quantity;
 
-                    
+                    let quantityLeft = short.quantity;
+
+                    for (let i = 0; i < userAsset.stocks.length; i++) {
+                        const stock = userAsset.stocks[i];
+                        if (stock.ticker === short.ticker) {
+                            if (stock.quantity > quantityLeft) {
+                                stock.quantity -= quantityLeft;
+                                quantityLeft = 0;
+                                break;
+                            } else if (stock.quantity === quantityLeft) {
+                                userAsset.stocks.splice(i, 1);
+                                quantityLeft = 0;
+                                break;
+                            } else if (stock.quantity < quantityLeft) {
+                                quantityLeft -= stock.quantity;
+                                userAsset.stocks.splice(i, 1);
+                                i--;
+                            }
+                        }
+                    }
+
+                    const currentPrice = getStockPrice(short.ticker);
+
+                    if (quantityLeft > 0) {
+                        const transactionAmount = currentPrice * quantityLeft;
+                        
+                        userAsset.balance -= transactionAmount;
+                        userAsset.balance = Math.round(userAsset.balance);
+                    }
+
+                    userAsset.stockShortSales.splice(index, 1);
+
+                    const saveResult = await userAsset.save();
+                    if (!saveResult) {
+                        serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
+                        error = true;
+                        return null;
+                    }
+
+                    serverLog(`[INFO] Buyback ${short.quantity} shares of ${short.ticker} stock. asset_id: ${asset_id}`);
+                    return true;
                 });
 
                 schedule_job_list[identification_code] = job;
@@ -95,12 +135,50 @@ module.exports = {
                     }
 
                     const binaryOption = userAsset.binary_options[index];
-                    const ticker = binaryOption.ticker;
-                    const amount = binaryOption.amount;
-                    const optionType = binaryOption.optionType;
-                    const expirationDate = binaryOption.expirationDate;
-                    const strikePrice = binaryOption.strikePrice;
+                    
+                    const currentPrice = getStockPrice(binaryOption.ticker);
 
+                    if (binaryOption.optionType === 'call') {
+                        if (currentPrice > binaryOption.strikePrice) {
+                            const transactionAmount = binaryOption.amount * 1.8;
+
+                            userAsset.balance += transactionAmount;
+                            userAsset.balance = Math.round(userAsset.balance);
+                        } else if (currentPrice < binaryOption.strikePrice) {
+
+                        } else if (currentPrice === binaryOption.strikePrice) {
+                            const transactionAmount = binaryOption.amount;
+                            
+                            userAsset.balance += transactionAmount;
+                            userAsset.balance = Math.round(userAsset.balance);
+                        }
+                    } else if (binaryOption.optionType === 'put') {
+                        if (currentPrice > binaryOption.strikePrice) {
+
+                        } else if (currentPrice < binaryOption.strikePrice) {
+                            const transactionAmount = binaryOption.amount * 1.8;
+
+                            userAsset.balance += transactionAmount;
+                            userAsset.balance = Math.round(userAsset.balance);
+                        } else if (currentPrice === binaryOption.strikePrice) {
+                            const transactionAmount = binaryOption.amount;
+                            
+                            userAsset.balance += transactionAmount;
+                            userAsset.balance = Math.round(userAsset.balance);
+                        }
+                    }
+
+                    userAsset.binary_options.splice(index, 1);
+
+                    const saveResult = await userAsset.save();
+                    if (!saveResult) {
+                        serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
+                        error = true;
+                        return null;
+                    }
+
+                    serverLog(`[INFO] Executed ${binaryOption.ticker} ${binaryOption.optionType} binary option. asset_id: ${asset_id}`);
+                    return true;
                 });
 
                 schedule_job_list[identification_code] = job;
@@ -117,7 +195,11 @@ module.exports = {
                         return null;
                     }
 
-                    userAsset.balance -= amount;
+                    const loan = userAsset.loans[index];
+
+                    userAsset.balance -= loan.amount;
+
+                    userAsset.loans.splice(index, 1);
 
                     const saveResult = await userAsset.save();
                     if (!saveResult) {
@@ -127,6 +209,73 @@ module.exports = {
                     }
 
                     serverLog(`[INFO] Repay ${amount} amount of money. asset_id: ${asset_id}`);
+                    return true;
+                });
+
+                schedule_job_list[identification_code] = job;
+            });
+        
+        program.command('pay_interest_fixed_deposit <asset_id> <index> at <date> | <identification_code>')
+            .action((asset_id, index, date, identification_code) => {
+                const dateObj = new Date();
+                dateObj.setTime(date);
+                const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
+                    const userAsset = await Asset.findById(asset_id);
+                    if (!userAsset) {
+                        serverLog('[ERROR] Error finding user');
+                        return null;
+                    }
+
+                    const fixed_deposit = userAsset.fixed_deposits[index];
+
+                    const transactionAmount = fixed_deposit.amount * (fixed_deposit.interestRate * fixed_deposit.product);
+
+                    userAsset.balance += transactionAmount;
+
+                    userAsset.fixed_deposits.splice(index, 1);
+
+                    const saveResult = await userAsset.save();
+                    if (!saveResult) {
+                        serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
+                        error = true;
+                        return null;
+                    }
+
+                    serverLog(`[INFO] Pay interest on ${amount} amount of fixed deposit. asset_id: ${asset_id}`);
+                    return true;
+                });
+
+                schedule_job_list[identification_code] = job;
+            });
+        
+        program.command('pay_interest_savings_account <asset_id> <index> at <date> | <identification_code>')
+            .action((asset_id, index, date, identification_code) => {
+                const dateObj = new Date();
+                dateObj.setTime(date);
+                const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
+                    const userAsset = await Asset.findById(asset_id);
+                    if (!userAsset) {
+                        serverLog('[ERROR] Error finding user');
+                        return null;
+                    }
+
+                    const savings_account = userAsset.savings_accounts[index];
+
+                    const compoundInterest = calculateCompoundInterestRate(savings_account.interestRate, savings_account.product);
+                    const transactionAmount = savings_account.amount * compoundInterest;
+
+                    userAsset.balance += transactionAmount;
+
+                    userAsset.savings_accounts.splice(index, 1);
+
+                    const saveResult = await userAsset.save();
+                    if (!saveResult) {
+                        serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
+                        error = true;
+                        return null;
+                    }
+
+                    serverLog(`[INFO] Pay interest on ${amount} amount of savings account. asset_id: ${asset_id}`);
                     return true;
                 });
 

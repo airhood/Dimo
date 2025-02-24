@@ -149,7 +149,7 @@ const AssetSchema = new Schema({
             required: true,
         },
         product: {
-            type: String,
+            type: Number,
             required: true,
         },
         interestRate: {
@@ -171,7 +171,7 @@ const AssetSchema = new Schema({
             required: true,
         },
         product: {
-            type: String,
+            type: Number,
             required: true,
         },
         interestRate: {
