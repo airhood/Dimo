@@ -156,7 +156,7 @@ module.exports = {
                     color = '=';
                     difference_sign = '';
                 }
-                stock_list_format.push(`${getStockName(stock.ticker)} [${stock.ticker}]\n\`\`\`diff\n${color} ${stock.price.toLocaleString('ko-KR')} (${difference_sign}${Math.abs(stock.difference).toFixed(2)})\n\`\`\``);
+                stock_list_format.push(`${getStockName(stock.ticker)} [${stock.ticker}]\n\`\`\`diff\n${color} ${stock.price.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")} (${difference_sign}${Math.abs(stock.difference).toFixed(2)})\n\`\`\``);
                 
                 /*
                 if (stock.difference > 0) {
@@ -236,8 +236,8 @@ module.exports = {
                         .setTitle('주식 정보')
                         .setDescription(`**종목명:** ${stockInfo.name}
                             **티커:** ${stockInfo.ticker}
-                            **현재가격:** ${stockInfo.price.toLocaleString('ko-KR')}원
-                            **발행량:** ${stockInfo.totalQuantity.toLocaleString('ko-KR')}주`)
+                            **현재가격:** ${stockInfo.price.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
+                            **발행량:** ${stockInfo.totalQuantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주`)
                 ],
             });
         } else if (subCommand === "차트") {
@@ -386,7 +386,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} ${quantity.toLocaleString('ko-KR')}주 매수 주문이 체결되었습니다.`)
+                            .setDescription(`${ticker} ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 매수 주문이 체결되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -437,7 +437,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} ${quantity.toLocaleString('ko-KR')}주 매도 주문이 체결되었습니다.`)
+                            .setDescription(`${ticker} ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 매도 주문이 체결되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -489,7 +489,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} ${quantity.toLocaleString('ko-KR')}주 공매도 주문이 체결되었습니다.\n상환일은 5일 후 입니다.`)
+                            .setDescription(`${ticker} ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 공매도 주문이 체결되었습니다.\n상환일은 5일 후 입니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -536,7 +536,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  상환 완료')
-                            .setDescription(`${result.ticker} ${result.quantity.toLocaleString('ko-KR')}주 상환되었습니다.`)
+                            .setDescription(`${result.ticker} ${result.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 상환되었습니다.`)
                             .setTimestamp()
                     ],
                 });

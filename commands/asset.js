@@ -139,7 +139,7 @@ module.exports = {
         const fields = [
             {
                 name: ':dollar:  계좌 잔액',
-                value: `\`\`\`${result.asset.balance.toLocaleString('ko-KR')}원\`\`\``,
+                value: `\`\`\`${result.asset.balance.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원\`\`\``,
             }
         ];
 
@@ -161,10 +161,10 @@ module.exports = {
                     earnSign = '';
                 }
 
-                stock_format += `${stock.ticker} ${stock.quantity.toLocaleString('ko-KR')}주
-| 현재가격: ${getStockPrice(stock.ticker).toLocaleString('ko-KR')}원
-| 매수가격: ${stock.purchasePrice.toLocaleString('ko-KR')}원
-| 평가손익: ${(stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)).toFixed(2).toLocaleString('ko-KR')}원 (${earnSign}${((Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toLocaleString('ko-KR')}%)
+                stock_format += `${stock.ticker} ${stock.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주
+| 현재가격: ${getStockPrice(stock.ticker).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
+| 매수가격: ${stock.purchasePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
+| 평가손익: ${(stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
 | 매수날짜: ${formattedPurchaseDate}`;
             }
 
@@ -187,10 +187,10 @@ module.exports = {
                     earnSign = '';
                 }
 
-                stock_format += `${short.ticker} ${-short.quantity.toLocaleString('ko-KR')}주
-| 현재가격: ${getStockPrice(short.ticker).toLocaleString('ko-KR')}원
-| 매도가격: ${short.sellPrice.toLocaleString('ko-KR')}원
-| 평가손익: ${(stock.quantity * (short.sellPrice - getStockPrice(short.ticker))).toFixed().toLocaleString('ko-KR')}원 (${earnSign}${((Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toLocaleString('ko-KR')}%)
+                stock_format += `${short.ticker} ${-short.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주
+| 현재가격: ${getStockPrice(short.ticker).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
+| 매도가격: ${short.sellPrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
+| 평가손익: ${(stock.quantity * (short.sellPrice - getStockPrice(short.ticker))).toFixed().toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
 | 상환일: ${formattedBuyBackDate}
 | 매도날짜: ${formattedSellDate}`;
             }
@@ -208,7 +208,7 @@ module.exports = {
                     earnSign = '';
                 }
 
-                stock_format += `${stock.ticker} ${stock.quantity.toLocaleString('ko-KR')}주 (평가손익: ${(stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)).toFixed(2).toLocaleString('ko-KR')}원 (${earnSign}${((Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toLocaleString('ko-KR')}%))`;
+                stock_format += `${stock.ticker} ${stock.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 (평가손익: ${(stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
             }
 
             if (result.asset.stockShortSales.length > 0) {
@@ -228,7 +228,7 @@ module.exports = {
                     earnSign = '';
                 }
 
-                stock_format += `${short.ticker} ${-short.quantity.toLocaleString('ko-KR')}주 (평가손익: ${(short.quantity * (short.sellPrice - getStockPrice(short.ticker))).toFixed(2).toLocaleString('ko-KR')}원 (${earnSign}${((Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toLocaleString('ko-KR')}%))`;
+                stock_format += `${short.ticker} ${-short.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 (평가손익: ${(short.quantity * (short.sellPrice - getStockPrice(short.ticker))).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
             }
         }
 
@@ -270,10 +270,10 @@ module.exports = {
                     earnSign = '';
                 }
 
-                future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity).toLocaleString('ko-KR')}계약
-| 현재가격: ${getFuturePrice(future.ticker).toLocaleString('ko-KR')}원
-| 매수가격: ${future.purchasePrice.toLocaleString('ko-KR')}원
-| 평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2).toLocaleString('ko-KR')}원 (${earnSign}${((Math.round((((getFuturePrice(future.ticker) - future.purchasePrice) * future.leverage * earnDirection) / future.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toLocaleString('ko-KR')}%)
+                future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약
+| 현재가격: ${getFuturePrice(future.ticker).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
+| 매수가격: ${future.purchasePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
+| 평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round((((getFuturePrice(future.ticker) - future.purchasePrice) * future.leverage * earnDirection) / future.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
 | 만기일: ${formattedExpirationDate}
 | 매수날짜: ${formattedPurchaseDate}`;
             }
@@ -304,7 +304,7 @@ module.exports = {
                     earnSign = '';
                 }
 
-                future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity).toLocaleString('ko-KR')}계약 (평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2).toLocaleString('ko-KR')}원 (${earnSign}${((Math.round((((getFuturePrice(future.ticker) - future.purchasePrice) * future.leverage * earnDirection) / future.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toLocaleString('ko-KR')}%))`;
+                future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 (평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round((((getFuturePrice(future.ticker) - future.purchasePrice) * future.leverage * earnDirection) / future.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
             }
         }
 
@@ -346,11 +346,11 @@ module.exports = {
                 }
                 const formattedExpirationDate = moment(option.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(option.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
-                option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity.toLocaleString('ko-KR')}계약
-| 현재가격: ${currentPrice.toLocaleString('ko-KR')}원
-| 매수가격: ${option.purchasePrice.toLocaleString('ko-KR')}원
-| 평가손익: ${(option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY).toFixed(2).toLocaleString('ko-KR')}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toLocaleString('ko-KR')}%)
-| 행사가격: ${option.strikePrice.toLocaleString('ko-KR')}원
+                option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약
+| 현재가격: ${currentPrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
+| 매수가격: ${option.purchasePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
+| 평가손익: ${(option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
+| 행사가격: ${option.strikePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 만기일: ${formattedExpirationDate}
 | 매수날짜: ${formattedPurchaseDate}`;
             }
@@ -385,7 +385,7 @@ module.exports = {
                 else if (option.optionType === 'put') formattedOptionType = '풋';
                 const formattedExpirationDate = moment(option.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(option.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
-                option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity.toLocaleString('ko-KR')}계약 (평가손익: ${(option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY).toFixed(2).toLocaleString('ko-KR')}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toLocaleString('ko-KR')}%))`;
+                option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 (평가손익: ${(option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
             }
         }
 
@@ -414,9 +414,9 @@ module.exports = {
                 const formattedExpirationDate = moment(binary_option.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(binary_option.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
 
-                binary_option_format += `${binary_option.ticker} ${direction} ${binary_option.amount.toLocaleString('ko-KR')}원 배팅
-| 현재가격: ${currentPrice.toLocaleString('ko-KR')}원
-| 기준가격: ${binary_option.strikePrice.toLocaleString('ko-KR')}원
+                binary_option_format += `${binary_option.ticker} ${direction} ${binary_option.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 배팅
+| 현재가격: ${currentPrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
+| 기준가격: ${binary_option.strikePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 만기일: ${formattedExpirationDate}
 | 배팅날짜: ${formattedPurchaseDate}`;
             }
@@ -431,7 +431,7 @@ module.exports = {
                     direction = '하락';
                 }
 
-                binary_option_format += `${binary_option.ticker} ${direction} ${binary_option.amount.toLocaleString('ko-KR')}원 배팅`;
+                binary_option_format += `${binary_option.ticker} ${direction} ${binary_option.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 배팅`;
             }
         }
 
@@ -449,7 +449,7 @@ module.exports = {
                 if (deposit_format !== '') deposit_format += '\n';
                 const formatted_depositDate = moment(fixed_deposit.depositDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formatted_maturityDate = moment(fixed_deposit.maturityDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
-                deposit_format += `예금 ${fixed_deposit.amount.toLocaleString('ko-KR')}원
+                deposit_format += `예금 ${fixed_deposit.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 상품: ${fixed_deposit.product}
 | 이자율: ${(fixed_deposit.interestRate * 100).toFixed(2)}%
 | 예금일: ${formatted_depositDate}
@@ -459,7 +459,7 @@ module.exports = {
                 if (deposit_format !== '') deposit_format += '\n';
                 const formatted_startDate = moment(savings_account.startDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formatted_endDate = moment(savings_account.endDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
-                deposit_format += `적금 ${savings_account.amount.toLocaleString('ko-KR')}원
+                deposit_format += `적금 ${savings_account.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 상품: ${savings_account.product}
 | 이자율: ${(savings_account.interestRate * 100).toFixed(2)}%
 | 가입일: ${formatted_startDate}
@@ -468,11 +468,11 @@ module.exports = {
         } else {
             for (fixed_deposit of result.asset.fixed_deposits) {
                 if (deposit_format !== '') deposit_format += '\n';
-                deposit_format += `예금 ${fixed_deposit.amount.toLocaleString('ko-KR')}원 (이자율: ${(fixed_deposit.interestRate * 100).toFixed(2)})`;
+                deposit_format += `예금 ${fixed_deposit.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(fixed_deposit.interestRate * 100).toFixed(2)})`;
             }
             for (savings_account of result.asset.savings_accounts) {
                 if (deposit_format !== '') deposit_format += '\n';
-                deposit_format += `적금 ${savings_account.amount.toLocaleString('ko-KR')}원 (이자율: ${(savings_account.interestRate * 100).toFixed(2)})`;
+                deposit_format += `적금 ${savings_account.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(savings_account.interestRate * 100).toFixed(2)})`;
             }
         }
 
@@ -489,7 +489,7 @@ module.exports = {
                 if (loan_format !== '') loan_format += '\n';
                 const formatted_loanDate = moment(loan.loanDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formatted_dueDate = moment(loan.dueDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
-                loan_format += `대출 ${loan.amount.toLocaleString('ko-KR')}원
+                loan_format += `대출 ${loan.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 이자율: ${(loan.interestRate * 100).toFixed(2)}%
 | 대출일: ${formatted_loanDate}
 | 상환일: ${formatted_dueDate}`;
@@ -497,7 +497,7 @@ module.exports = {
         } else {
             for (loan of result.asset.loans) {
                 if (loan_format !== '') loan_format += '\n';
-                loan_format += `대출 ${loan.amount.toLocaleString('ko-KR')}원 (이자율: ${(loan.interestRate * 100).toFixed(2)}%)`;
+                loan_format += `대출 ${loan.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(loan.interestRate * 100).toFixed(2)}%)`;
             }
         }
 

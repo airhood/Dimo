@@ -132,7 +132,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x2ecc71)
                             .setTitle(':white_check_mark:  대출 승인')
-                            .setDescription(`은행으로부터 ${amount.toLocaleString('ko-KR')}원을 대출했습니다.`)
+                            .setDescription(`은행으로부터 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원을 대출했습니다.`)
                     ]
                 });
             } else {
@@ -169,7 +169,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle(':x:  대출 상환 실패')
-                            .setDescription(`잔액이 부족합니다.\n현재 이자를 포함하여 상환해야 할 금액은 \`${result.toLocaleString('ko-KR')}원\` 입니다.`)
+                            .setDescription(`잔액이 부족합니다.\n현재 이자를 포함하여 상환해야 할 금액은 \`${result.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원\` 입니다.`)
                     ]
                 });
             } else {
@@ -178,7 +178,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x2ecc71)
                             .setTitle(':white_check_mark:  상환 완료')
-                            .setDescription(`대출받은 ${result.toLocaleString('ko-KR')}원을 상환했습니다.`)
+                            .setDescription(`대출받은 ${result.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원을 상환했습니다.`)
                     ]
                 });
             }
@@ -205,7 +205,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x2ecc71)
                             .setTitle(':white_check_mark:  예금 완료')
-                            .setDescription(`은행에 ${amount.toLocaleString('ko-KR')}원이 예금되었습니다.`)
+                            .setDescription(`은행에 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원이 예금되었습니다.`)
                     ]
                 });
             } else if (result === null) {
@@ -241,7 +241,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x2ecc71)
                             .setTitle(':white_check_mark:  적금 신청 완료')
-                            .setDescription(`은행에 적금 신청이 완료되었습니다.\n매일 자정에 ${amount.toLocaleString('ko-KR')}원이 자동으로 적금 계좌로 송금됩니다.\n중간에 잔액 부족으로 송금을 실패하면 원금은 반환받되, 이자는 지급받지 못합니다.`)
+                            .setDescription(`은행에 적금 신청이 완료되었습니다.\n매일 자정에 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원이 자동으로 적금 계좌로 송금됩니다.\n중간에 잔액 부족으로 송금을 실패하면 원금은 반환받되, 이자는 지급받지 못합니다.`)
                     ]
                 });
             } else if (result === null) {

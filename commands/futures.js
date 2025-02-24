@@ -175,7 +175,7 @@ module.exports = {
                     color = '=';
                     difference_sign = '';
                 }
-                future_list_format.push(`${getStockName(future.ticker)} [${future.ticker}]\n\`\`\`diff\n${color} ${future.price.toLocaleString('ko-KR')} (${difference_sign}${Math.abs(future.difference).toFixed(2)})\n\`\`\``);
+                future_list_format.push(`${getStockName(future.ticker)} [${future.ticker}]\n\`\`\`diff\n${color} ${future.price.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")} (${difference_sign}${Math.abs(future.difference).toFixed(2)})\n\`\`\``);
             }
 
             const pages = [];
@@ -335,7 +335,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} 선물 롱 ${quantity.toLocaleString('ko-KR')}계약 매수 주문이 체결되었습니다.`)
+                            .setDescription(`${ticker} 선물 롱 ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매수 주문이 체결되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -389,7 +389,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} 선물 숏 ${quantity.toLocaleString('ko-KR')}계약 매도 주문이 체결되었습니다.`)
+                            .setDescription(`${ticker} 선물 숏 ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매도 주문이 체결되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -431,7 +431,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  포지션 청산 완료')
-                            .setDescription(`${result.ticker} 선물 ${positionType} 포지션 ${Math.abs(result.quantity).toLocaleString('ko-KR')}계약이 청산되었습니다.`)
+                            .setDescription(`${result.ticker} 선물 ${positionType} 포지션 ${Math.abs(result.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약이 청산되었습니다.`)
                             .setTimestamp()
                     ],
                 });

@@ -110,7 +110,7 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0x448FE6)
                         .setTitle(':white_check_mark:  주문 체결 완료')
-                        .setDescription(`${ticker} 주식 가격의 ${formattedTime} 후 가격이 현재 가격보다 ${direction}한다는 예측에 ${amount.toLocaleString('ko-KR')}원을 배팅하였습니다.`)
+                        .setDescription(`${ticker} 주식 가격의 ${formattedTime} 후 가격이 현재 가격보다 ${direction}한다는 예측에 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원을 배팅하였습니다.`)
                         .setTimestamp()
                 ],
             });

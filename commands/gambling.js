@@ -152,7 +152,7 @@ module.exports = {
                             { name: ':coin: 배팅금액', value: `\`\`\`${betAmount}\`\`\``, inline: false },
                             { name: ':game_die: 유저', value: `:number_${userNumber}:`, inline: true },
                             { name: ':game_die: 봇', value: `:number_${botNumber}:`, inline: true },
-                            { name: ':moneybag: 수익', value: `\`\`\`${transactionAmount}\`\`\``, inline: true },
+                            { name: ':moneybag: 수익', value: `\`\`\`${transactionAmount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}\`\`\``, inline: true },
                         )
                 ],
             });
@@ -217,7 +217,7 @@ module.exports = {
                             { name: ':coin: 배팅금액', value: `\`\`\`${betAmount}\`\`\``, inline: false },
                             { name: ':game_die: 배팅한 숫자', value: `**${userNumber}**`, inline: true },
                             { name: ':game_die: 나온 숫자', value: `**${targetNumber}**`, inline: true },
-                            { name: ':moneybag: 수익', value: `\`\`\`${transactionAmount}\`\`\``, inline: true },
+                            { name: ':moneybag: 수익', value: `\`\`\`${transactionAmount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}\`\`\``, inline: true },
                         )
                 ],
             });

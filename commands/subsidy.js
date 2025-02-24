@@ -62,7 +62,7 @@ module.exports = {
         const fields = [
             {
                 name: ':dollar:  계좌 잔액',
-                value: `\`\`\`${result1}원\`\`\``,
+                value: `\`\`\`${result1.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원\`\`\``,
             }
         ];
 
