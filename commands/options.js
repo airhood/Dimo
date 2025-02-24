@@ -222,7 +222,7 @@ module.exports = {
                 }
 
                 fields.push({
-                    name: ':chart_with_upwards_trend:  풋옵션',
+                    name: ':chart_with_upwards_trend:  콜옵션',
                     value: `\`\`\`${callFormat}\`\`\``,
                 });
                 
@@ -232,7 +232,7 @@ module.exports = {
                 }
 
                 fields.push({
-                    name: ':chart_with_downwards_trend:  콜옵션',
+                    name: ':chart_with_downwards_trend:  풋옵션',
                     value: `\`\`\`${putFormat}\`\`\``,
                 });
 
