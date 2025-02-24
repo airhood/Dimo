@@ -59,12 +59,20 @@ module.exports = {
             return;
         }
 
+        const fields = [
+            {
+                name: ':dollar:  계좌 잔액',
+                value: `\`\`\`${result1}원\`\`\``,
+            }
+        ];
+
         await interaction.reply({
             embeds: [
                 new EmbedBuilder()
                     .setColor(0xF1C40F)
                     .setTitle('지원금 도착')
                     .setDescription('지원금 5만원이 도착했습니다!')
+                    .setFields(fields)
             ],
         });
     }

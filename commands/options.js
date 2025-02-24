@@ -188,7 +188,7 @@ module.exports = {
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle(':x:  차트 불러오기 실패')
+                            .setTitle(':x:  가격 불러오기 실패')
                             .setDescription(`존재하지 않는 종목입니다.`)
                             .setTimestamp()
                     ],
@@ -218,7 +218,7 @@ module.exports = {
 
                 let callFormat = '';
                 for (let i = 0; i < call.length; i++) {
-                    callFormat += `\n${strikePriceList[i]}원: ${call[i]}`;
+                    callFormat += `\n${strikePriceList[i].toLocaleString('ko-KR')}원: ${call[i]}`;
                 }
 
                 fields.push({
@@ -228,7 +228,7 @@ module.exports = {
                 
                 let putFormat = '';
                 for (let i = 0; i < put.length; i++) {
-                    putFormat += `\n${strikePriceList[i]}원: ${put[i]}`;
+                    putFormat += `\n${strikePriceList[i].toLocaleString('ko-KR')}원: ${put[i]}`;
                 }
 
                 fields.push({
@@ -374,7 +374,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  포지션 청산 완료')
-                            .setDescription(`${result.ticker} 옵션 ${formattedOptionType} ${positionType} 포지션 ${Math.abs(result.quantity)}계약이 청산되었습니다.`)
+                            .setDescription(`${result.ticker} 옵션 ${formattedOptionType} ${positionType} 포지션 ${Math.abs(result.quantity).toLocaleString('ko-KR')}계약이 청산되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -442,7 +442,7 @@ module.exports = {
                                 new EmbedBuilder()
                                     .setColor(0x448FE6)
                                     .setTitle(':white_check_mark:  주문 체결 완료')
-                                    .setDescription(`콜옵션 ${quantity}계약 매수 주문이 체결되었습니다.`)
+                                    .setDescription(`콜옵션 ${quantity.toLocaleString('ko-KR')}계약 매수 주문이 체결되었습니다.`)
                                     .setTimestamp()
                             ],
                         });
@@ -506,7 +506,7 @@ module.exports = {
                                 new EmbedBuilder()
                                     .setColor(0x448FE6)
                                     .setTitle(':white_check_mark:  주문 체결 완료')
-                                    .setDescription(`콜옵션 ${quantity}계약 매도 주문이 체결되었습니다.`)
+                                    .setDescription(`콜옵션 ${quantity.toLocaleString('ko-KR')}계약 매도 주문이 체결되었습니다.`)
                                     .setTimestamp()
                             ],
                         });
@@ -572,7 +572,7 @@ module.exports = {
                                 new EmbedBuilder()
                                     .setColor(0x448FE6)
                                     .setTitle(':white_check_mark:  주문 체결 완료')
-                                    .setDescription(`풋옵션 ${quantity}계약 매수 주문이 체결되었습니다.`)
+                                    .setDescription(`풋옵션 ${quantity.toLocaleString('ko-KR')}계약 매수 주문이 체결되었습니다.`)
                                     .setTimestamp()
                             ],
                         });
@@ -636,7 +636,7 @@ module.exports = {
                                 new EmbedBuilder()
                                     .setColor(0x448FE6)
                                     .setTitle(':white_check_mark:  주문 체결 완료')
-                                    .setDescription(`풋옵션 ${quantity}계약 매도 주문이 체결되었습니다.`)
+                                    .setDescription(`풋옵션 ${quantity.toLocaleString('ko-KR')}계약 매도 주문이 체결되었습니다.`)
                                     .setTimestamp()
                             ],
                         });

@@ -79,7 +79,7 @@ module.exports = {
                         .setColor(0x448FE6)
                         .setTitle(':white_check_mark:  송금 완료')
                         .setDescription(`<@${from.id}> :arrow_right: <@${to.id}>
-                             \`${amount}\`원이 송금되었습니다.`)
+                             \`${amount.toLocaleString('ko-KR')}\`원이 송금되었습니다.`)
                 ],
             });
         }

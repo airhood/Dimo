@@ -420,7 +420,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Added ${amount} amount of balance to ${id}.`);
-            return true;
+            return userAsset.balance;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:addBalance': ${err}`);
             return null;
@@ -1445,7 +1445,7 @@ module.exports = {
             if (!result) return null;
 
             serverLog(`[INFO] Repayed ${amount} amount of loaned money.`);
-            return true;
+            return amount;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:loanRepay': ${err}`);
             return null;
