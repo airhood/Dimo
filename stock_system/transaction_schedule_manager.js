@@ -45,8 +45,8 @@ const { calculateCompoundInterestRate } = require("./bank_manager");
 
 module.exports = {
     async initScheduleManager() {
-        program.command('buyback stock <asset_id> <index> at <date> | <identification_code>')
-            .action((asset_id, index, date, identification_code) => {      
+        program.command('buyback stock <asset_id> <uid> at <date> | <identification_code>')
+            .action((asset_id, uid, date, identification_code) => {      
                 const dateObj = new Date();
                 dateObj.setTime(date);
                 const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
@@ -56,7 +56,15 @@ module.exports = {
                         return null;
                     }
 
-                    const short = await userAsset.stockShortSales[index];
+                    let index;
+                    let short;
+                    userAsset.stockShortSales.forEach((element, _index) => {
+                        if (element.uid === uid) {
+                            short = element;
+                            index = _index;
+                        }
+                    });
+
                     const quantity = short.quantity;
 
                     let quantityLeft = short.quantity;
@@ -124,7 +132,7 @@ module.exports = {
             });
         
         program.command('execute_binary_option <asset_id> <index> <expiration_date> | <identification_code>')
-            .action((asset_id, index, expiration_date, identification_code) => {
+            .action((asset_id, uid, expiration_date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(expiration_date);
                 const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
@@ -134,7 +142,14 @@ module.exports = {
                         return null;
                     }
 
-                    const binaryOption = userAsset.binary_options[index];
+                    let index;
+                    let binaryOption;
+                    userAsset.binary_options.forEach((element, _index) => {
+                        if (element.uid === uid) {
+                            short = element;
+                            index = _index;
+                        }
+                    });
                     
                     const currentPrice = getStockPrice(binaryOption.ticker);
 
@@ -185,7 +200,7 @@ module.exports = {
             });
         
         program.command('repay_loan <asset_id> <index> at <date> | <identification_code>')
-            .action((asset_id, index, date, identification_code) => {
+            .action((asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
                 const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
@@ -195,7 +210,14 @@ module.exports = {
                         return null;
                     }
 
-                    const loan = userAsset.loans[index];
+                    let index;
+                    let loan;
+                    userAsset.loans.forEach((element, _index) => {
+                        if (element.uid === uid) {
+                            short = element;
+                            index = _index;
+                        }
+                    });
 
                     userAsset.balance -= loan.amount;
 
@@ -216,7 +238,7 @@ module.exports = {
             });
         
         program.command('pay_interest_fixed_deposit <asset_id> <index> at <date> | <identification_code>')
-            .action((asset_id, index, date, identification_code) => {
+            .action((asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
                 const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
@@ -226,7 +248,14 @@ module.exports = {
                         return null;
                     }
 
-                    const fixed_deposit = userAsset.fixed_deposits[index];
+                    let index;
+                    let fixed_deposit;
+                    userAsset.fixed_deposits.forEach((element, _index) => {
+                        if (element.uid === uid) {
+                            short = element;
+                            index = _index;
+                        }
+                    });
 
                     const transactionAmount = fixed_deposit.amount * (fixed_deposit.interestRate * fixed_deposit.product);
 
@@ -249,7 +278,7 @@ module.exports = {
             });
         
         program.command('pay_interest_savings_account <asset_id> <index> at <date> | <identification_code>')
-            .action((asset_id, index, date, identification_code) => {
+            .action((asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
                 const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
@@ -259,7 +288,14 @@ module.exports = {
                         return null;
                     }
 
-                    const savings_account = userAsset.savings_accounts[index];
+                    let index;
+                    let savings_account;
+                    userAsset.savings_accounts.forEach((element, _index) => {
+                        if (element.uid === uid) {
+                            short = element;
+                            index = _index;
+                        }
+                    });
 
                     const compoundInterest = calculateCompoundInterestRate(savings_account.interestRate, savings_account.product);
                     const transactionAmount = savings_account.amount * compoundInterest;

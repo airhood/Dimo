@@ -53,6 +53,10 @@ const AssetSchema = new Schema({
         margin: {
             type: Number,
             required: true,
+        },
+        uid: {
+            type: Number,
+            required: true,
         }
     }],
     futures: [{
@@ -142,6 +146,10 @@ const AssetSchema = new Schema({
             type: Date,
             required: true,
         },
+        uid: {
+            type: Number,
+            required: true,
+        }
     }],
     fixed_deposits: [{
         amount: {
@@ -164,6 +172,10 @@ const AssetSchema = new Schema({
             type: Date,
             required: true,
         },
+        uid: {
+            type: Number,
+            required: true,
+        }
     }],
     savings_accounts: [{
         amount: {
@@ -186,6 +198,10 @@ const AssetSchema = new Schema({
             type: Date,
             required: true,
         },
+        uid: {
+            type: Number,
+            required: true,
+        }
     }],
     loans: [{
         amount: {
@@ -204,6 +220,10 @@ const AssetSchema = new Schema({
             type: Date,
             required: true,
         },
+        uid: {
+            type: Number,
+            required: true,
+        }
     }],
 });
 

@@ -716,6 +716,13 @@ module.exports = {
             const buyBackDate = new Date();
             buyBackDate.setDate(sellDate.getDate() + 5);
 
+            let uid;
+            if (userAsset.stockShortSales.length === 0) {
+                uid = 0;
+            } else {
+                uid = userAsset.stockShortSales[userAsset.stockShortSales.length - 1].uid + 1;
+            }
+
             userAsset.stockShortSales.push({
                 ticker: ticker,
                 quantity: quantity,
@@ -723,6 +730,7 @@ module.exports = {
                 sellDate: sellDate,
                 buyBackDate: buyBackDate,
                 margin: margin,
+                uid: uid,
             });
 
             const saveResult = await userAsset.save();
@@ -731,7 +739,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}-${ticker}_short_${userAsset.stockShortSales.length - 1}`, id, `buyback stock ${userAsset._id} ${userAsset.stockShortSales.length - 1} at ${buyBackDate.getTime()}`)
+            const result = await module.exports.setTransactionSchedule(`${id}-short_${uid}`, id, `buyback stock ${userAsset._id} ${uid} at ${buyBackDate.getTime()}`)
             if (!result) return null;
 
             serverLog(`[INFO] Short sell ${quantity}shares of '${ticker}' stock success. id: ${id}`);
@@ -762,6 +770,7 @@ module.exports = {
             
             const ticker = userAsset.stockShortSales[positionNum - 1].ticker;
             const quantity = userAsset.stockShortSales[positionNum - 1].quantity;
+            const uid = userAsset.stockShortSales[positionNum - 1].uid;
             
             let quantityLeft = quantity;
             for (let i = 0; i < userAsset.stocks.length; i++) {
@@ -794,7 +803,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.deleteTransactionSchedule(`${id}-${ticker}_short_${positionNum - 1}`);
+            const result = await module.exports.deleteTransactionSchedule(`${id}-short_${uid}`);
             if (!result) return null;
 
             serverLog(`[INFO] Repay ${quantity}shares of '${ticker}' stock success. id: ${id}`);
@@ -1373,6 +1382,13 @@ module.exports = {
 
             const currentPrice = getStockPrice(ticker);
 
+            let uid;
+            if (userAsset.binary_options.length === 0) {
+                uid = 0;
+            } else {
+                uid = userAsset.binary_options[userAsset.binary_options.length - 1].uid + 1;
+            }
+
             userAsset.binary_options.push({
                 ticker: ticker,
                 optionType: prediction,
@@ -1380,6 +1396,7 @@ module.exports = {
                 strikePrice: currentPrice,
                 expirationDate: expirationDate,
                 purchaseDate: now,
+                uid: uid,
             });
 
             const saveResult = await userAsset.save();
@@ -1388,7 +1405,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}_binary_option`, id, `execute_binary_option ${userAsset._id} ${userAsset.binary_options.length - 1} ${expirationDate.getTime()}`);
+            const result = await module.exports.setTransactionSchedule(`${id}_binary_option_${uid}`, id, `execute_binary_option ${userAsset._id} ${uid} ${expirationDate.getTime()}`);
             if (!result) return null;
             
             serverLog(`[INFO] Binary option. ticker: ${ticker}, prediction: ${prediction}, time: ${time}, amount: ${amount}. id: ${id}`);
@@ -1427,11 +1444,19 @@ module.exports = {
 
             userAsset.balance += amount;
 
+            let uid;
+            if (userAsset.loans.length === 0) {
+                uid = 0;
+            } else {
+                uid = userAsset.loans[userAsset.loans.length - 1].uid + 1;
+            }
+
             userAsset.loans.push({
                 amount: amount,
                 interestRate: interestRate,
                 loanDate: now,
                 dueDate: dueDate,
+                uid: uid,
             });
 
             const saveResult = await userAsset.save();
@@ -1440,7 +1465,7 @@ module.exports = {
                 return false;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}-loan_${userAsset.loans.length - 1}`, id, `repay_loan ${userAsset._id} ${userAsset.loans.length - 1} at ${dueDate.getTime()}`);
+            const result = await module.exports.setTransactionSchedule(`${id}-loan_${uid}`, id, `repay_loan ${userAsset._id} ${uid} at ${dueDate.getTime()}`);
             if (!result) return false;
 
             serverLog(`[INFO] Loaned ${amount} amount of money.`);
@@ -1495,7 +1520,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.deleteTransactionSchedule(`${id}-loan_${loanNumber - 1}`);
+            const result = await module.exports.deleteTransactionSchedule(`${id}-loan_${loan.uid}`);
             if (!result) return null;
 
             serverLog(`[INFO] Repayed ${amount} amount of loaned money.`);
@@ -1744,17 +1769,25 @@ module.exports = {
             const maturityDate = new Date();
             maturityDate.setDate(depositDate.getDate() + product);
 
+            let uid;
+            if (userAsset.futures.length === 0) {
+                uid = 0;
+            } else {
+                uid = userAsset.futures[userAsset.futures.length - 1].uid + 1;
+            }
+
             userAsset.fixed_deposits.push({
                 amount: amount,
                 product: product,
                 interestRate: interestRate,
                 depositDate: depositDate,
                 maturityDate: maturityDate,
+                uid: uid,
             });
 
             userAsset.balance -= amount;
 
-            const result = await module.exports.setTransactionSchedule(`${id}-fixed_deposit_${userAsset.fixed_deposits.length - 1}`, id, `pay_interest_fixed_deposit ${userAsset._id} ${userAsset.fixed_deposits.length - 1} at ${maturityDate.getTime()}`);
+            const result = await module.exports.setTransactionSchedule(`${id}-fixed_deposit_${uid}`, id, `pay_interest_fixed_deposit ${userAsset._id} ${uid} at ${maturityDate.getTime()}`);
             if (!result) return null;
 
             const saveResult = userAsset.save();
@@ -1790,17 +1823,25 @@ module.exports = {
             const endDate = new Date();
             endDate.setDate(startDate.getDate() + product);
 
+            let uid;
+            if (userAsset.futures.length === 0) {
+                uid = 0;
+            } else {
+                uid = userAsset.futures[userAsset.futures.length - 1].uid + 1;
+            }
+
             userAsset.savings_accounts.push({
                 amount: amount,
                 product: product,
                 interestRate: interestRate,
                 startDate: startDate,
                 endDate: endDate,
+                uid: uid,
             });
 
             userAsset.balance -= amount;
 
-            const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${userAsset.savings_accounts.length - 1}`, id, `pay_interest_savings_account ${userAsset._id} ${userAsset.savings_accounts.length - 1} at ${maturityDate.getTime()}`);
+            const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${uid}`, id, `pay_interest_savings_account ${userAsset._id} ${uid} at ${maturityDate.getTime()}`);
             if (!result) return null;
 
             const saveResult = userAsset.save();
