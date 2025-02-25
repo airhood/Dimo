@@ -14,6 +14,6 @@ const TransactionScheduleSchema = new Schema({
         type: String,
         required: true,
     },
-})
+});
 
 module.exports = mongoose.model('TransactionSchedule', TransactionScheduleSchema);

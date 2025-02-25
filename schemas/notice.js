@@ -14,6 +14,6 @@ const NoticeSchema = new Schema({
         type: Date,
         required: true,
     },
-})
+});
 
 module.exports = mongoose.model('Notice', NoticeSchema);

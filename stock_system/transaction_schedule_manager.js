@@ -1,5 +1,5 @@
-const { getTransactionScheduleData, deleteTransactionSchedule, OPTION_UNIT_QUANTITY } = require("../database");
-const { setFutureExpireCallback, setOptionExpireCallback, getStockPrice } = require("./stock_sim");
+const { getTransactionScheduleData, OPTION_UNIT_QUANTITY } = require("../database");
+const { setOnFutureExpireListener, setOnOptionExpireListener, getStockPrice } = require("./stock_sim");
 const { program } = require('commander');
 const { serverLog } = require("../server/server_logger");
 const schedule = require('node-schedule');
@@ -321,7 +321,7 @@ module.exports = {
         const result = cacheTransactionScheduleData();
         if (!result) return false;
 
-        setFutureExpireCallback(async () => {
+        setOnFutureExpireListener(async () => {
             const results = await Promise.all(future_execute_list.map(async (transaction_schedule) => {
                 const userAsset = await Asset.findById(transaction_schedule.asset_id);
                 if (!userAsset) {
@@ -384,7 +384,7 @@ module.exports = {
             }));
         });
 
-        setOptionExpireCallback(async () => {
+        setOnOptionExpireListener(async () => {
             const results = await Promise.all(option_execute_list.map(async (transaction_schedule) => {
                 const userAsset = await Asset.findById(transaction_schedule.asset_id);
                 if (!userAsset) {

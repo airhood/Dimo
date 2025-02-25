@@ -468,7 +468,7 @@ function updateFutureTimeLeft() {
 
 let futureExpireCallback;
 
-function setFutureExpireCallback(callback) {
+function setOnFutureExpireListener(callback) {
     futureExpireCallback = callback;
 }
 
@@ -528,7 +528,7 @@ function updateOptionTimeLeft() {
 
 let optionExpireCallback;
 
-function setOptionExpireCallback(callback) {
+function setOnOptionExpireListener(callback) {
     optionExpireCallback = callback;
 }
 
@@ -1024,8 +1024,8 @@ exports.getOptionPrice = getOptionPrice;
 exports.getOptionExpirationDate = getOptionExpirationDate;
 exports.getStockInfo = getStockInfo;
 
-exports.setFutureExpireCallback = setFutureExpireCallback;
-exports.setOptionExpireCallback = setOptionExpireCallback;
+exports.setOnFutureExpireListener = setOnFutureExpireListener;
+exports.setOnOptionExpireListener = setOnOptionExpireListener;
 
 exports.tryGetTicker = tryGetTicker;
 exports.getTickerList = getTickerList;
