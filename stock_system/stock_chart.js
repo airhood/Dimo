@@ -3,7 +3,7 @@ const fs = require('fs');
 const { getStockName } = require('./stock_name');
 const { COMPRESSION_RATE } = require('./stock_sim');
 
-let index = 0;
+let chartFileIndex = 0;
 
 async function generateStockChartImage(ticker, timeRangeData, targetMinuteIndex) {
     const name = getStockName(ticker);
@@ -14,17 +14,18 @@ async function generateStockChartImage(ticker, timeRangeData, targetMinuteIndex)
     const maxMinuteIndex = timeRangeData[maxHourIndex][0].prices.length - 1;
     const currentTime = (maxHourIndex * 60) + maxMinuteIndex;
     
+    let time = 0;
     timeRangeData.forEach((hourData, hour) => {
         hourData.forEach((priceData) => {
             const ticker = priceData.ticker;
 
             const data = priceData.prices.map((price, minute) => {
-                let time = (hour * 60) + (priceData.compressed === true ? minute * COMPRESSION_RATE : minute);
-                if (hour === 0) {
-                    time += targetMinuteIndex;
+                if (priceData.compressed) {
+                    time += COMPRESSION_RATE;
+                } else {
+                    time += 1;
                 }
-                const relTime = time - currentTime;
-                return [relTime, price];
+                return [time, price];
             });
 
             const existingSeries = series.find(s => s.name === ticker);
@@ -37,6 +38,20 @@ async function generateStockChartImage(ticker, timeRangeData, targetMinuteIndex)
                 });
             }
         });
+    });
+
+    const finalTime = series[0].data[series[0].data.length - 1][0];
+
+    const formattedSeries = series.map((stock_series) => {
+        return {
+            name: stock_series.ticker,
+            data: stock_series.data.map((value) => {
+                return [
+                    value[0] - finalTime,
+                    value[1]
+                ];
+            }),
+        };
     });
 
     const chartOptions = {
@@ -52,7 +67,7 @@ async function generateStockChartImage(ticker, timeRangeData, targetMinuteIndex)
         stroke: {
             width: 1,
         },
-        series: series,
+        series: formattedSeries,
         xaxis: {
             type: 'linear',
             title: {
@@ -81,10 +96,10 @@ async function generateStockChartImage(ticker, timeRangeData, targetMinuteIndex)
 
     // fs.writeFileSync('test_s.txt', JSON.stringify(series));
     // fs.writeFileSync('test_t.txt', JSON.stringify(timeRangeData));
-    const filepath = `assets/charts/chart_${index}.png`;
-    const filename = `chart_${index}.png`;
+    const filepath = `assets/charts/chart_${chartFileIndex}.png`;
+    const filename = `chart_${chartFileIndex}.png`;
     fs.writeFileSync(filepath, response.data);
-    index++;
+    chartFileIndex++;
     return {
         filepath: filepath,
         filename: filename,
