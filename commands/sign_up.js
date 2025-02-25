@@ -38,8 +38,8 @@ module.exports = {
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x95A5A6)
-                            .setTitle('Dimo 사용 규칙')
-                            .setDescription('1. 매크로 등 자동화 프로그램을 이용할 경우 이용이 제한될 수 있습니다.')
+                            .setTitle('서비스 이용약관 및 개인정보처리방침')
+                            .setDescription('**\'동의\'** 버튼을 누를 시 아래 약관에 동의한 것으로 간주합니다.\n약관 동의를 거절할 권리가 있지만, 약관에 동의하지 않을 시 서비스 이용이 제한될 수 있습니다.\n\n**서비스 이용약관**\nhttps://dimo-bot.notion.site/Terms-of-Service-189513f1951b803da711d8401f4e219e\n**개인정보처리방침**\nhttps://dimo-bot.notion.site/Privacy-Policy-189513f1951b80f19728d0bf96fb79ee')
                     ],
                     components: [row]
                 });
