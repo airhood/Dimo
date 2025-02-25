@@ -81,8 +81,8 @@ module.exports = {
                         )
                         .addIntegerOption((option) =>
                             option.setName('수량')
-                                .setDescription('매수할 콜옵션의 수량')
-                                .setMinValue(1)
+                                .setDescription('매수할 콜옵션의 수량 (0 입력시 올인)')
+                                .setMinValue(0)
                                 .setRequired(true)
                         )
                         .addIntegerOption((option) =>
@@ -102,8 +102,8 @@ module.exports = {
                         )
                         .addIntegerOption((option) =>
                             option.setName('수량')
-                                .setDescription('매도할 콜옵션의 수량')
-                                .setMinValue(1)
+                                .setDescription('매도할 콜옵션의 수량 (0 입력시 올인)')
+                                .setMinValue(0)
                                 .setRequired(true)
                         )
                         .addIntegerOption((option) =>
@@ -128,7 +128,7 @@ module.exports = {
                         )
                         .addIntegerOption((option) =>
                             option.setName('수량')
-                                .setDescription('매수할 풋옵션의 수량')
+                                .setDescription('매수할 풋옵션의 수량 (0 입력시 올인)')
                                 .setMinValue(0)
                                 .setRequired(true)
                         )
@@ -149,7 +149,7 @@ module.exports = {
                         )
                         .addIntegerOption((option) =>
                             option.setName('수량')
-                                .setDescription('매도할 풋옵션의 수량')
+                                .setDescription('매도할 풋옵션의 수량 (0 입력시 올인)')
                                 .setMinValue(0)
                                 .setRequired(true)
                         )

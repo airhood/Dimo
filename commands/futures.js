@@ -74,7 +74,7 @@ module.exports = {
                 )
                 .addIntegerOption((option) =>
                     option.setName('수량')
-                        .setDescription('선물의 계약수')
+                        .setDescription('선물의 계약수 (0 입력시 올인)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -103,7 +103,7 @@ module.exports = {
                 )
                 .addIntegerOption((option) =>
                     option.setName('수량')
-                        .setDescription('선물의 계약수')
+                        .setDescription('선물의 계약수 (0 입력시 올인)')
                         .setMinValue(0)
                         .setRequired(true)
                 )

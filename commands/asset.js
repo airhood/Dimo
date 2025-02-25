@@ -468,11 +468,11 @@ module.exports = {
         } else {
             for (fixed_deposit of result.asset.fixed_deposits) {
                 if (deposit_format !== '') deposit_format += '\n';
-                deposit_format += `예금 ${fixed_deposit.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(fixed_deposit.interestRate * 100).toFixed(2)})`;
+                deposit_format += `예금 ${fixed_deposit.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(fixed_deposit.interestRate * 100).toFixed(2)}%)`;
             }
             for (savings_account of result.asset.savings_accounts) {
                 if (deposit_format !== '') deposit_format += '\n';
-                deposit_format += `적금 ${savings_account.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(savings_account.interestRate * 100).toFixed(2)})`;
+                deposit_format += `적금 ${savings_account.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(savings_account.interestRate * 100).toFixed(2)}%)`;
             }
         }
 

@@ -73,7 +73,7 @@ module.exports = {
                 )
                 .addIntegerOption((option) =>
                     option.setName('수량')
-                        .setDescription('매수할 주식의 수량')
+                        .setDescription('매수할 주식의 수량 (0 입력시 올인)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -88,7 +88,7 @@ module.exports = {
                 )
                 .addIntegerOption((option) =>
                     option.setName('수량')
-                        .setDescription('매도할 주식의 수량')
+                        .setDescription('매도할 주식의 수량 (0 입력시 올인)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -103,7 +103,7 @@ module.exports = {
                 )
                 .addIntegerOption((option) =>
                     option.setName('수량')
-                        .setDescription('공매도할 주식의 수량')
+                        .setDescription('공매도할 주식의 수량 (0 입력시 올인)')
                         .setMinValue(0)
                         .setRequired(true)
                 )

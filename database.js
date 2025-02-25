@@ -575,6 +575,11 @@ module.exports = {
             }
 
             const currentPrice = getStockPrice(ticker);
+
+            if (quantity === 0) {
+                quantity = Math.floor(userAsset.balance / currentPrice);
+            }
+
             const transactionAmount = currentPrice * quantity;
             
             if (userAsset.balance < transactionAmount) {
@@ -623,7 +628,11 @@ module.exports = {
             }
 
             const currentPrice = getStockPrice(ticker);
-            
+
+            if (quantity === 0) {
+                quantity = Math.floor(userAsset.balance / currentPrice);
+            }
+
             const transactionAmount = currentPrice * quantity;
 
             let quantityLeft = quantity;
@@ -681,6 +690,11 @@ module.exports = {
             }
 
             const currentPrice = getStockPrice(ticker);
+
+            if (quantity === 0) {
+                quantity = Math.floor(userAsset.balance / (currentPrice * SHORT_SELL_MARGIN_RATE));
+            }
+
             const transactionAmount = currentPrice * quantity;
             const margin = currentPrice * quantity * SHORT_SELL_MARGIN_RATE;
 
@@ -811,6 +825,10 @@ module.exports = {
 
             const currentPrice = getFuturePrice(ticker);
 
+            if (quantity === 0) {
+                quantity = Math.floor(userAsset.balance / currentPrice);
+            }
+
             const margin = currentPrice * quantity;
 
             if (userAsset.balance < margin) {
@@ -900,6 +918,10 @@ module.exports = {
             }
 
             const currentPrice = getStockPrice(ticker);
+
+            if (quantity === 0) {
+                quantity = Math.floor(userAsset.balance / currentPrice);
+            }
 
             const margin = currentPrice * quantity;
 
@@ -1035,12 +1057,16 @@ module.exports = {
                 serverLog('[ERROR] Error finding user asset');
                 return null;
             }
-
+            
             const optionPrices = getOptionPrice(ticker);
             const callOptionPrice = optionPrices.call;
             const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
             if (strikePriceIndex === null) return 'invalid_strikePrice';
             const currentPrice = callOptionPrice[strikePriceIndex];
+
+            if (quantity === 0) {
+                quantity = Math.floor(userAsset.balance / currentPrice);
+            }
 
             const transactionAmount = currentPrice * quantity * OPTION_UNIT_QUANTITY;
 
@@ -1098,6 +1124,10 @@ module.exports = {
             if (strikePriceIndex === null) return 'invalid_strikePrice';
             const currentPrice = callOptionPrice[strikePriceIndex];
 
+            if (quantity === 0) {
+                quantity = Math.floor(userAsset.balance / currentPrice);
+            }
+
             const transactionAmount = currentPrice * Math.abs(quantity) * OPTION_UNIT_QUANTITY;
 
             if (userAsset.balance < transactionAmount) return false;
@@ -1154,6 +1184,10 @@ module.exports = {
             if (strikePriceIndex === null) return 'invalid_strikePrice';
             const currentPrice = putOptionPrice[strikePriceIndex];
 
+            if (quantity === 0) {
+                quantity = Math.floor(userAsset.balance / currentPrice);
+            }
+
             const transactionAmount = currentPrice * quantity * OPTION_UNIT_QUANTITY;
 
             if (userAsset.balance < transactionAmount) return false;
@@ -1209,6 +1243,10 @@ module.exports = {
             const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
             if (strikePriceIndex === null) return 'invalid_strikePrice';
             const currentPrice = putOptionPrice[strikePriceIndex];
+
+            if (quantity === 0) {
+                quantity = Math.floor(userAsset.balance / currentPrice);
+            }
 
             const transactionAmount = currentPrice * Math.abs(quantity) * OPTION_UNIT_QUANTITY;
 
@@ -1268,7 +1306,19 @@ module.exports = {
             const ticker = position.ticker;
             const optionType = position.optionType;
             const quantity = position.quantity;
-            const currentPrice = getOptionPrice(ticker);
+            const strikePrice = position.strikePrice;
+            const currentOptionPrices = getOptionPrice(ticker);
+            
+            const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
+            if (strikePriceIndex === null) return falsel
+            
+            let currentPrice;
+            if (optionType === 'call') {
+                currentPrice = currentOptionPrices.call[strikePriceIndex];
+            } else if (optionType === 'put') {
+                currentPrice = currentOptionPrices.put[strikePriceIndex];
+            }
+
             const currentValue = currentPrice * quantity * OPTION_UNIT_QUANTITY;
 
             const transactionAmount = currentValue;
@@ -1312,6 +1362,10 @@ module.exports = {
             }
 
             if (userAsset.balance < amount) return false;
+
+            if (amount === 0) {
+                amount = userAsset.balance;
+            }
 
             const now  = new Date();
             const expirationDate = new Date();
@@ -1687,7 +1741,7 @@ module.exports = {
 
             const interestRate = getFixedDepositInterestRate();
             const depositDate = new Date();
-            const maturityDate = depositDate;
+            const maturityDate = new Date();
             maturityDate.setDate(depositDate.getDate() + product);
 
             userAsset.fixed_deposits.push({
@@ -1733,10 +1787,10 @@ module.exports = {
 
             const interestRate = getFixedDepositInterestRate();
             const startDate = new Date();
-            const endDate = startDate;
+            const endDate = new Date();
             endDate.setDate(startDate.getDate() + product);
 
-            userAsset.fixed_deposits.push({
+            userAsset.savings_accounts.push({
                 amount: amount,
                 product: product,
                 interestRate: interestRate,

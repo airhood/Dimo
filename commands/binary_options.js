@@ -35,8 +35,8 @@ module.exports = {
         )
         .addIntegerOption((option) =>
             option.setName('금액')
-                .setDescription('투자할 액수 (최소 1만원)')
-                .setMinValue(10000)
+                .setDescription('투자할 액수 (0 입력시 올인)')
+                .setMinValue(0)
                 .setRequired(true)
         ),
     
