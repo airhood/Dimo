@@ -220,6 +220,10 @@ const AssetSchema = new Schema({
             type: Date,
             required: true,
         },
+        days: {
+            type: Number,
+            required: true,
+        },
         uid: {
             type: Number,
             required: true,

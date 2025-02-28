@@ -1,4 +1,4 @@
-const { getTransactionScheduleData, OPTION_UNIT_QUANTITY } = require("../database");
+const { getTransactionScheduleData, OPTION_UNIT_QUANTITY, deleteTransactionSchedule } = require("../database");
 const { setOnFutureExpireListener, setOnOptionExpireListener, getStockPrice } = require("./stock_sim");
 const { program } = require('commander');
 const { serverLog } = require("../server/server_logger");
@@ -26,6 +26,7 @@ async function cacheTransactionScheduleData() {
         return false;
     } else if (data !== null) {
         const result = Promise.all(data.map(async (transaction_schedule) => {
+            console.log(`command: ${transaction_schedule.command}`);
             const commandArgs = transaction_schedule.command.split(' ');
             commandArgs.push('|', transaction_schedule.identification_code);
 
@@ -41,12 +42,12 @@ async function cacheTransactionScheduleData() {
 }
 
 const Asset = require('../schemas/asset');
-const { calculateCompoundInterestRate } = require("./bank_manager");
+const { calculateCompoundInterestRate, getLoanInterestRate } = require("./bank_manager");
 
 module.exports = {
     async initScheduleManager() {
-        program.command('buyback stock <asset_id> <uid> at <date> | <identification_code>')
-            .action((asset_id, uid, date, identification_code) => {      
+        program.command('buyback stock <id> <asset_id> <uid> at <date> | <identification_code>')
+            .action((id, asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
                 const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
@@ -106,6 +107,12 @@ module.exports = {
                         return null;
                     }
 
+                    const result = deleteTransactionSchedule(`${id}-short_${uid}`);
+                    if (!result) {
+                        serverLog('[ERROR] Delete transaction schedule failed.');
+                        return null;
+                    }
+
                     serverLog(`[INFO] Buyback ${short.quantity} shares of ${short.ticker} stock. asset_id: ${asset_id}`);
                     return true;
                 });
@@ -113,26 +120,28 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
-        program.command('execute_future <asset_id> | <identification_code>')
-            .action((asset_id, identification_code) => {
+        program.command('execute_future <id> <asset_id> | <identification_code>')
+            .action((id, asset_id, identification_code) => {
                 const transaction_schedule = {
+                    id: id,
                     asset_id: asset_id,
                 };
         
                 future_execute_list[identification_code] = transaction_schedule;
             });
         
-        program.command('execute_option <asset_id> | <identification_code>')
-            .action((asset_id, identification_code) => {
+        program.command('execute_option <id> <asset_id> | <identification_code>')
+            .action((id, asset_id, identification_code) => {
                 const transaction_schedule = {
+                    id: id,
                     asset_id: asset_id,
                 };
 
                 option_execute_list[identification_code] = transaction_schedule;
             });
         
-        program.command('execute_binary_option <asset_id> <index> <expiration_date> | <identification_code>')
-            .action((asset_id, uid, expiration_date, identification_code) => {
+        program.command('execute_binary_option <id> <asset_id> <uid> <expiration_date> | <identification_code>')
+            .action((id, asset_id, uid, expiration_date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(expiration_date);
                 const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
@@ -192,6 +201,12 @@ module.exports = {
                         return null;
                     }
 
+                    const result = deleteTransactionSchedule(`${id}_binary_option_${uid}`);
+                    if (!result) {
+                        serverLog('[ERROR] Delete transaction schedule failed.');
+                        return null;
+                    }
+
                     serverLog(`[INFO] Executed ${binaryOption.ticker} ${binaryOption.optionType} binary option. asset_id: ${asset_id}`);
                     return true;
                 });
@@ -199,8 +214,8 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
-        program.command('repay_loan <asset_id> <index> at <date> | <identification_code>')
-            .action((asset_id, uid, date, identification_code) => {
+        program.command('repay_loan <id> <asset_id> <uid> at <date> | <identification_code>')
+            .action((id, asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
                 const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
@@ -221,12 +236,26 @@ module.exports = {
 
                     userAsset.balance -= loan.amount;
 
+                    let interestRate = loan.interestRate;
+                    if (interestRate === 0) {
+                        interestRate = getLoanInterestRate();
+                    }
+
+                    userAsset.balance -= loan.amount * interestRate * loan.days;
+                    userAsset.balance = Math.round(userAsset.balance);
+
                     userAsset.loans.splice(index, 1);
 
                     const saveResult = await userAsset.save();
                     if (!saveResult) {
                         serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
                         error = true;
+                        return null;
+                    }
+
+                    const result = deleteTransactionSchedule(`${id}-loan_${uid}`);
+                    if (!result) {
+                        serverLog('[ERROR] Delete transaction schedule failed.');
                         return null;
                     }
 
@@ -237,8 +266,8 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
-        program.command('pay_interest_fixed_deposit <asset_id> <index> at <date> | <identification_code>')
-            .action((asset_id, uid, date, identification_code) => {
+        program.command('pay_interest_fixed_deposit <id> <asset_id> <uid> at <date> | <identification_code>')
+            .action((id, asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
                 const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
@@ -270,6 +299,12 @@ module.exports = {
                         return null;
                     }
 
+                    const result = deleteTransactionSchedule(`${id}-fixed_deposit_${uid}`);
+                    if (!result) {
+                        serverLog('[ERROR] Delete transaction schedule failed.');
+                        return null;
+                    }
+
                     serverLog(`[INFO] Pay interest on ${amount} amount of fixed deposit. asset_id: ${asset_id}`);
                     return true;
                 });
@@ -277,8 +312,8 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
-        program.command('pay_interest_savings_account <asset_id> <index> at <date> | <identification_code>')
-            .action((asset_id, uid, date, identification_code) => {
+        program.command('pay_interest_savings_account <id> <asset_id> <uid> at <date> | <identification_code>')
+            .action((id, asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
                 const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
@@ -311,7 +346,80 @@ module.exports = {
                         return null;
                     }
 
+                    const result = deleteTransactionSchedule(`${id}-savings_account_${uid}`);
+                    if (!result) {
+                        serverLog('[ERROR] Delete transaction schedule failed.');
+                        return null;
+                    }
+
                     serverLog(`[INFO] Pay interest on ${amount} amount of savings account. asset_id: ${asset_id}`);
+                    return true;
+                });
+
+                schedule_job_list[identification_code] = job;
+            });
+        
+        program.command('pay_money_savings_account <id> <asset_id> <uid> <cycle> at <date> | <identification_code>')
+            .action((id, asset_id, uid, cycle, date, identification_code) => {
+                const dateObj = new Date();
+                dateObj.setTime(date);
+                const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
+                    const userAsset = await Asset.findById(asset_id);
+                    if (!userAsset) {
+                        serverLog('[ERROR] Error finding user');
+                        return null;
+                    }
+
+                    let index;
+                    let savings_account;
+                    userAsset.savings_accounts.forEach((element, _index) => {
+                        if (element.uid === uid) {
+                            short = element;
+                            index = _index;
+                        }
+                    });
+
+                    if (userAsset.balance < savings_account.amount) {
+                        serverLog(`[INFO] Pay ${amount} amount of money to savings account failed. No money. asset_id: ${asset_id}`);
+
+                        userAsset.balance += savings_account.amount * cycle;
+                        userAsset.balance = Math.round(userAsset.balance);
+
+                        for (let del_cycle = cycle; del_cycle < savings_account.product; del_cycle++) {
+                            const result = await deleteTransactionSchedule(`${id}-savings_account_${uid}_${del_cycle}`);
+                            if (!result) {
+                                serverLog('[ERROR] Delete transaction schedule failed.');
+                            }
+                        }
+
+                        const saveResult = await userAsset.save();
+                        if (!saveResult) {
+                            serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
+                            error = true;
+                            return null;
+                        }
+
+                        serverLog(`[INFO] Liquiated savings account. asset_id: ${asset_id}`);
+                        return false;
+                    }
+
+                    userAsset.balance -= savings_account.amount;
+                    userAsset.balance = Math.round(userAsset.balance);
+
+                    const result = await deleteTransactionSchedule(`${id}-savings_account_${uid}_${cycle}`);
+                    if (!result) {
+                        serverLog('[ERROR] Delete transaction schedule failed.');
+                        return null;
+                    }
+
+                    const saveResult = await userAsset.save();
+                    if (!saveResult) {
+                        serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
+                        error = true;
+                        return null;
+                    }
+
+                    serverLog(`[INFO] Pay ${amount} amount of money to savings account success. asset_id: ${asset_id}`);
                     return true;
                 });
 
@@ -376,6 +484,12 @@ module.exports = {
                     if (!saveResult) {
                         serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${transaction_schedule.asset_id}`);
                         error = true;
+                        return null;
+                    }
+
+                    const result = await deleteTransactionSchedule(`${transaction_schedule.id}_future`);
+                    if (!result) {
+                        serverLog('[ERROR] Delete transaction schedule failed.');
                         return null;
                     }
 
@@ -471,22 +585,28 @@ module.exports = {
 
                     userAsset.options.splice(index, 1);
                 }));
-            }));
 
-            if (!error) {
-                serverLog(`[ERROR] Failed to execute option. asset_id: ${transaction_schedule.asset_id}`);
-            } else {
-                userAsset.options = [];
-
-                const saveResult = await userAsset.save();
-                if (!saveResult) {
-                    serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${transaction_schedule.asset_id}`);
-                    error = true;
-                    return null;
+                if (!error) {
+                    serverLog(`[ERROR] Failed to execute option. asset_id: ${transaction_schedule.asset_id}`);
+                } else {
+                    userAsset.options = [];
+    
+                    const saveResult = await userAsset.save();
+                    if (!saveResult) {
+                        serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${transaction_schedule.asset_id}`);
+                        error = true;
+                        return null;
+                    }
+    
+                    const result = await deleteTransactionSchedule(`${transaction_schedule.id}_option`);
+                    if (!result) {
+                        serverLog('[ERROR] Delete transaction schedule failed.');
+                        return null;
+                    }
+    
+                    serverLog(`[INFO] Option execute process success. asset_id: ${transaction_schedule.asset_id}}`);
                 }
-
-                serverLog(`[INFO] Option execute process success. asset_id: ${transaction_schedule.asset_id}}`);
-            }
+            }));
         });
 
         return true;

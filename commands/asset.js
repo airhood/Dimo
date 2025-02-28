@@ -35,11 +35,24 @@ module.exports = {
         ,
     
     async execute(interaction) {
-        let targetUser = interaction.options.getUser('유저');
+        let targetUser = interaction.options.getUser('유저');        
         let loadDetails = interaction.options.getString('상세정보');
         
         if (targetUser === null) {
             targetUser = interaction.user;
+        }
+
+        const userExists = await checkUserExists(targetUser.id);
+        if (!userExists) {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xEA4144)
+                        .setTitle('존재하지 않는 계정입니다')
+                        .setDescription(`<@${targetUser.id}>의 계정이 존재하지 않습니다.`)
+                ],
+            });
+            return;
         }
 
         if (loadDetails === '표시') {
@@ -145,11 +158,14 @@ module.exports = {
             }
         ];
 
+        
+        let totalEarn = 0;
+
 
         let stock_format = '';
 
         if (loadDetails) {
-            for (stock of result.asset.stocks) {
+            for (const stock of result.asset.stocks) {
                 if (stock_format !== '') stock_format += '\n';
                 const formattedPurchaseDate = moment(stock.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
 
@@ -163,6 +179,8 @@ module.exports = {
                     earnSign = '';
                 }
 
+                totalEarn += stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice);
+
                 stock_format += `${stock.ticker} ${stock.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주
 | 현재가격: ${getStockPrice(stock.ticker).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 매수가격: ${stock.purchasePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
@@ -174,7 +192,7 @@ module.exports = {
                 stock_format += '\n\n----- 공매도 -----';
             }
 
-            for (short of result.asset.stockShortSales) {
+            for (const short of result.asset.stockShortSales) {
                 if (stock_format !== ' ') stock_format += '\n';
                 const formattedSellDate = moment(short.sellDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedBuyBackDate = moment(short.buyBackDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -189,6 +207,8 @@ module.exports = {
                     earnSign = '';
                 }
 
+                totalEarn += stock.quantity * (short.sellPrice - getStockPrice(short.ticker));
+
                 stock_format += `${short.ticker} ${-short.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주
 | 현재가격: ${getStockPrice(short.ticker).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 매도가격: ${short.sellPrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
@@ -197,7 +217,7 @@ module.exports = {
 | 매도날짜: ${formattedSellDate}`;
             }
         } else {
-            for (stock of result.asset.stocks) {
+            for (const stock of result.asset.stocks) {
                 if (stock_format !== '') stock_format += '\n';
 
                 const earn = (getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice;
@@ -210,6 +230,8 @@ module.exports = {
                     earnSign = '';
                 }
 
+                totalEarn += stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice);
+
                 stock_format += `${stock.ticker} ${stock.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 (평가손익: ${(stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
             }
 
@@ -217,7 +239,7 @@ module.exports = {
                 stock_format += '\n\n----- 공매도 -----';
             }
 
-            for (short of result.asset.stockShortSales) {
+            for (const short of result.asset.stockShortSales) {
                 if (stock_format !== ' ') stock_format += '\n';
 
                 const earn = (short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice;
@@ -229,6 +251,8 @@ module.exports = {
                 } else if (earn < 0) {
                     earnSign = '';
                 }
+
+                totalEarn += short.quantity * (short.sellPrice - getStockPrice(short.ticker));
 
                 stock_format += `${short.ticker} ${-short.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 (평가손익: ${(short.quantity * (short.sellPrice - getStockPrice(short.ticker))).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
             }
@@ -245,7 +269,7 @@ module.exports = {
         let future_format = '';
 
         if (loadDetails) {
-            for (future of result.asset.futures) {
+            for (const future of result.asset.futures) {
                 if (future_format !== '') future_format += '\n';
                 const formattedExpirationDate = moment(future.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(future.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -272,6 +296,8 @@ module.exports = {
                     earnSign = '';
                 }
 
+                totalEarn += future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice);
+
                 future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약
 | 현재가격: ${getFuturePrice(future.ticker).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 매수가격: ${future.purchasePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
@@ -281,7 +307,7 @@ module.exports = {
             }
         } else {
             
-            for (future of result.asset.futures) {
+            for (const future of result.asset.futures) {
                 if (future_format !== '') future_format += '\n';
                 
                 let positionType;
@@ -306,6 +332,8 @@ module.exports = {
                     earnSign = '';
                 }
 
+                totalEarn += future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice);
+
                 future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 (평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round((((getFuturePrice(future.ticker) - future.purchasePrice) * future.leverage * earnDirection) / future.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
             }
         }
@@ -321,7 +349,7 @@ module.exports = {
         let option_format = '';
         
         if (loadDetails) {
-            for (option of result.asset.options) {
+            for (const option of result.asset.options) {
                 if (option_format !== '') option_format += '\n\n';
                 let formattedOptionType;
                 const optionPrices = getOptionPrice(option.ticker);
@@ -346,8 +374,12 @@ module.exports = {
                 } else if (earnRate < 0) {
                     earnSign = '';
                 }
+
                 const formattedExpirationDate = moment(option.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(option.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+
+                totalEarn += option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY;
+
                 option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약
 | 현재가격: ${currentPrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 매수가격: ${option.purchasePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
@@ -357,7 +389,7 @@ module.exports = {
 | 매수날짜: ${formattedPurchaseDate}`;
             }
         } else {
-            for (option of result.asset.options) {
+            for (const option of result.asset.options) {
                 if (option_format !== '') option_format += '\n\n';
                 let formattedOptionType;
                 const optionPrices = getOptionPrice(option.ticker);
@@ -383,10 +415,11 @@ module.exports = {
                     earnSign = '';
                 }
 
-                if (option.optionType === 'call') formattedOptionType = '콜';
-                else if (option.optionType === 'put') formattedOptionType = '풋';
                 const formattedExpirationDate = moment(option.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(option.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+
+                totalEarn += option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY;
+
                 option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 (평가손익: ${(option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
             }
         }
@@ -401,17 +434,29 @@ module.exports = {
 
         let binary_option_format = '';
         if (loadDetails) {
-            for (binary_option of result.asset.binary_options) {
+            for (const binary_option of result.asset.binary_options) {
                 if (binary_option_format !== '') binary_option_format += '\n';
+
+                const currentPrice = getStockPrice(binary_option.ticker);
 
                 let direction;
                 if (binary_option.optionType === 'call') {
                     direction = '상승';
+
+                    if (currentPrice > binary_option.strikePrice) {
+                        totalEarn += binary_option.amount * (0.8);
+                    } else if (currentPrice < binary_option.strikePrice) {
+                        totalEarn -= binary_option.amount;
+                    }
                 } else if (binary_option.optionType === 'put') {
                     direction = '하락';
-                }
 
-                const currentPrice = getStockPrice(binary_option.ticker);
+                    if (currentPrice > binary_option.strikePrice) {
+                        totalEarn -= binary_option.amount;
+                    } else if (currentPrice < binary_option.strikePrice) {
+                        totalEarn += binary_option.amount * (0.8);
+                    }
+                }
 
                 const formattedExpirationDate = moment(binary_option.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(binary_option.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -423,14 +468,26 @@ module.exports = {
 | 배팅날짜: ${formattedPurchaseDate}`;
             }
         } else {
-            for (binary_option of result.asset.binary_options) {
+            for (const binary_option of result.asset.binary_options) {
                 if (binary_option_format !== '') binary_option_format += '\n';
 
                 let direction;
                 if (binary_option.optionType === 'call') {
                     direction = '상승';
+
+                    if (currentPrice > binary_option.strikePrice) {
+                        totalEarn += binary_option.amount * (0.8);
+                    } else if (currentPrice < binary_option.strikePrice) {
+                        totalEarn -= binary_option.amount;
+                    }
                 } else if (binary_option.optionType === 'put') {
                     direction = '하락';
+
+                    if (currentPrice > binary_option.strikePrice) {
+                        totalEarn -= binary_option.amount;
+                    } else if (currentPrice < binary_option.strikePrice) {
+                        totalEarn += binary_option.amount * (0.8);
+                    }
                 }
 
                 binary_option_format += `${binary_option.ticker} ${direction} ${binary_option.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 배팅`;
@@ -447,7 +504,7 @@ module.exports = {
 
         let deposit_format = '';
         if (loadDetails) {
-            for (fixed_deposit of result.asset.fixed_deposits) {
+            for (const fixed_deposit of result.asset.fixed_deposits) {
                 if (deposit_format !== '') deposit_format += '\n';
                 const formatted_depositDate = moment(fixed_deposit.depositDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formatted_maturityDate = moment(fixed_deposit.maturityDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -457,7 +514,7 @@ module.exports = {
 | 예금일: ${formatted_depositDate}
 | 만기일: ${formatted_maturityDate}`;
             }
-            for (savings_account of result.asset.savings_accounts) {
+            for (const savings_account of result.asset.savings_accounts) {
                 if (deposit_format !== '') deposit_format += '\n';
                 const formatted_startDate = moment(savings_account.startDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formatted_endDate = moment(savings_account.endDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -468,11 +525,11 @@ module.exports = {
 | 만기일: ${formatted_endDate}`;
             }
         } else {
-            for (fixed_deposit of result.asset.fixed_deposits) {
+            for (const fixed_deposit of result.asset.fixed_deposits) {
                 if (deposit_format !== '') deposit_format += '\n';
                 deposit_format += `예금 ${fixed_deposit.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(fixed_deposit.interestRate * 100).toFixed(2)}%)`;
             }
-            for (savings_account of result.asset.savings_accounts) {
+            for (const savings_account of result.asset.savings_accounts) {
                 if (deposit_format !== '') deposit_format += '\n';
                 deposit_format += `적금 ${savings_account.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(savings_account.interestRate * 100).toFixed(2)}%)`;
             }
@@ -487,7 +544,7 @@ module.exports = {
 
         let loan_format = '';
         if (loadDetails) {
-            for (loan of result.asset.loans) {
+            for (const loan of result.asset.loans) {
                 if (loan_format !== '') loan_format += '\n';
                 const formatted_loanDate = moment(loan.loanDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formatted_dueDate = moment(loan.dueDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -497,7 +554,7 @@ module.exports = {
 | 상환일: ${formatted_dueDate}`;
             }
         } else {
-            for (loan of result.asset.loans) {
+            for (const loan of result.asset.loans) {
                 if (loan_format !== '') loan_format += '\n';
                 loan_format += `대출 ${loan.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(loan.interestRate * 100).toFixed(2)}%)`;
             }

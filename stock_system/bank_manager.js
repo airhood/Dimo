@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { calculateAssetValue, getAssetTotalLoan } = require('./credit_system');
 
 function getInterestRate() {
     const currentDate = new Date();
@@ -62,6 +63,33 @@ function calculateCompoundInterestRate(r, n) {
     return r * (Math.pow(r, n) - 1) / (r - 1);
 }
 
+function calculateLoanLimit(userAsset, creditRating) {
+    const assetValue = calculateAssetValue(userAsset);
+
+    const totalLoan = getAssetTotalLoan(userAsset);
+
+    let multiplier = 0;
+
+    if (creditRating >= 101 && creditRating <= 200) {
+        multiplier = 1;
+    } else if (creditRating >= 201 && creditRating <= 400) {
+        multiplier = 1.5;
+    } else if (creditRating >= 401 && creditRating <= 600) {
+        multiplier = 2;
+    } else if (creditRating >= 601 && creditRating <= 800) {
+        multiplier = 3;
+    } else if (creditRating >= 801 && creditRating <= 1000) {
+        multiplier = 5;
+    }
+
+    const loanLimit = assetValue * multiplier;
+
+    const loanLimitLeft = loanLimit - totalLoan;
+
+    return Math.max(0, loanLimitLeft);
+}
+
+
 exports.getInterestRate = getInterestRate;
 exports.getInterestRatePoint = getInterestRatePoint;
 exports.getLoanInterestRate = getLoanInterestRate;
@@ -72,3 +100,5 @@ exports.getSavingsAccountInterestRate = getSavingsAccountInterestRate;
 exports.getSavingsAccountInterestRatePoint = getSavingsAccountInterestRatePoint;
 
 exports.calculateCompoundInterestRate = calculateCompoundInterestRate;
+
+exports.calculateLoanLimit = calculateLoanLimit;

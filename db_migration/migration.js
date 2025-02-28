@@ -1,0 +1,72 @@
+const mongoose = require('mongoose');
+const { mongodb_url }  = require('../config.json');
+
+
+mongoose.connection.on('connected', () => {
+    console.log('[MONGO_DB] Database connected');
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log('[MONGO_DB] Database disconnected');
+});
+
+mongoose.connection.on('reconnected', () => {
+    console.log('[MONGO_DB] Database reconnected');
+});
+
+mongoose.connection.on('reconnectFailed', () => {
+    console.log('[MONGO_DB] Database reconnectFailed');
+});
+
+async function connectDatabase() {
+    if (process.env.NODE_ENV !== 'production') {
+        mongoose.set('debug', true);
+    }
+    
+    try {
+        await mongoose.connect(mongodb_url, { });
+    } catch (err) {
+        console.log(`[ERROR] Database connect failed.`);
+        return false;
+    }
+    return true;
+}
+
+const Profile = require('../schemas/profile');
+const Asset = require('../schemas/asset');
+
+const migrateAddCreditRating = async () => {
+    try {
+        const result1 = await Asset.updateMany(
+            { },
+            { $set: {
+                balance: 150 * 10000, // 150만원
+                stocks: [],
+                stockShortSales: [],
+                futures: [],
+                options: [],
+                binary_options: [],
+                fixed_deposits: [],
+                savings_accounts: [],
+                loans: [],
+            } }
+        );
+
+        // const result2 = await Profile.updateMany(
+        //     { },
+        //     { $push: { achievements: {
+        //         name: '초기유저',
+        //         description: '디모봇을 베타 시절부터 사용했어요!',
+        //     } } }
+        // )
+        
+        console.log(`Matched ${result1.matchedCount} documents and updated ${result1.modifiedCount} documents.`);
+        // console.log(`Matched ${result2.matchedCount} documents and updated ${result2.modifiedCount} documents.`);
+    } catch (err) {
+        console.error('Error during migration:', err);
+    }
+};
+
+connectDatabase().then(() => {
+    migrateAddCreditRating();
+});

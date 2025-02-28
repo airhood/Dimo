@@ -4,9 +4,9 @@ const { Schema } = mongoose;
 
 const ProfileSchema = new Schema({
     user: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-            required: true,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
     },
     level: {
         level: {
@@ -18,6 +18,10 @@ const ProfileSchema = new Schema({
             required: true,
         },
     },
+    credit_rating: {
+        type: Number,
+        required: true,
+    },
     achievements: [{
         name: {
             type: String,
@@ -28,6 +32,6 @@ const ProfileSchema = new Schema({
             required: true,
         },
     }]
-})
+});
 
 module.exports = mongoose.model('Profile', ProfileSchema);

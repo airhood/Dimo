@@ -10,6 +10,7 @@ const { setClient_status_tracker, setupStatusChannel } = require('./server/statu
 const { dimoChat } = require('./chat_bot/chat_bot');
 const { addToBucket, existsInCurrentBucket } = require('./message_reference_tracker');
 const { filterMessage } = require('./chat_bot/message_filter');
+const { setClient_koreanbots_update } = require('./koreanbots_update');
 
 const client = new Client({
 	intents: [
@@ -98,8 +99,14 @@ module.exports = {
 			serverLog(`[INFO] Bot ready! Logged in as ${readyClient.user.tag}`);
 			setClient_server_logger(client);
 			setClient_status_tracker(client);
+			setClient_koreanbots_update(client);
 			setupAdminChannel();
 			setupStatusChannel();
+			if (process.env.NODE_ENV === 'production') {
+				setUpdateInterval();
+				
+				console.log('[INFO] Koreanbots api loaded');
+			}
 		});
 		
 		client.on(Events.MessageCreate, async (message) => {
@@ -141,8 +148,8 @@ module.exports = {
 								await message.reply('내용이 기억이 안나.');
 								console.log('a');
 								addToBucket(null, true);
-							} else {
-								await message.reply('으악! 오류가 발생했어.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해줘.');
+							} else if ('error') {
+								await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
 								addToBucket(null, true);
 							}
 						} else if (existsInCurrentBucket(referenceMessageID) === 'special') {
@@ -170,8 +177,8 @@ module.exports = {
 							} else if (result.result === 'reply_timeout') {
 								await message.reply('내용이 기억이 안나.');
 								addToBucket(null, true);
-							} else {
-								await message.reply('으악! 오류가 발생했어.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해줘.');
+							} else if ('error') {
+								await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
 								addToBucket(null, true);
 							}
 						} else {
@@ -203,8 +210,8 @@ module.exports = {
 						} else if (result.result === 'reply_timeout') {
 							await message.reply('내용이 기억이 안나.');
 							addToBucket(null, true);
-						} else {
-							await message.reply('으악! 오류가 발생했어.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해줘.');
+						} else if ('error') {
+							await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
 							addToBucket(null, true);
 						}
 					}

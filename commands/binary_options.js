@@ -6,7 +6,7 @@ const { checkUserExists, binaryOption } = require('../database');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('바이너리옵션')
-        .setDescription('주식의 가격 변동을 맞출 시 투자한 금액에 +70%를 돌려받습니다.')
+        .setDescription('주식의 가격 변동을 맞출 시 투자한 금액에 +80%를 돌려받습니다.')
         .addStringOption((option) =>
             option.setName('종목')
                 .setDescription('바이너리 옵션을 매수하려는 종목 코드 또는 종목명')

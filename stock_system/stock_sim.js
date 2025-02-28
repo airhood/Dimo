@@ -381,6 +381,16 @@ async function loadRecentStockData() {
     });
 }
 
+async function initStockSim() {
+    try {
+        await loadRecentStockData();
+        return true;
+    } catch (err) {
+        serverLog(`[ERROR] Error loading recent stock data: ${err}`);
+        return false;
+    }
+}
+
 function calculateNextHourPrice() {
     const newStockData = {};
     const newNewsData = {};
@@ -1013,7 +1023,7 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
     return timeRangeData;
 }
 
-exports.loadRecentStockData = loadRecentStockData;
+exports.initStockSim = initStockSim;
 
 exports.getStockPrice = getStockPrice;
 exports.getStockList = getStockList;

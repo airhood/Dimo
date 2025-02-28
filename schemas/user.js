@@ -17,8 +17,12 @@ const UserSchema = new Schema({
     },
     state: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'State'
-    }
+        ref: 'State',
+    },
+    notification_schedule: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'NotificationSchedule',
+    },
 });
 
 module.exports = mongoose.model('User', UserSchema);

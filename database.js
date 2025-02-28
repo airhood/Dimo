@@ -1,9 +1,11 @@
-const { MongoClient, ServerApiVersion } = require('mongodb');
 const mongoose = require('mongoose');
 const { mongodb_url }  = require('./config.json');
 const { serverLog } = require('./server/server_logger');
 const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionStrikePriceIndex, getOptionExpirationDate } = require('./stock_system/stock_sim');
+const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit } = require('./stock_system/bank_manager');
 require('dotenv').config();
+const moment = require('moment-timezone');
+const fs = require('fs');
 
 
 mongoose.connection.on('connected', () => {
@@ -36,13 +38,12 @@ const Profile = require('./schemas/profile');
 const Asset = require('./schemas/asset');
 const State = require('./schemas/state');
 const Ban = require('./schemas/ban');
+const NotificationSchedule = require('./schemas/notification_schedule');
 
 const TransactionSchedule = require('./schemas/transaction_schedule');
 
 const Notice = require('./schemas/notice');
 
-const fs = require('fs');
-const { getLoanInterestRate, getFixedDepositInterestRate } = require('./stock_system/bank_manager');
 
 let serversideLockedAccounts = [];
 
@@ -74,6 +75,8 @@ function isServersideLocked(id) {
 
 
 module.exports = {
+    OPTION_UNIT_QUANTITY: OPTION_UNIT_QUANTITY,
+
     loadServersideLockData() {
         fs.access('serverside_locked_accounts.txt', fs.constants.F_OK, (err) => {
             if (err) return false;
@@ -171,9 +174,19 @@ module.exports = {
                 serverLog(`[ERROR] Create user failed. Failed to create state data. id: ${id}`);
             }
 
+            const newNotificationSchedule = await NotificationSchedule.create({
+                user: newUser._id,
+                notifications: [],
+            });
+
+            if (!newNotificationSchedule) {
+                serverLog(`[ERROR] Create user failed. Failed to create notification schedule data. id: ${id}`);
+            }
+
             newUser.profile = newProfile._id;
             newUser.asset = newAsset._id;
             newUser.state = newState._id;
+            newUser.notification_schedule = newNotificationSchedule._id;
 
             const saveResult = await newUser.save();
             if (!saveResult) {
@@ -200,7 +213,10 @@ module.exports = {
             const result1 = await Profile.deleteOne({ _id: user.profile });
             const result2 = await Asset.deleteOne({ _id: user.asset });
             const result3 = await State.deleteOne({ _id: user.state });
-            const result4 = await user.deleteOne();
+            const result4 = await TransactionSchedule.deleteMany(
+                { subject: id },
+            );
+            const result5 = await user.deleteOne();
             if (result1.deletedCount === 0) {
                 serverLog(`[ERROR] delete user profile data failed. matching id not found.`)
                 return false;
@@ -214,6 +230,10 @@ module.exports = {
                 return false;
             }
             if (result4.deletedCount === 0) {
+                serverLog(`[ERROR] delete transaction schedule data failed. matching id not found.`)
+                return false;
+            }
+            if (result5.deletedCount === 0) {
                 serverLog(`[ERROR] delete user data failed. matching id not found.`)
                 return false;
             }
@@ -578,6 +598,8 @@ module.exports = {
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
+                serverLog(`[INFO] Buy stock failed. Not enough balance. id: ${id}`);
+                if (quantity === 0) return false;
             }
 
             const transactionAmount = currentPrice * quantity;
@@ -630,34 +652,41 @@ module.exports = {
             const currentPrice = getStockPrice(ticker);
 
             if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
+                for (let i = 0; i < userAsset.stocks.length; i++) {
+                    const stock = userAsset.stocks[i];
+                    if (stock.ticker === ticker) {
+                        quantity += stock.quantity;
+                        userAsset.stocks.splice(i, 1);
+                    }
+                }
+            } else {
+                
+                let quantityLeft = quantity;
+                
+                for (let i = 0; i < userAsset.stocks.length; i++) {
+                    const stock = userAsset.stocks[i];
+                    if (stock.ticker === ticker) {
+                        if (stock.quantity > quantityLeft) {
+                            stock.quantity -= quantityLeft;
+                            quantityLeft = 0;
+                            break;
+                        } else if (stock.quantity === quantityLeft) {
+                            userAsset.stocks.splice(i, 1);
+                            quantityLeft = 0;
+                            break;
+                        } else if (stock.quantity < quantityLeft) {
+                            quantityLeft -= stock.quantity;
+                            userAsset.stocks.splice(i, 1);
+                            i--;
+                        }
+                    }
+                }
+                
+                if (quantityLeft !== 0) return false;
             }
 
             const transactionAmount = currentPrice * quantity;
-
-            let quantityLeft = quantity;
-
-            for (let i = 0; i < userAsset.stocks.length; i++) {
-                const stock = userAsset.stocks[i];
-                if (stock.ticker === ticker) {
-                    if (stock.quantity > quantityLeft) {
-                        stock.quantity -= quantityLeft;
-                        quantityLeft = 0;
-                        break;
-                    } else if (stock.quantity === quantityLeft) {
-                        userAsset.stocks.splice(i, 1);
-                        quantityLeft = 0;
-                        break;
-                    } else if (stock.quantity < quantityLeft) {
-                        quantityLeft -= stock.quantity;
-                        userAsset.stocks.splice(i, 1);
-                        i--;
-                    }
-                }
-            }
-
-            if (quantityLeft !== 0) return false;
-
+            
             userAsset.balance += transactionAmount;
             userAsset.balance = Math.round(userAsset.balance);
 
@@ -739,7 +768,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}-short_${uid}`, id, `buyback stock ${userAsset._id} ${uid} at ${buyBackDate.getTime()}`)
+            const result = await module.exports.setTransactionSchedule(`${id}-short_${uid}`, id, `buyback stock ${id} ${userAsset._id} ${uid} at ${buyBackDate.getTime()}`)
             if (!result) return null;
 
             serverLog(`[INFO] Short sell ${quantity}shares of '${ticker}' stock success. id: ${id}`);
@@ -836,6 +865,7 @@ module.exports = {
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
+                if (quantity === 0) return false;
             }
 
             const margin = currentPrice * quantity;
@@ -897,7 +927,7 @@ module.exports = {
             }
 
             if (userAsset.futures.length !== 0) {
-                const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `execute_future ${userAsset._id}`);
+                const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `execute_future ${id} ${userAsset._id}`);
                 if (!result) return null;
             } else {
                 const result = await module.exports.deleteTransactionSchedule(`${id}_future`);
@@ -930,6 +960,7 @@ module.exports = {
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
+                if (quantity === 0) return false;
             }
 
             const margin = currentPrice * quantity;
@@ -990,7 +1021,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `execute_future ${userAsset._id}`);
+            const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `execute_future ${id} ${userAsset._id}`);
             if (!result) return null;
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' future success. id: ${id}`);
@@ -1075,6 +1106,7 @@ module.exports = {
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
+                if (quantity === 0) return false;
             }
 
             const transactionAmount = currentPrice * quantity * OPTION_UNIT_QUANTITY;
@@ -1102,7 +1134,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${userAsset._id}`);
+            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${id} ${userAsset._id}`);
             if (!result) return null;
 
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' call option success. id: ${id}`);
@@ -1135,6 +1167,7 @@ module.exports = {
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
+                if (quantity === 0) return false;
             }
 
             const transactionAmount = currentPrice * Math.abs(quantity) * OPTION_UNIT_QUANTITY;
@@ -1162,7 +1195,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${userAsset._id}`);
+            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${id} ${userAsset._id}`);
             if (!result) return null;
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' call option success. id: ${id}`);
@@ -1195,6 +1228,7 @@ module.exports = {
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
+                if (quantity === 0) return false;
             }
 
             const transactionAmount = currentPrice * quantity * OPTION_UNIT_QUANTITY;
@@ -1222,7 +1256,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${userAsset._id}`);
+            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${id} ${userAsset._id}`);
             if (!result) return null;
 
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' put option success. id: ${id}`);
@@ -1255,6 +1289,7 @@ module.exports = {
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
+                if (quantity === 0) return false;
             }
 
             const transactionAmount = currentPrice * Math.abs(quantity) * OPTION_UNIT_QUANTITY;
@@ -1282,7 +1317,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${userAsset._id}`);
+            const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${id} ${userAsset._id}`);
             if (!result) return null;
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' put option success. id: ${id}`);
@@ -1374,6 +1409,7 @@ module.exports = {
 
             if (amount === 0) {
                 amount = userAsset.balance;
+                if (amount === 0) return false;
             }
 
             const now  = new Date();
@@ -1405,7 +1441,7 @@ module.exports = {
                 return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}_binary_option_${uid}`, id, `execute_binary_option ${userAsset._id} ${uid} ${expirationDate.getTime()}`);
+            const result = await module.exports.setTransactionSchedule(`${id}_binary_option_${uid}`, id, `execute_binary_option ${id} ${userAsset._id} ${uid} ${expirationDate.getTime()}`);
             if (!result) return null;
             
             serverLog(`[INFO] Binary option. ticker: ${ticker}, prediction: ${prediction}, time: ${time}, amount: ${amount}. id: ${id}`);
@@ -1416,19 +1452,28 @@ module.exports = {
         }
     },
 
-    async loan(id, amount, dueDate, interestType) {
+    async loan(id, amount, dueDate, interestType, days) {
         try {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return null;
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return false;
+                return null;
             }
+
+            const creditRating = await module.exports.getUserCredit(id);
+            if (creditRating === null) return null;
+
+            const loanLimit = calculateLoanLimit(userAsset, creditRating);
+
+            console.log(`loanLimit: ${loanLimit}`);
+
+            if (amount > loanLimit) return loanLimit;
 
             let interestRate;
             if (interestType === '고정금리') {
@@ -1437,7 +1482,7 @@ module.exports = {
                 interestRate = 0;
             } else {
                 serverLog(`[ERROR] Unsupported interest type: ${interestType}`);
-                return false;
+                return null;
             }
 
             const now = new Date();
@@ -1456,23 +1501,24 @@ module.exports = {
                 interestRate: interestRate,
                 loanDate: now,
                 dueDate: dueDate,
+                days: days,
                 uid: uid,
             });
 
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return false;
+                return null;
             }
 
-            const result = await module.exports.setTransactionSchedule(`${id}-loan_${uid}`, id, `repay_loan ${userAsset._id} ${uid} at ${dueDate.getTime()}`);
-            if (!result) return false;
+            const result = await module.exports.setTransactionSchedule(`${id}-loan_${uid}`, id, `repay_loan ${id} ${userAsset._id} ${uid} at ${dueDate.getTime()}`);
+            if (!result) return null;
 
             serverLog(`[INFO] Loaned ${amount} amount of money.`);
             return true;
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:loan': ${err}`);
-            return false;
+            return null;
         }
     },
 
@@ -1507,7 +1553,10 @@ module.exports = {
             const transactionAmount = amount * (1 + interest);
 
             if (userAsset.balance < transactionAmount) {
-                return transactionAmount;
+                return {
+                    state: false,
+                    data: transactionAmount,
+                };
             }
 
             userAsset.balance -= transactionAmount;
@@ -1524,7 +1573,10 @@ module.exports = {
             if (!result) return null;
 
             serverLog(`[INFO] Repayed ${amount} amount of loaned money.`);
-            return amount;
+            return {
+                state: true,
+                data: amount,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:loanRepay': ${err}`);
             return null;
@@ -1638,13 +1690,13 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return false;
             }
 
             const userProfile = await Profile.findById(user.profile);
             if (userProfile === null) {
                 serverLog(`[ERROR] Error finding user profile`);
-                return null;
+                return false;
             }
 
             userProfile.level.state += 1;
@@ -1718,7 +1770,7 @@ module.exports = {
             const saveResult = userProfile.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user profile`);
-                return false;
+                return null;
             }
             return true;
         } catch (err) {
@@ -1787,13 +1839,13 @@ module.exports = {
 
             userAsset.balance -= amount;
 
-            const result = await module.exports.setTransactionSchedule(`${id}-fixed_deposit_${uid}`, id, `pay_interest_fixed_deposit ${userAsset._id} ${uid} at ${maturityDate.getTime()}`);
+            const result = await module.exports.setTransactionSchedule(`${id}-fixed_deposit_${uid}`, id, `pay_interest_fixed_deposit ${id} ${userAsset._id} ${uid} at ${maturityDate.getTime()}`);
             if (!result) return null;
 
             const saveResult = userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user asset`);
-                return false;
+                return null;
             }
             return true;
         } catch (err) {
@@ -1841,13 +1893,17 @@ module.exports = {
 
             userAsset.balance -= amount;
 
-            const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${uid}`, id, `pay_interest_savings_account ${userAsset._id} ${uid} at ${maturityDate.getTime()}`);
+            for (let i = 1; i < product; i++) {
+                const targetDate = date.setDate(startDate.getDate() + i);
+                const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${uid}_${i}`, id, `pay_money_savings_account ${id} ${userAsset._id} ${uid} ${i} at ${targetDate.getTime()}`);
+            }
+            const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${uid}`, id, `pay_interest_savings_account ${id} ${userAsset._id} ${uid} at ${endDate.getTime()}`);
             if (!result) return null;
 
             const saveResult = userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user asset`);
-                return false;
+                return null;
             }
             return true;
         } catch (err) {
@@ -1856,5 +1912,89 @@ module.exports = {
         }
     },
 
-    OPTION_UNIT_QUANTITY: OPTION_UNIT_QUANTITY,
+    async addNotification(id, command) {
+
+    },
+
+    async deleteNotification(id, notificationNum) {
+
+    },
+
+    async getNotificationList() {
+
+    },
+
+    async resetNotification() {
+
+    },
+
+    async setCreditRating(id, creditRating) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return false;
+            }
+
+            const userProfile = await Profile.findById(user.profile);
+            if (userProfile === null) {
+                serverLog('[ERROR] Error finding user profile');
+                return false;
+            }
+
+            userProfile.credit_rating = creditRating;
+
+            const saveResult = userProfile.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Error saving user profile`);
+                return false;
+            }
+            return true;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:setCreditRating': ${err}`);
+            return false;
+        }
+    },
+
+    async getCreditRating(id) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return null;
+            }
+
+            const userProfile = await Profile.findById(user.profile);
+            if (userProfile === null) {
+                serverLog('[ERROR] Error finding user profile');
+                return null;
+            }
+
+            return userProfile.credit_rating;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getCreditRating': ${err}`);
+            return null;
+        }
+    },
+
+    async setUsersCredit(operations) {
+        try {
+            const result = await Profile.bulkWrite(operations);
+            if (result.acknowledged) return true;
+            else return false;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:setUsersCredit': ${err}`);
+            return false;
+        }
+    },
+
+    async getUserCredit(id) {
+        try {
+            const user = await User.findOne({ userID: id }).populate('profile');
+            return user.profile.credit_rating;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getUserCredit': ${err}`);
+            return null;
+        }
+    }
 }

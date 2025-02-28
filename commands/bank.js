@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, CommandInteractionOptionResolver } = require('discord.js');
-const { loan, loanRepay, openFixedDeposit, openSavingsAccount } = require('../database');
+const { loan, loanRepay, openFixedDeposit, openSavingsAccount, getUserCredit } = require('../database');
 const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint } = require('../stock_system/bank_manager');
 
 module.exports = {
@@ -99,6 +99,15 @@ module.exports = {
         .addSubcommand((subCommand) =>
             subCommand.setName('적금금리')
                 .setDescription('적금금리는 변동될 수 있습니다.')
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('신용등급')
+                .setDescription('신용등급을 대출 가능한 최대 금액을 결정합니다.')
+                .addUserOption((option) =>
+                    option.setName('유저')
+                        .setDescription('신용등급을 불러올 유저')
+                        .setRequired(false)
+                )
         ),
     
     async execute(interaction) {
@@ -124,7 +133,7 @@ module.exports = {
             const dueDate = new Date();
             dueDate.setDate(now.getDate() + dueDateRel);
 
-            const result = await loan(interaction.user.id, amount, dueDate, interestType);
+            const result = await loan(interaction.user.id, amount, dueDate, interestType, dueDateRel);
 
             if (result) {
                 await interaction.reply({
@@ -135,13 +144,24 @@ module.exports = {
                             .setDescription(`은행으로부터 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원을 대출했습니다.`)
                     ]
                 });
-            } else {
+            } else if (result === null) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle('서버 오류')
                             .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  대출 거절')
+                            .setDescription(`대출 한도 초과로 인해 대출 신청이 거절되었습니다.\n현재 대출 한도는 ${result}원 입니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -163,22 +183,22 @@ module.exports = {
                     ],
                 });
                 return;
-            } else if (result === false) {
+            } else if (result.state === false) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle(':x:  대출 상환 실패')
-                            .setDescription(`잔액이 부족합니다.\n현재 이자를 포함하여 상환해야 할 금액은 \`${result.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원\` 입니다.`)
+                            .setDescription(`잔액이 부족합니다.\n현재 이자를 포함하여 상환해야 할 금액은 \`${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원\` 입니다.`)
                     ]
                 });
-            } else {
+            } else if (result.state === true) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x2ecc71)
                             .setTitle(':white_check_mark:  상환 완료')
-                            .setDescription(`대출받은 ${result.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원을 상환했습니다.`)
+                            .setDescription(`대출받은 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원을 상환했습니다.`)
                     ]
                 });
             }
@@ -287,6 +307,35 @@ module.exports = {
                         .setDescription(`\`\`\`${interestRatePoint}%\`\`\``)
                 ],
             });
+        } else if (subCommand === '신용등급') {
+            let targetUser = interaction.options.getUser('유저');
+            if (!targetUser) {
+                targetUser = interaction.user;
+            }
+
+            const userCredit = await getUserCredit(targetUser.id);
+
+            if (userCredit === null) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xF1C40F)
+                            .setTitle('신용등급')
+                            .setDescription(`\`\`\`${userCredit}%\`\`\``)
+                    ],
+                });
+            }
         }
     }
 }

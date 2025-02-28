@@ -1,12 +1,16 @@
 const { connectDatabase, loadServersideLockData } = require('./database');
 const { serverLog } = require('./server/server_logger');
-const { loadRecentStockData } = require('./stock_system/stock_sim');
+const { initStockSim } = require('./stock_system/stock_sim');
 const { initTerminal } = require('./server/server_terminal');
 const { startBucketCycle } = require('./message_reference_tracker');
 const { initResourceMonitor, checkResource } = require('./server/resource_monitor');
 const { initScheduleManager } = require('./stock_system/transaction_schedule_manager');
+const { setUpdateInterval } = require('./koreanbots_update');
 
 const discord_bot = require('./discord_bot');
+const { initCreditSystem } = require('./stock_system/credit_system');
+
+require('dotenv').config();
 
 module.exports = {
     async run() {
@@ -28,33 +32,35 @@ module.exports = {
 
         console.log('[BOOT] Serverside lock data loaded');
         
-        try {
-            await loadRecentStockData();
-            
-        } catch (err) {
-            serverLog(`[ERROR] Error loading recent stock data: ${err}`);
-            return false;
-        }
-
-        console.log('[BOOT] Stock data loaded');
-
-        const result3 = initScheduleManager();
+        const result3 = await initStockSim();
         if (!result3) return false;
+
+        console.log('[BOOT] Stock simulation loaded');
+        
+        const result4 = await initCreditSystem();
+        if (!result4) return false;
+
+        console.log('[BOOT] Credit system loaded');
+
+        const result5 = initScheduleManager();
+        if (!result5) return false;
 
         console.log('[BOOT] Schedule Manager loaded');
         
-        discord_bot.setup();
+        await discord_bot.setup();
 
         console.log('[BOOT] Discord bot loaded');
         
         startBucketCycle();
 
         console.log('[BOOT] Message Reference Tracker loaded');
-        
+
         const memoryState = checkResource();
         if (!memoryState) return false;
 
         console.log('[BOOT] Server resource status: OK');
+
+        console.log('[BOOT] Boot complete!');
 
         return true;
     }
