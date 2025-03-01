@@ -1,10 +1,32 @@
-const { setUsersCredit } = require('../database');
 const { serverLog } = require('../server/server_logger');
 const schedule = require('node-schedule');
-const { getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex } = require('./stock_sim');
 const User = require('../schemas/user');
 
 const userDataList = {};
+
+async function setUsersCredit(operations) {
+    try {
+        const result = await Profile.bulkWrite(operations);
+        if (result.acknowledged) {
+            return {
+                state: 'success',
+                data: null,
+            };
+        }
+        else {
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    } catch (err) {
+        serverLog(`[ERROR] Error at 'database.js:setUsersCredit': ${err}`);
+        return {
+            state: 'error',
+            data: null,
+        };
+    }
+}
 
 async function getAllUser() {
     try {
@@ -150,7 +172,7 @@ async function initCreditSystem() {
     return true;
 }
 
-function calculateAssetValue(userAsset, loanDueDate) {
+function calculateAssetValue(userAsset, loanDueDate, getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex) {
     let value = 0;
 
     value += userAsset.balance;

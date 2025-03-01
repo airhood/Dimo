@@ -35,8 +35,20 @@ module.exports = {
         }
 
         const toUserExists = await checkUserExists(to.id);
+        if (toUserExists.state === 'error') {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xEA4144)
+                        .setTitle('서버 오류')
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTimestamp()
+                ],
+            });
+            return;
+        }
 
-        if (toUserExists === false) {
+        if (toUserExists.data === false) {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -50,7 +62,7 @@ module.exports = {
 
         const result = await transfer(from.id, to.id, amount);
 
-        if (result === 'locked:from') {
+        if (result.state === 'locked:from') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -61,7 +73,7 @@ module.exports = {
                 ],
             });
         }
-        else if (result === 'locked:to') {
+        else if (result.state === 'locked:to') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -72,7 +84,7 @@ module.exports = {
                 ],
             });
         }
-        else if (result === true) {
+        else if (result.state === 'success') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -83,7 +95,7 @@ module.exports = {
                 ],
             });
         }
-        else if (result === false) {
+        else if (result.state === 'no_balance') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -93,7 +105,7 @@ module.exports = {
                 ],
             });
         }
-        else if (result === null) {
+        else if (result.state === 'error') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()

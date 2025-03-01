@@ -4,6 +4,7 @@ const { callOptionBuy, callOptionSell, putOptionBuy, putOptionSell, optionLiquid
 const { generateStockChartImage } = require('../stock_system/stock_chart');
 const { serverLog } = require('../server/server_logger');
 const fs = require('fs');
+const moment = require('moment-timezone');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -338,7 +339,7 @@ module.exports = {
 
             const result = await optionLiquidate(interaction.user.id, positionNum);
 
-            if (result === 'invalid_position') {
+            if (result.state === 'invalid_position') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -348,28 +349,40 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-            } else if (result === null) {
+            } else if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle(':x:  청산 실패')
+                            .setTitle('서버 오류')
                             .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
                             .setTimestamp()
                     ],
                 });
-            } else {
+                return;
+            } else if (result.state === 'invalid_strike_price') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else if (result.state === 'success') {
                 let formattedOptionType;
-                if (result.optionType === 'call') {
+                if (result.data.optionType === 'call') {
                     formattedOptionType = '콜';
-                } else if (result.optionType === 'put') {
+                } else if (result.data.optionType === 'put') {
                     formattedOptionType = '풋';
                 }
 
                 let positionType;
-                if (result.quantity > 0) {
+                if (result.data.quantity > 0) {
                     positionType = '매수';
-                } else if (result.quantity < 0) {
+                } else if (result.data.quantity < 0) {
                     positionType = '매도';
                 }
                 await interaction.reply({
@@ -377,7 +390,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  포지션 청산 완료')
-                            .setDescription(`${result.ticker} 옵션 ${formattedOptionType} ${positionType} 포지션 ${Math.abs(result.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약이 청산되었습니다.`)
+                            .setDescription(`${result.data.ticker} 옵션 ${formattedOptionType} ${positionType} 포지션 ${Math.abs(result.data.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약이 청산되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -418,7 +431,7 @@ module.exports = {
 
                     const result = await callOptionBuy(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strikePrice') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -429,7 +442,7 @@ module.exports = {
                             ],
                         });
                         return;
-                    } else if (result === false) {
+                    } else if (result.state === 'no_balance') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -439,17 +452,17 @@ module.exports = {
                                     .setTimestamp()
                             ],
                         });
-                    } else if (result === true) {
+                    } else if (result.state === 'success') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
                                     .setColor(0x448FE6)
                                     .setTitle(':white_check_mark:  주문 체결 완료')
-                                    .setDescription(`콜옵션 ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매수 주문이 체결되었습니다.`)
+                                    .setDescription(`콜옵션 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매수 주문이 체결되었습니다.`)
                                     .setTimestamp()
                             ],
                         });
-                    } else {
+                    } else if (result.state === 'error') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -482,7 +495,7 @@ module.exports = {
 
                     const result = await callOptionSell(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strikePrice') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -493,7 +506,7 @@ module.exports = {
                             ],
                         });
                         return;
-                    } else if (result === false) {
+                    } else if (result.state === 'no_balance') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -503,17 +516,17 @@ module.exports = {
                                     .setTimestamp()
                             ],
                         });
-                    } else if (result === true) {
+                    } else if (result.state === 'success') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
                                     .setColor(0x448FE6)
                                     .setTitle(':white_check_mark:  주문 체결 완료')
-                                    .setDescription(`콜옵션 ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매도 주문이 체결되었습니다.`)
+                                    .setDescription(`콜옵션 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매도 주문이 체결되었습니다.`)
                                     .setTimestamp()
                             ],
                         });
-                    } else {
+                    } else if (result.state === 'error') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -548,7 +561,7 @@ module.exports = {
 
                     const result = await putOptionBuy(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strikePrice') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -559,7 +572,7 @@ module.exports = {
                             ],
                         });
                         return;
-                    } else if (result === false) {
+                    } else if (result.state === 'no_balance') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -569,17 +582,17 @@ module.exports = {
                                     .setTimestamp()
                             ],
                         });
-                    } else if (result === true) {
+                    } else if (result.state === 'success') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
                                     .setColor(0x448FE6)
                                     .setTitle(':white_check_mark:  주문 체결 완료')
-                                    .setDescription(`풋옵션 ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매수 주문이 체결되었습니다.`)
+                                    .setDescription(`풋옵션 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매수 주문이 체결되었습니다.`)
                                     .setTimestamp()
                             ],
                         });
-                    } else {
+                    } else if (result.state === 'error') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -612,7 +625,7 @@ module.exports = {
 
                     const result = await putOptionSell(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strikePrice') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -623,7 +636,7 @@ module.exports = {
                             ],
                         });
                         return;
-                    } else if (result === false) {
+                    } else if (result.state === 'no_balance') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -633,17 +646,17 @@ module.exports = {
                                     .setTimestamp()
                             ],
                         });
-                    } else if (result === true) {
+                    } else if (result.state === 'success') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
                                     .setColor(0x448FE6)
                                     .setTitle(':white_check_mark:  주문 체결 완료')
-                                    .setDescription(`풋옵션 ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매도 주문이 체결되었습니다.`)
+                                    .setDescription(`풋옵션 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매도 주문이 체결되었습니다.`)
                                     .setTimestamp()
                             ],
                         });
-                    } else {
+                    } else if (result.state === 'error') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()

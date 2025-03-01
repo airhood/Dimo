@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { mongodb_url }  = require('./config.json');
 const { serverLog } = require('./server/server_logger');
 const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionStrikePriceIndex, getOptionExpirationDate } = require('./stock_system/stock_sim');
-const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit } = require('./stock_system/bank_manager');
+const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, getLoanInterestRatePoint, getFixedDepositInterestRatePoint } = require('./stock_system/bank_manager');
 require('dotenv').config();
 const moment = require('moment-timezone');
 const fs = require('fs');
@@ -43,6 +43,7 @@ const NotificationSchedule = require('./schemas/notification_schedule');
 const TransactionSchedule = require('./schemas/transaction_schedule');
 
 const Notice = require('./schemas/notice');
+const korean_time = require('./korean_time');
 
 
 let serversideLockedAccounts = [];
@@ -111,12 +112,21 @@ module.exports = {
         try{
             const user = await User.exists({ userID: id });
             if (user) {
-                return true;
+                return {
+                    state: 'success',
+                    data: true,
+                };
             }
-            return false;
+            return {
+                state: 'success',
+                data: false,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:checkUserExists': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
     
@@ -128,7 +138,10 @@ module.exports = {
 
             if (!newUser) {
                 serverLog(`[ERROR] Create user failed. Failed to create user data. id: ${id}`);
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const newProfile = await Profile.create({
@@ -137,11 +150,16 @@ module.exports = {
                     level: 0,
                     state: 0,
                 },
+                credit_rating: 100,
                 achievements: [],
             });
 
             if (!newProfile) {
                 serverLog(`[ERROR] Create user failed. Failed to create profile data. id: ${id}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const newAsset = await Asset.create({
@@ -159,6 +177,10 @@ module.exports = {
 
             if (!newAsset) {
                 serverLog(`[ERROR] Create user failed. Failed to create asset data. id: ${id}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const today = new Date();
@@ -172,6 +194,10 @@ module.exports = {
 
             if (!newState) {
                 serverLog(`[ERROR] Create user failed. Failed to create state data. id: ${id}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const newNotificationSchedule = await NotificationSchedule.create({
@@ -181,6 +207,10 @@ module.exports = {
 
             if (!newNotificationSchedule) {
                 serverLog(`[ERROR] Create user failed. Failed to create notification schedule data. id: ${id}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             newUser.profile = newProfile._id;
@@ -191,15 +221,24 @@ module.exports = {
             const saveResult = await newUser.save();
             if (!saveResult) {
                 serverLog('[ERROR] Create user failed. User data save failed.');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             serverLog(`[INFO] account created. userID: ${id}.`);
-    
-            return true;
+
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:createUser': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -208,7 +247,10 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             const result1 = await Profile.deleteOne({ _id: user.profile });
             const result2 = await Asset.deleteOne({ _id: user.asset });
@@ -219,29 +261,45 @@ module.exports = {
             const result5 = await user.deleteOne();
             if (result1.deletedCount === 0) {
                 serverLog(`[ERROR] delete user profile data failed. matching id not found.`)
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             if (result2.deletedCount === 0) {
                 serverLog(`[ERROR] delete user asset data failed. matching id not found.`)
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             if (result3.deletedCount === 0) {
                 serverLog(`[ERROR] delete user state data failed. matching id not found.`)
-                return false;
-            }
-            if (result4.deletedCount === 0) {
-                serverLog(`[ERROR] delete transaction schedule data failed. matching id not found.`)
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             if (result5.deletedCount === 0) {
                 serverLog(`[ERROR] delete user data failed. matching id not found.`)
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
+
             serverLog(`[INFO] account deleted. userID: ${id}.`);
-            return true;
+
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:deleteUser': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -250,17 +308,28 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const deleteResult = await module.exports.deleteUser(id);
-            if (!deleteResult) {
+            if (deleteResult.state === 'error') {
                 serverLog(`[ERROR] Error deleting user. id: ${id}`);
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const exists = await Ban.exists({ userID: id });
-            if (exists) return null;
+            if (exists) {
+                return {
+                    state: 'success',
+                    data: null,
+                };
+            }
 
             const banResult = await Ban.create({
                 userID: id,
@@ -269,26 +338,43 @@ module.exports = {
 
             if (!banResult) {
                 serverLog('[ERROR] Add ban list failed.');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
-            return true;
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:banUser': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
     async checkUserBanned(id) {
         try {
             const ban = await Ban.findOne({ userID: id });
-            if (ban === null) {
-                return false;
-            }
-            return ban;
+
+            let isBanned;
+            if (ban) isBanned = true;
+            else isBanned = false;
+
+            return {
+                state: 'success',
+                data: isBanned,
+            };
         } catch (err) {
-            serverLog(`[ERROR] Error at 'database.js:isBanned': ${err}`);
-            return null;
+            serverLog(`[ERROR] Error at 'database.js:checkUserBanned': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -297,12 +383,22 @@ module.exports = {
             const result = await User.findOne({ userID: id });
             if (result === null) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return result;
+
+            return {
+                state: 'success',
+                data: result,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getUser': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -311,12 +407,22 @@ module.exports = {
             const result = await User.findOne({ userID: id }).populate('profile');
             if (result === null) {
                 serverLog('[ERROR] Error finding user profile');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return result;
+
+            return {
+                state: 'success',
+                data: result,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getUserAsset': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -325,12 +431,22 @@ module.exports = {
             const result = await User.findOne({ userID: id }).populate('asset');
             if (result === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return result;
+
+            return {
+                state: 'success',
+                data: result,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getUserAsset': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -339,33 +455,55 @@ module.exports = {
             const result = await User.findOne({ userID: id }).populate('state');
             if (result === null) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return result;
+
+            return {
+                state: 'success',
+                data: result,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getUserAsset': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
     async transfer(from, to, amount) {
         try {
             if (isServersideLocked(from)) {
-                return 'locked:from';
+                return {
+                    state: 'locked:from',
+                    data: null,
+                };
             }
             if (isServersideLocked(to)) {
-                return 'locked:to';
+                return {
+                    state: 'locked:to',
+                    data: null,
+                };
             }
 
             const userFrom = await User.findOne({ userID: from });
             const userTo = await User.findOne({ userID: to });
             if (userFrom === null) {
                 serverLog('[ERROR] Error finding from user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             if (userTo === null) {
                 serverLog('[ERROR] Error finding to user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userFromAsset = await Asset.findById(userFrom.asset);
@@ -373,7 +511,10 @@ module.exports = {
 
             if (userFromAsset.balance < amount) {
                 serverLog(`[INFO] Money transfer failed. Not enough balance. id: ${from}`);
-                return false;
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
             }
 
             userFromAsset.balance -= amount;
@@ -382,7 +523,10 @@ module.exports = {
 
             if (!saveFromResult) {
                 serverLog(`[ERROR] Money transfer failed. Failed to save fromUser: ${from}.`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             userToAsset.balance += amount;
@@ -400,17 +544,32 @@ module.exports = {
                     serverLog(`[ERROR] Transaction cancel failed. Failed to save fromUser: ${from}. Locking account ${from} on server-side.`);
                     const lockAccountID = from;
                     serversideLockAccount(lockAccountID);
-                    return null;
+
+                    return {
+                        state: 'error',
+                        data: null,
+                    };
                 }
+
                 serverLog(`[INFO] Transaction cancel success. id: ${id}`);
-                return null;
+
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             serverLog(`[INFO] Transfered ${amount}원 from ${from} to ${to}.`);
-            return true;
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:transfer': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -419,16 +578,20 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-
-            if ((userAsset.balance + amount) < 0) return false;
 
             userAsset.balance += amount;
             userAsset.balance = Math.round(userAsset.balance);
@@ -436,14 +599,23 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Add balance failed. Failed to save user asset data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             serverLog(`[INFO] Added ${amount} amount of balance to ${id}.`);
-            return userAsset.balance;
+            return {
+                state: 'success',
+                data: userAsset.balance,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:addBalance': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -452,16 +624,20 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-
-            if (balance < 0) return false;
 
             userAsset.balance = balance;
             userAsset.balance = Math.round(userAsset.balance);
@@ -469,14 +645,23 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Set balance failed. Failed to save user asset data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             serverLog(`[INFO] Set balance of ${id} to ${balance}.`);
-            return true;
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:setBalance': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -485,13 +670,19 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const deleteResult = await Asset.deleteOne(user.asset);
             if (deleteResult.deletedCount === 0) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const newAsset = await Asset.create({
@@ -512,13 +703,23 @@ module.exports = {
             const saveResult = await user.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Reset balance failed. Failed to save user asset data. id: ${id}`);
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
+
             serverLog(`[INFO] Reset balance of ${id}.`);
-            return true;
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:resetAsset': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -527,13 +728,19 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const userState = await State.findById(user.state);
             if (userState === null) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             userState.subsidy_recieve_date = date;
@@ -541,13 +748,22 @@ module.exports = {
             const saveResult = await userState.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Set subsidy date failed. Failed to save user asset data. id: ${id}`);
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             serverLog(`[INFO] Reset balance of ${id}.`);
-            return true;
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:markSubsidyReceived': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -556,27 +772,45 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const userState = await State.findById(user.state);
             if (userState === null) {
                 serverLog('[ERROR] Error finding user state');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const receiveDate = userState.subsidy_recieve_date;
-            const localDate = new Date(receiveDate.toLocaleString());
-            const today = new Date();
+            const localDate = korean_time(receiveDate);
+            const today = korean_time(new Date());
 
             localDate.setHours(0, 0, 0, 0);
             today.setHours(0, 0, 0, 0);
 
-            if (localDate < today) return false;
-            else return true;
+            if (localDate < today) {
+                return {
+                    state: 'success',
+                    data: false,
+                };
+            } else {
+                return {
+                    state: 'success',
+                    data: true,
+                };
+            }
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:checkSubsidyReceived': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -585,13 +819,19 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const currentPrice = getStockPrice(ticker);
@@ -599,14 +839,22 @@ module.exports = {
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
                 serverLog(`[INFO] Buy stock failed. Not enough balance. id: ${id}`);
-                if (quantity === 0) return false;
+                if (quantity === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             const transactionAmount = currentPrice * quantity;
             
             if (userAsset.balance < transactionAmount) {
                 serverLog(`[INFO] Buy stock failed. Not enough balance. id: ${id}`);
-                return false;
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
             }
             
             userAsset.balance -= transactionAmount;
@@ -624,14 +872,23 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user asset data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             serverLog(`[INFO] Buy ${quantity}shares of '${ticker}' stock success. id: ${id}`);
-            return true;
+            return {
+                state: 'success',
+                data: quantity,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:stockBuy': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -640,13 +897,19 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const currentPrice = getStockPrice(ticker);
@@ -682,7 +945,12 @@ module.exports = {
                     }
                 }
                 
-                if (quantityLeft !== 0) return false;
+                if (quantityLeft !== 0) {
+                    return {
+                        state: 'no_stock',
+                        data: null,
+                    };
+                }
             }
 
             const transactionAmount = currentPrice * quantity;
@@ -693,14 +961,23 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user asset data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             serverLog(`[INFO] Sell ${quantity}shares of '${ticker}' stock success. id: ${id}`);
-            return true;
+            return {
+                state: 'success',
+                data: quantity,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:stockSell': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -709,13 +986,19 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const currentPrice = getStockPrice(ticker);
@@ -734,7 +1017,10 @@ module.exports = {
             
             if (userAsset.balance < currentHoldingMargin + margin) {
                 serverLog(`[INFO] Short sell stock failed. Not enough balance. id: ${id}`);
-                return false;
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
             }
 
             userAsset.balance += transactionAmount;
@@ -765,17 +1051,31 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user asset data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const result = await module.exports.setTransactionSchedule(`${id}-short_${uid}`, id, `buyback stock ${id} ${userAsset._id} ${uid} at ${buyBackDate.getTime()}`)
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             serverLog(`[INFO] Short sell ${quantity}shares of '${ticker}' stock success. id: ${id}`);
-            return true;
+            return {
+                state: 'success',
+                data: quantity,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:stockShortSell': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -784,22 +1084,32 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             if (userAsset.stockShortSales.length < positionNum) {
-                return 'invalid_position';
+                return {
+                    state: 'invalid_position',
+                    data: null,
+                };
             }
             
-            const ticker = userAsset.stockShortSales[positionNum - 1].ticker;
-            const quantity = userAsset.stockShortSales[positionNum - 1].quantity;
-            const uid = userAsset.stockShortSales[positionNum - 1].uid;
+            const short = userAsset.stockShortSales[positionNum - 1];
+            const ticker = short.ticker;
+            const quantity = short.quantity;
+            const uid = short.uid;
             
             let quantityLeft = quantity;
             for (let i = 0; i < userAsset.stocks.length; i++) {
@@ -821,7 +1131,12 @@ module.exports = {
                 }
             }
 
-            if (quantityLeft !== 0) return false;
+            if (quantityLeft !== 0) {
+                return {
+                    state: 'no_stock',
+                    data: null,
+                };
+            }
 
             userAsset.balance += userAsset.stockShortSales[positionNum - 1].margin;
             userAsset.stockShortSales.splice(positionNum - 1, 1);
@@ -829,21 +1144,32 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user asset data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const result = await module.exports.deleteTransactionSchedule(`${id}-short_${uid}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             serverLog(`[INFO] Repay ${quantity}shares of '${ticker}' stock success. id: ${id}`);
 
             return {
-                ticker: ticker,
-                quantity: quantity,
+                state: 'success',
+                data: short,
             };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:stockShortRepay': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -852,27 +1178,41 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const currentPrice = getFuturePrice(ticker);
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
-                if (quantity === 0) return false;
+                if (quantity === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             const margin = currentPrice * quantity;
 
             if (userAsset.balance < margin) {
                 serverLog(`[INFO] Buy future failed. Not enough balance. id: ${id}`);
-                return false;
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
             }
 
             const expirationDate = getFutureExpirationDate();
@@ -923,22 +1263,41 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             if (userAsset.futures.length !== 0) {
                 const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `execute_future ${id} ${userAsset._id}`);
-                if (!result) return null;
+                if (result.state === 'error') {
+                    return {
+                        state: 'error',
+                        data: null,
+                    };
+                }
             } else {
                 const result = await module.exports.deleteTransactionSchedule(`${id}_future`);
-                if (!result) return null;
+                if (result.state === 'error') {
+                    return {
+                        state: 'error',
+                        data: null,
+                    };
+                }
             }
             
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' future success. id: ${id}`);
-            return true;
+            return {
+                state: 'success',
+                data: quantity,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:futureLong': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -947,27 +1306,41 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const currentPrice = getStockPrice(ticker);
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
-                if (quantity === 0) return false;
+                if (quantity === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             const margin = currentPrice * quantity;
 
             if (userAsset.balance < margin) {
                 serverLog(`[INFO] Buy future failed. Not enough balance. id: ${id}`);
-                return false;
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
             }
 
             const expirationDate = getFutureExpirationDate();
@@ -1018,17 +1391,31 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const result = await module.exports.setTransactionSchedule(`${id}_future`, id, `execute_future ${id} ${userAsset._id}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' future success. id: ${id}`);
-            return true;
+            return {
+                state: 'success',
+                data: quantity,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:futureShort': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1037,17 +1424,26 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             if (userAsset.futures.length < positionNum) {
-                return 'invalid_position';
+                return {
+                    state: 'invalid_position',
+                    data: null,
+                };
             }
 
             const position = userAsset.futures[positionNum - 1];
@@ -1068,19 +1464,33 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             if (userAsset.futures.length === 0) {
                 const result = await module.exports.deleteTransactionSchedule(`${id}_future`);
-                if (!result) return null;
+                if (result.state === 'error') {
+                    return {
+                        state: 'error',
+                        data: null,
+                    };
+                }
             }
             
             serverLog(`[INFO] Liquidated ${quantity}contracts of '${ticker}' future success. id: ${id}`);
-            return position;
+            return {
+                state: 'success',
+                data: position,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:futureLiquidate': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1089,13 +1499,19 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const optionPrices = getOptionPrice(ticker);
@@ -1105,13 +1521,23 @@ module.exports = {
             const currentPrice = callOptionPrice[strikePriceIndex];
 
             if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
-                if (quantity === 0) return false;
+                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                if (quantity === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             const transactionAmount = currentPrice * quantity * OPTION_UNIT_QUANTITY;
 
-            if (userAsset.balance < transactionAmount) return false;
+            if (userAsset.balance < transactionAmount) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
             
             const expirationDate = getOptionExpirationDate();
             const purchaseDate = new Date();
@@ -1131,17 +1557,31 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${id} ${userAsset._id}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' call option success. id: ${id}`);
-            return true;
+            return {
+                state: 'success',
+                data: quantity,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:callOptionBuy': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1150,13 +1590,19 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const optionPrices = getOptionPrice(ticker);
@@ -1166,13 +1612,23 @@ module.exports = {
             const currentPrice = callOptionPrice[strikePriceIndex];
 
             if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
-                if (quantity === 0) return false;
+                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                if (quantity === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             const transactionAmount = currentPrice * Math.abs(quantity) * OPTION_UNIT_QUANTITY;
 
-            if (userAsset.balance < transactionAmount) return false;
+            if (userAsset.balance < transactionAmount) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
             
             const expirationDate = getOptionExpirationDate();
             const purchaseDate = new Date();
@@ -1192,17 +1648,31 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${id} ${userAsset._id}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' call option success. id: ${id}`);
-            return true;
+            return {
+                state: 'success',
+                data: quantity,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:callOptionSell': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1211,13 +1681,19 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const optionPrices = getOptionPrice(ticker);
@@ -1227,13 +1703,23 @@ module.exports = {
             const currentPrice = putOptionPrice[strikePriceIndex];
 
             if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
-                if (quantity === 0) return false;
+                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                if (quantity === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             const transactionAmount = currentPrice * quantity * OPTION_UNIT_QUANTITY;
 
-            if (userAsset.balance < transactionAmount) return false;
+            if (userAsset.balance < transactionAmount) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
             
             const expirationDate = getOptionExpirationDate();
             const purchaseDate = new Date();
@@ -1253,17 +1739,31 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${id} ${userAsset._id}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' put option success. id: ${id}`);
-            return true;
+            return {
+                state: 'success',
+                data: quantity,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:putOptionBuy': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1272,29 +1772,50 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const optionPrices = getOptionPrice(ticker);
             const putOptionPrice = optionPrices.put;
             const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
-            if (strikePriceIndex === null) return 'invalid_strikePrice';
+            if (strikePriceIndex === null) {
+                return {
+                    state: 'invalid_strikePrice',
+                    data: null,
+                };
+            }
             const currentPrice = putOptionPrice[strikePriceIndex];
 
             if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
-                if (quantity === 0) return false;
+                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                if (quantity === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             const transactionAmount = currentPrice * Math.abs(quantity) * OPTION_UNIT_QUANTITY;
 
-            if (userAsset.balance < transactionAmount) return false;
+            if (userAsset.balance < transactionAmount) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
             
             const expirationDate = getOptionExpirationDate();
             const purchaseDate = new Date();
@@ -1314,17 +1835,31 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const result = await module.exports.setTransactionSchedule(`${id}_option`, id, `execute_option ${id} ${userAsset._id}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' put option success. id: ${id}`);
-            return true;
+            return {
+                state: 'success',
+                data: quantity,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:putOptionSell': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1333,17 +1868,26 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             if (userAsset.options.length < positionNum) {
-                return 'invalid_position';
+                return {
+                    state: 'invalid_position',
+                    data: null,
+                };
             }
 
             const position = userAsset.options[positionNum - 1];
@@ -1354,7 +1898,12 @@ module.exports = {
             const currentOptionPrices = getOptionPrice(ticker);
             
             const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
-            if (strikePriceIndex === null) return falsel
+            if (strikePriceIndex === null) {
+                return {
+                    state: 'invalid_strike_price',
+                    data: null,
+                };
+            }
             
             let currentPrice;
             if (optionType === 'call') {
@@ -1375,19 +1924,33 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             if (userAsset.options.length === 0) {
                 const result = await module.exports.deleteTransactionSchedule(`${id}_option`);
-                if (!result) return null;
+                if (result.state === 'error') {
+                    return {
+                        state: 'error',
+                        data: null,
+                    };
+                }
             }
             
             serverLog(`[INFO] Liquidated ${quantity}contracts of '${ticker}' ${optionType} option success. id: ${id}`);
-            return position;
+            return {
+                state: 'success',
+                data: position,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:optionLiquidate': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1396,20 +1959,36 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
-            if (userAsset.balance < amount) return false;
+            if (userAsset.balance < amount) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
 
             if (amount === 0) {
                 amount = userAsset.balance;
-                if (amount === 0) return false;
+                if (amount === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             const now  = new Date();
@@ -1438,17 +2017,31 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const result = await module.exports.setTransactionSchedule(`${id}_binary_option_${uid}`, id, `execute_binary_option ${id} ${userAsset._id} ${uid} ${expirationDate.getTime()}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
             
             serverLog(`[INFO] Binary option. ticker: ${ticker}, prediction: ${prediction}, time: ${time}, amount: ${amount}. id: ${id}`);
-            return true;
+            return {
+                state: 'success',
+                data: amount,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:binaryOption': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1457,23 +2050,39 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const creditRating = await module.exports.getUserCredit(id);
-            if (creditRating === null) return null;
+            if (creditRating.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
-            const loanLimit = calculateLoanLimit(userAsset, creditRating);
+            const loanLimit = calculateLoanLimit(userAsset, creditRating.data);
 
             console.log(`loanLimit: ${loanLimit}`);
 
-            if (amount > loanLimit) return loanLimit;
+            if (amount > loanLimit) {
+                return {
+                    state: 'loan_limit_over',
+                    data: loanLimit,
+                };
+            }
 
             let interestRate;
             if (interestType === '고정금리') {
@@ -1482,7 +2091,10 @@ module.exports = {
                 interestRate = 0;
             } else {
                 serverLog(`[ERROR] Unsupported interest type: ${interestType}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const now = new Date();
@@ -1508,17 +2120,31 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const result = await module.exports.setTransactionSchedule(`${id}-loan_${uid}`, id, `repay_loan ${id} ${userAsset._id} ${uid} at ${dueDate.getTime()}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             serverLog(`[INFO] Loaned ${amount} amount of money.`);
-            return true;
+            return {
+                state: 'success',
+                data: getLoanInterestRatePoint(),
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:loan': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1527,16 +2153,27 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
             
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
-            if (userAsset.loans.length < loanNumber) return 'invalid_loan_number';
+            if (userAsset.loans.length < loanNumber) {
+                return {
+                    state: 'invalid_loan_number',
+                    data: null,
+                };
+            }
 
             const loan = userAsset.loans[loanNumber - 1];
             
@@ -1554,7 +2191,7 @@ module.exports = {
 
             if (userAsset.balance < transactionAmount) {
                 return {
-                    state: false,
+                    state: 'no_balance',
                     data: transactionAmount,
                 };
             }
@@ -1566,20 +2203,31 @@ module.exports = {
             const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Transaction failed. Failed to save user data. id: ${id}`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const result = await module.exports.deleteTransactionSchedule(`${id}-loan_${loan.uid}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             serverLog(`[INFO] Repayed ${amount} amount of loaned money.`);
             return {
-                state: true,
+                state: 'success',
                 data: amount,
             };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:loanRepay': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1595,11 +2243,17 @@ module.exports = {
 
                 if (!saveResult) {
                     serverLog(`[ERROR] Failed to save transaction schedule.`);
-                    return false;
+                    return {
+                        state: 'error',
+                        data: null,
+                    };
                 }
 
                 serverLog(`[INFO] Add transaction schedule success. identification_code: ${identification_code}, subject: ${subject}, command: ${command}`);
-                return true;
+                return {
+                    state: 'success',
+                    data: null,
+                };
             } else {
                 const createResult = await TransactionSchedule.create({
                     identification_code: identification_code,
@@ -1609,15 +2263,24 @@ module.exports = {
         
                 if (!createResult) {
                     serverLog(`[ERROR] Failed to add transaction schedule.`);
-                    return false;
+                    return {
+                        state: 'error',
+                        data: null,
+                    };
                 }
 
                 serverLog(`[INFO] Add transaction schedule success. identification_code: ${identification_code}, subject: ${subject}, command: ${command}`);
-                return true;
+                return {
+                    state: 'success',
+                    data: null,
+                };
             }
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:addTransactionSchedule': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1626,12 +2289,21 @@ module.exports = {
             const result = await TransactionSchedule.deleteOne({ identification_code: identification_code });
             if (result.deletedCount === 0) {
                 serverLog(`[ERROR] Cannot delete transaction schedule. Matching transaction schedule not found.`);
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return true;
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:deleteTransactionSchedule': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1640,12 +2312,21 @@ module.exports = {
             const data = await TransactionSchedule.find();
             
             if (data.length === 0) {
-                return null;
+                return {
+                    state: 'success',
+                    data: null,
+                };
             }
-            return data;
+            return {
+                state: 'success',
+                data: data,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getTransactionScheduleData': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1655,11 +2336,22 @@ module.exports = {
                 .sort({ date: -1 })
                 .limit(count);
             
-            if (notices.length === 0) return null;
-            return notices;
+            if (notices.length === 0) {
+                return {
+                    state: 'success',
+                    data: null,
+                };
+            }
+            return {
+                state: 'success',
+                data: notices,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getNoticeList': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1673,12 +2365,21 @@ module.exports = {
 
             if (!result) {
                 serverLog(`[ERROR] Post notice failed.`);
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return true;
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:postNotics': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
     
@@ -1690,13 +2391,19 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const userProfile = await Profile.findById(user.profile);
             if (userProfile === null) {
                 serverLog(`[ERROR] Error finding user profile`);
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             userProfile.level.state += 1;
@@ -1708,12 +2415,21 @@ module.exports = {
             const saveResult = userProfile.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user profile`);
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return true;
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:increaseLevelPoint': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1725,23 +2441,35 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const userProfile = await Profile.findById(user.profile);
             if (userProfile === null) {
                 serverLog(`[ERROR] Error finding user profile`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             return {
-                level: userProfile.level.level,
-                state: userProfile.level.state,
-                target: (DEFAULT_POINT_REQUIRED + (LEVEL_UP_POINT_GAP * userProfile.level.level)),
+                state: 'success',
+                data: {
+                    level: userProfile.level.level,
+                    state: userProfile.level.state,
+                    target: (DEFAULT_POINT_REQUIRED + (LEVEL_UP_POINT_GAP * userProfile.level.level)),
+                },
             };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getLevelInfo': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1750,17 +2478,33 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const userProfile = await Profile.findById(user.profile);
             if (userProfile === null) {
                 serverLog(`[ERROR] Error finding user profile`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
-            if (!name) return false;
-            if (!description) return false;
+            if (!name) {
+                return {
+                    state: 'invalid_parameter',
+                    data: null,
+                };
+            }
+            if (!description) {
+                return {
+                    state: 'invalid_parameter',
+                    data: null,
+                };
+            }
 
             userProfile.achievements.push({
                 name: name,
@@ -1770,12 +2514,22 @@ module.exports = {
             const saveResult = userProfile.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user profile`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return true;
+
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:addAchievements': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
     
@@ -1784,19 +2538,31 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const userProfile = await Profile.findById(user.profile);
             if (userProfile === null) {
                 serverLog(`[ERROR] Error finding user profile`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
-            return userProfile.achievements;
+            return {
+                state: 'success',
+                data: userProfile.achievements,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:addAchievements': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1805,16 +2571,27 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
-            if (userAsset.balance < amount) return false;
+            if (userAsset.balance < amount) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
 
             const interestRate = getFixedDepositInterestRate();
             const depositDate = new Date();
@@ -1840,17 +2617,32 @@ module.exports = {
             userAsset.balance -= amount;
 
             const result = await module.exports.setTransactionSchedule(`${id}-fixed_deposit_${uid}`, id, `pay_interest_fixed_deposit ${id} ${userAsset._id} ${uid} at ${maturityDate.getTime()}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             const saveResult = userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user asset`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return true;
+
+            return {
+                state: 'success',
+                data: getFixedDepositInterestRatePoint(),
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:openFixedDeposit': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1859,16 +2651,27 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
-            if (userAsset.balance < amount) return false;
+            if (userAsset.balance < amount) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
 
             const interestRate = getFixedDepositInterestRate();
             const startDate = new Date();
@@ -1893,22 +2696,49 @@ module.exports = {
 
             userAsset.balance -= amount;
 
+            let error = false;
+
             for (let i = 1; i < product; i++) {
                 const targetDate = date.setDate(startDate.getDate() + i);
                 const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${uid}_${i}`, id, `pay_money_savings_account ${id} ${userAsset._id} ${uid} ${i} at ${targetDate.getTime()}`);
+                if (result.state === 'error') {
+                    error = true;
+                }
             }
+
+            if (error) {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
             const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${uid}`, id, `pay_interest_savings_account ${id} ${userAsset._id} ${uid} at ${endDate.getTime()}`);
-            if (!result) return null;
+            if (result.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
 
             const saveResult = userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user asset`);
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return true;
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:openSavingsAccount': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1933,13 +2763,19 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const userProfile = await Profile.findById(user.profile);
             if (userProfile === null) {
                 serverLog('[ERROR] Error finding user profile');
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             userProfile.credit_rating = creditRating;
@@ -1947,12 +2783,22 @@ module.exports = {
             const saveResult = userProfile.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user profile`);
-                return false;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
-            return true;
+
+            return {
+                state: 'success',
+                data: null,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:setCreditRating': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
@@ -1961,40 +2807,85 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
             const userProfile = await Profile.findById(user.profile);
             if (userProfile === null) {
                 serverLog('[ERROR] Error finding user profile');
-                return null;
+                return {
+                    state: 'error',
+                    data: null,
+                };
             }
 
-            return userProfile.credit_rating;
+            return {
+                state: 'success',
+                data: userProfile.credit_rating,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getCreditRating': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
     async setUsersCredit(operations) {
         try {
             const result = await Profile.bulkWrite(operations);
-            if (result.acknowledged) return true;
-            else return false;
+            if (result.acknowledged) {
+                return {
+                    state: 'success',
+                    data: null,
+                };
+            }
+            else {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:setUsersCredit': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
 
     async getUserCredit(id) {
         try {
             const user = await User.findOne({ userID: id }).populate('profile');
-            return user.profile.credit_rating;
+            return {
+                state: 'success',
+                data: user.profile.credit_rating,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getUserCredit': ${err}`);
-            return null;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
-    }
+    },
+
+    async getAllUser() {
+        try {
+            const data = await User.find();
+
+            if (data.length === 0) {
+                return null;
+            }
+            return data;
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getAllUser': ${err}`);
+            return false;
+        }
+    },
 }

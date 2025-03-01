@@ -10,19 +10,25 @@ module.exports = {
     async execute(interaction) {
         const user = await getUserAsset(interaction.user.id);
 
+        if (user.state === 'error') {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xEA4144)
+                        .setTitle('서버 오류')
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTimestamp()
+                ],
+            });
+            return;
+        }
+
         let loanTotal = 0;
-        user.asset.loans.forEach((loan) => {
+        user.data.asset.loans.forEach((loan) => {
             loanTotal += loan.amount;
         });
 
-        if (user.asset.balance >= loanTotal) {
-            if ((user.asset.stocks.length !== 0) ||
-                (user.asset.stockShortSales.length !== 0) ||
-                (user.asset.futures.length !== 0) ||
-                (user.asset.options.length !== 0) ||
-                (user.asset.binary_options.length !== 0) ||
-                (user.asset.fixed_deposits.length !== 0) ||
-                (user.asset.savings_accounts.length !== 0))
+        if (user.data.asset.balance >= loanTotal) {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -33,9 +39,26 @@ module.exports = {
             });
             return;
         } else {
+            if ((user.data.asset.stocks.length !== 0) ||
+                (user.data.asset.stockShortSales.length !== 0) ||
+                (user.data.asset.futures.length !== 0) ||
+                (user.data.asset.options.length !== 0) ||
+                (user.data.asset.binary_options.length !== 0) ||
+                (user.data.asset.fixed_deposits.length !== 0) ||
+                (user.data.asset.savings_accounts.length !== 0)) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x: 파산신청 거절')
+                            .setDescription('파산 상태가 아닙니다.\n\n**파산신청**\n```조건: 주식, 선물, 옵션, 바이너리 옵션, 예금, 적금 등 대출을 제외한 모든 금융상품을 소유하지 않은 상태이어야 합니다.\n불이익: 프로필에 파산한 횟수가 표시됩니다.```')
+                    ],
+                });
+                return;
+            }
             const resetResult = await resetAsset(interaction.user.id);
             
-            if (resetResult) {
+            if (resetResult.state === 'success') {
                 const achievementsAddResult = await addAchievements(interaction.user.id, '파산신청', '파산신청을 한 적이 있어요.');
 
                 if (achievementsAddResult) {
@@ -47,7 +70,7 @@ module.exports = {
                                 .setDescription(`파산신청이 승인되었습니다.`)
                         ],
                     });
-                } else {
+                } else if (resetResult.state === 'error') {
                     serverLog(`[ERROR] Un-processed bankruptcy achievment. id: ${interaction.user.id}`);
                     
                     await interaction.reply({

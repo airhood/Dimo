@@ -63,23 +63,32 @@ function calculateCompoundInterestRate(r, n) {
     return r * (Math.pow(r, n) - 1) / (r - 1);
 }
 
+let getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex;
+
+function initFuncDependencies(_getStockPrice, _getFuturePrice, _getOptionPrice, _getOptionStrikePriceIndex) {
+    getStockPrice = _getStockPrice;
+    getFuturePrice = _getFuturePrice;
+    getOptionPrice = _getOptionPrice;
+    getOptionStrikePriceIndex = _getOptionStrikePriceIndex;
+}
+
 function calculateLoanLimit(userAsset, creditRating) {
-    const assetValue = calculateAssetValue(userAsset);
+    const assetValue = calculateAssetValue(userAsset, getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex);
 
     const totalLoan = getAssetTotalLoan(userAsset);
 
     let multiplier = 0;
 
     if (creditRating >= 101 && creditRating <= 200) {
-        multiplier = 1;
+        multiplier = 0.3;
     } else if (creditRating >= 201 && creditRating <= 400) {
-        multiplier = 1.5;
+        multiplier = 0.7;
     } else if (creditRating >= 401 && creditRating <= 600) {
-        multiplier = 2;
+        multiplier = 1.2;
     } else if (creditRating >= 601 && creditRating <= 800) {
-        multiplier = 3;
+        multiplier = 2;
     } else if (creditRating >= 801 && creditRating <= 1000) {
-        multiplier = 5;
+        multiplier = 3;
     }
 
     const loanLimit = assetValue * multiplier;
@@ -102,3 +111,5 @@ exports.getSavingsAccountInterestRatePoint = getSavingsAccountInterestRatePoint;
 exports.calculateCompoundInterestRate = calculateCompoundInterestRate;
 
 exports.calculateLoanLimit = calculateLoanLimit;
+
+exports.initFuncDependencies = initFuncDependencies;

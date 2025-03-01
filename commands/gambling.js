@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
-const { getUserAsset, addBalance, checkUserExists } = require('../database');
+const { getUserAsset, addBalance } = require('../database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -37,19 +37,6 @@ module.exports = {
         ,
     
     async execute(interaction) {
-        const userExists = await checkUserExists(interaction.user.id);
-        if (userExists === false) {
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xEA4144)
-                        .setTitle('계정이 없습니다')
-                        .setDescription('가입된 계정이 없습니다.\n회원가입은 **/회원가입** 을 통해 가능합니다.')
-                ],
-            });
-            return;
-        }
-
         const subCommand = interaction.options.getSubcommand();
 
         if (subCommand === '주사위') {
@@ -57,7 +44,20 @@ module.exports = {
 
             const userAsset = await getUserAsset(interaction.user.id);
 
-            if (userAsset.asset.balance < betAmount) {
+            if (userAsset.state === 'error') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
+
+            if (userAsset.data.asset.balance < betAmount) {
                 interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -83,7 +83,7 @@ module.exports = {
 
             const result = await addBalance(interaction.user.id, transactionAmount);
 
-            if (result === null) {
+            if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -161,7 +161,7 @@ module.exports = {
 
             const userAsset = await getUserAsset(interaction.user.id);
 
-            if (userAsset === false) {
+            if (userAsset.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -173,7 +173,7 @@ module.exports = {
                 return;
             }
             
-            if (userAsset.asset.balance < betAmount) {
+            if (userAsset.data.asset.balance < betAmount) {
                 interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -197,7 +197,7 @@ module.exports = {
 
             const result = await addBalance(interaction.user.id, transactionAmount);
 
-            if (result === null) {
+            if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()

@@ -361,19 +361,18 @@ module.exports = {
 
             const result = await stockBuy(interaction.user.id, ticker, quantity);
 
-            if (result === null) {
+            if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle(':x:  주문 실패')
-                            .setDescription(`오류가 발생하였습니다.
-                                공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
                             .setTimestamp()
                     ],
                 });
                 return;
-            } else if (result === false) {
+            } else if (result.state === 'no_balance') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -383,13 +382,13 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-            } else if (result === true) {
+            } else if (result.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 매수 주문이 체결되었습니다.`)
+                            .setDescription(`${ticker} ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 매수 주문이 체결되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -414,17 +413,18 @@ module.exports = {
 
             const result = await stockSell(interaction.user.id, ticker, quantity);
 
-            if (result === null) {
+            if (result.state === null) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle(':x:  주문 실패')
-                            .setDescription(`전산 오류가 발생하였습니다.`)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
                             .setTimestamp()
                     ],
                 });
-            } else if (result === false) {
+                return;
+            } else if (result.state === 'no_stock') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -434,13 +434,13 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-            } else if (result === true) {
+            } else if (result.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 매도 주문이 체결되었습니다.`)
+                            .setDescription(`${ticker} ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 매도 주문이 체결되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -465,7 +465,7 @@ module.exports = {
 
             const result = await stockShortSell(interaction.user.id, ticker, quantity);
 
-            if (result === null) {
+            if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -476,7 +476,7 @@ module.exports = {
                     ],
                 });
                 return;
-            } else if (result === false) {
+            } else if (result.state === 'no_balance') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -486,13 +486,13 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-            } else if (result === true) {
+            } else if (result.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 공매도 주문이 체결되었습니다.\n상환일은 5일 후 입니다.`)
+                            .setDescription(`${ticker} ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 공매도 주문이 체결되었습니다.\n상환일은 5일 후 입니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -502,7 +502,7 @@ module.exports = {
 
             const result = await stockShortRepay(interaction.user.id, positionNum);
 
-            if (result === null) {
+            if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -513,7 +513,7 @@ module.exports = {
                     ],
                 });
                 return;
-            } else if (result === false) {
+            } else if (result.state === 'no_stock') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -523,7 +523,7 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-            } else if (result === 'invalid_position') {
+            } else if (result.state === 'invalid_position') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -533,13 +533,13 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-            } else {
+            } else if (result.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  상환 완료')
-                            .setDescription(`${result.ticker} ${result.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 상환되었습니다.`)
+                            .setDescription(`${result.data.ticker} ${result.data.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 상환되었습니다.`)
                             .setTimestamp()
                     ],
                 });

@@ -3,7 +3,7 @@ const { tryGetTicker, getFutureList, getFutureExpirationDate, getFutureTimeRange
 const { getStockName } = require('../stock_system/stock_name');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
-const { checkUserExists, futureLiquidate, futureLong, futureShort } = require('../database');
+const { futureLiquidate, futureLong, futureShort } = require('../database');
 const { generateStockChartImage } = require('../stock_system/stock_chart');
 const { serverLog } = require('../server/server_logger');
 const fs = require('fs');
@@ -309,9 +309,7 @@ module.exports = {
 
             const result = await futureLong(interaction.user.id, ticker, quantity, leverage);
 
-            console.log(`result: ${result}`);
-
-            if (result === null) {
+            if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -322,7 +320,7 @@ module.exports = {
                     ],
                 });
                 return;
-            } else if (result === false) {
+            } else if (result.state === 'no_balance') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -332,13 +330,13 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-            } else if (result === true) {
+            } else if (result.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} 선물 롱 ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매수 주문이 체결되었습니다.`)
+                            .setDescription(`${ticker} 선물 롱 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매수 주문이 체결되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -365,7 +363,7 @@ module.exports = {
 
             const result = await futureShort(interaction.user.id, ticker, quantity, leverage);
 
-            if (result === null) {
+            if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -376,7 +374,7 @@ module.exports = {
                     ],
                 });
                 return;
-            } else if (result === false) {
+            } else if (result.state === 'no_balance') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -386,13 +384,13 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-            } else if (result === true) {
+            } else if (result.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} 선물 숏 ${quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매도 주문이 체결되었습니다.`)
+                            .setDescription(`${ticker} 선물 숏 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매도 주문이 체결되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -402,7 +400,7 @@ module.exports = {
 
             const result = await futureLiquidate(interaction.user.id, positionNum);
 
-            if (result === 'invalid_position') {
+            if (result.state === 'invalid_position') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -412,21 +410,21 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-            } else if (result === null) {
+            } else if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
-                            .setTitle(':x:  청산 실패')
+                            .setTitle('서버 오류')
                             .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
                             .setTimestamp()
                     ],
                 });
-            } else {
+            } else if (result.state === 'success') {
                 let positionType;
-                if (result.quantity > 0) {
+                if (result.data.quantity > 0) {
                     positionType = '롱';
-                } else if (result.quantity < 0) {
+                } else if (result.data.quantity < 0) {
                     positionType = '숏';
                 }
                 await interaction.reply({
@@ -434,7 +432,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  포지션 청산 완료')
-                            .setDescription(`${result.ticker} 선물 ${positionType} 포지션 ${Math.abs(result.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약이 청산되었습니다.`)
+                            .setDescription(`${result.data.ticker} 선물 ${positionType} 포지션 ${Math.abs(result.data.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약이 청산되었습니다.`)
                             .setTimestamp()
                     ],
                 });

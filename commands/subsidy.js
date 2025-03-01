@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { addBalance, checkUserExists, markSubsidyReceived, checkSubsidyReceived } = require('../database');
+const { addBalance, markSubsidyReceived, checkSubsidyReceived } = require('../database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -32,7 +32,7 @@ module.exports = {
         }
 
         const result1 = await addBalance(interaction.user.id, 50000);
-        if (result1 === null) {
+        if (result1.state === 'error') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -46,7 +46,7 @@ module.exports = {
         }
 
         const result2 = await markSubsidyReceived(interaction.user.id, new Date());
-        if (result2 === false) {
+        if (result2.state === 'error') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -62,7 +62,7 @@ module.exports = {
         const fields = [
             {
                 name: ':dollar:  계좌 잔액',
-                value: `\`\`\`${result1.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원\`\`\``,
+                value: `\`\`\`${result1.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원\`\`\``,
             }
         ];
 

@@ -22,10 +22,10 @@ function dateToCron(date) {
 async function cacheTransactionScheduleData() {
     const data = await getTransactionScheduleData();
 
-    if (data === false) {
+    if (data.state === 'error') {
         return false;
-    } else if (data !== null) {
-        const result = Promise.all(data.map(async (transaction_schedule) => {
+    } else if (data.state === 'success') {
+        const result = Promise.all(data.data.map(async (transaction_schedule) => {
             console.log(`command: ${transaction_schedule.command}`);
             const commandArgs = transaction_schedule.command.split(' ');
             commandArgs.push('|', transaction_schedule.identification_code);

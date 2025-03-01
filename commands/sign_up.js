@@ -9,10 +9,36 @@ module.exports = {
     async execute(interaction) {
         const userBanned = await checkUserBanned(interaction.user.id);
 
-        if (userBanned === false) {
+        if (userBanned.state === 'error') {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xEA4144)
+                        .setTitle('서버 오류')
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTimestamp()
+                ],
+            });
+            return;
+        }
+
+        if (userBanned.data === false) {
             const userExists = await checkUserExists(interaction.user.id);
+
+            if (userExists.state === 'error') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
     
-            if (userExists === true) {
+            if (userExists.data === true) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -20,7 +46,7 @@ module.exports = {
                             .setTitle('이미 계정이 존재합니다')
                     ],
                 });
-            } else if (userExists === false) {
+            } else if (userExists.data === false) {
                 const accept = new ButtonBuilder()
                     .setCustomId(`sign_up_accept-${interaction.user.id}`)
                     .setLabel('동의')
@@ -44,17 +70,6 @@ module.exports = {
                     components: [row]
                 });
             }
-        } else if (userBanned === null) {
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xEA4144)
-                        .setTitle('서버 오류')
-                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                        .setTimestamp()
-                ],
-            });
-            return;
         } else {
             await interaction.reply({
                 embeds: [

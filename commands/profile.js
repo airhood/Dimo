@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { checkUserExists, getUser, getUserProfile, getLevelInfo } = require('../database');
+const { checkUserExists, getLevelInfo } = require('../database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -19,20 +19,45 @@ module.exports = {
         }
 
         const userExists = await checkUserExists(targetUser.id);
-
-        if (userExists === false) {
+        if (userExists.state === 'error') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0xEA4144)
-                        .setTitle('계정이 없습니다')
-                        .setDescription('가입된 계정이 없습니다.\n회원가입은 **/회원가입** 을 통해 가능합니다.')
+                        .setTitle('서버 오류')
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTimestamp()
+                ],
+            });
+            return;
+        }
+
+        if (userExists.data === false) {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xEA4144)
+                        .setTitle('존재하지 않는 계정입니다')
+                        .setDescription(`<@${targetUser.id}>의 계정이 존재하지 않습니다.`)
                 ],
             });
             return;
         }
 
         const levelInfo = await getLevelInfo(targetUser.id);
+        if (levelInfo.state === 'error') {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xEA4144)
+                        .setTitle('서버 오류')
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTimestamp()
+                ],
+            });
+            return;
+        }
+
         const avatarURL = targetUser.displayAvatarURL({ format: 'png', size: 512 });
 
         await interaction.reply({

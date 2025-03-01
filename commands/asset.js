@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { checkUserExists, getUserAsset, binaryOption, OPTION_UNIT_QUANTITY } = require('../database');
+const { checkUserExists, getUserAsset, OPTION_UNIT_QUANTITY } = require('../database');
 const moment = require('moment-timezone');
 const { getStockPrice, getFuturePrice, getCallOptionPrice, getPutOptionPrice, getOptionPrice, getOptionStrikePriceIndex } = require('../stock_system/stock_sim');
 const asset = require('../schemas/asset');
@@ -43,7 +43,20 @@ module.exports = {
         }
 
         const userExists = await checkUserExists(targetUser.id);
-        if (!userExists) {
+        if (userExists.state === 'error') {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xEA4144)
+                        .setTitle('서버 오류')
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTimestamp()
+                ],
+            });
+            return;
+        }
+
+        if (userExists.data === false) {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -67,7 +80,7 @@ module.exports = {
 
         const result = await getUserAsset(targetUser.id);
 
-        if (result === false) {
+        if (result.state === 'error') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -83,7 +96,7 @@ module.exports = {
         /*
         if (!loadDetails) {
             const stocksMap = new Map();
-            result.asset.stocks.forEach(stock => {
+            result.data.asset.stocks.forEach(stock => {
                 if (stocksMap.has(stock.ticker)) {
                     const existingStock = stocksMap.get(stock.ticker);
                     const { totalQuantity, newAveragePrice } = mergePositions(existingStock.quantity, existingStock.purchasePrice, stock.quantity, stock.purchasePrice);
@@ -96,7 +109,7 @@ module.exports = {
             const mergedStocks = [...stocksMap.values()];
             
             const futuresMap = new Map();
-            result.asset.futures.forEach(future => {
+            result.data.asset.futures.forEach(future => {
                 let direction;
                 if (future.quantity > 0) {
                     direction = 'call';
@@ -116,7 +129,7 @@ module.exports = {
             const mergedFutures = [...futuresMap.values()];
             
             const optionsMap = new Map();
-            result.asset.options.forEach(option => {
+            result.data.asset.options.forEach(option => {
                 const key = `${option.ticker}-${option.optionType}-${option.strikePrice}`;
                 if (optionsMap.has(key)) {
                     const existingOption = optionsMap.get(key);
@@ -129,16 +142,16 @@ module.exports = {
             });
             const mergedOptions = [...optionsMap.values()];
 
-            const binary_options = [...result.asset.binary_options];
-            const mergedFixedDeposits = [...result.asset.fixed_deposits];
-            const mergedSavingsAccounts = [...result.asset.savings_accounts];
-            const mergedLoans = [...result.asset.loans];
+            const binary_options = [...result.data.asset.binary_options];
+            const mergedFixedDeposits = [...result.data.asset.fixed_deposits];
+            const mergedSavingsAccounts = [...result.data.asset.savings_accounts];
+            const mergedLoans = [...result.data.asset.loans];
             
             const mergedAsset = {
-                user: result.asset.user,
-                balance: result.asset.balance,
+                user: result.data.asset.user,
+                balance: result.data.asset.balance,
                 stocks: mergedStocks,
-                stockShortSales: result.asset.stockShortSales,
+                stockShortSales: result.data.asset.stockShortSales,
                 futures: mergedFutures,
                 options: mergedOptions,
                 binary_options: binary_options,
@@ -147,14 +160,14 @@ module.exports = {
                 loans: mergedLoans,
             };
 
-            result.asset = mergedAsset;
+            result.data.asset = mergedAsset;
         }
         */
 
         const fields = [
             {
                 name: ':dollar:  계좌 잔액',
-                value: `\`\`\`${result.asset.balance.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원\`\`\``,
+                value: `\`\`\`${result.data.asset.balance.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원\`\`\``,
             }
         ];
 
@@ -165,7 +178,7 @@ module.exports = {
         let stock_format = '';
 
         if (loadDetails) {
-            for (const stock of result.asset.stocks) {
+            for (const stock of result.data.asset.stocks) {
                 if (stock_format !== '') stock_format += '\n';
                 const formattedPurchaseDate = moment(stock.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
 
@@ -188,11 +201,11 @@ module.exports = {
 | 매수날짜: ${formattedPurchaseDate}`;
             }
 
-            if (result.asset.stockShortSales.length > 0) {
+            if (result.data.asset.stockShortSales.length > 0) {
                 stock_format += '\n\n----- 공매도 -----';
             }
 
-            for (const short of result.asset.stockShortSales) {
+            for (const short of result.data.asset.stockShortSales) {
                 if (stock_format !== ' ') stock_format += '\n';
                 const formattedSellDate = moment(short.sellDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedBuyBackDate = moment(short.buyBackDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -217,7 +230,7 @@ module.exports = {
 | 매도날짜: ${formattedSellDate}`;
             }
         } else {
-            for (const stock of result.asset.stocks) {
+            for (const stock of result.data.asset.stocks) {
                 if (stock_format !== '') stock_format += '\n';
 
                 const earn = (getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice;
@@ -235,11 +248,11 @@ module.exports = {
                 stock_format += `${stock.ticker} ${stock.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 (평가손익: ${(stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
             }
 
-            if (result.asset.stockShortSales.length > 0) {
+            if (result.data.asset.stockShortSales.length > 0) {
                 stock_format += '\n\n----- 공매도 -----';
             }
 
-            for (const short of result.asset.stockShortSales) {
+            for (const short of result.data.asset.stockShortSales) {
                 if (stock_format !== ' ') stock_format += '\n';
 
                 const earn = (short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice;
@@ -269,7 +282,7 @@ module.exports = {
         let future_format = '';
 
         if (loadDetails) {
-            for (const future of result.asset.futures) {
+            for (const future of result.data.asset.futures) {
                 if (future_format !== '') future_format += '\n';
                 const formattedExpirationDate = moment(future.expirationDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formattedPurchaseDate = moment(future.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -307,7 +320,7 @@ module.exports = {
             }
         } else {
             
-            for (const future of result.asset.futures) {
+            for (const future of result.data.asset.futures) {
                 if (future_format !== '') future_format += '\n';
                 
                 let positionType;
@@ -349,7 +362,7 @@ module.exports = {
         let option_format = '';
         
         if (loadDetails) {
-            for (const option of result.asset.options) {
+            for (const option of result.data.asset.options) {
                 if (option_format !== '') option_format += '\n\n';
                 let formattedOptionType;
                 const optionPrices = getOptionPrice(option.ticker);
@@ -389,7 +402,7 @@ module.exports = {
 | 매수날짜: ${formattedPurchaseDate}`;
             }
         } else {
-            for (const option of result.asset.options) {
+            for (const option of result.data.asset.options) {
                 if (option_format !== '') option_format += '\n\n';
                 let formattedOptionType;
                 const optionPrices = getOptionPrice(option.ticker);
@@ -434,7 +447,7 @@ module.exports = {
 
         let binary_option_format = '';
         if (loadDetails) {
-            for (const binary_option of result.asset.binary_options) {
+            for (const binary_option of result.data.asset.binary_options) {
                 if (binary_option_format !== '') binary_option_format += '\n';
 
                 const currentPrice = getStockPrice(binary_option.ticker);
@@ -468,7 +481,7 @@ module.exports = {
 | 배팅날짜: ${formattedPurchaseDate}`;
             }
         } else {
-            for (const binary_option of result.asset.binary_options) {
+            for (const binary_option of result.data.asset.binary_options) {
                 if (binary_option_format !== '') binary_option_format += '\n';
 
                 let direction;
@@ -504,7 +517,7 @@ module.exports = {
 
         let deposit_format = '';
         if (loadDetails) {
-            for (const fixed_deposit of result.asset.fixed_deposits) {
+            for (const fixed_deposit of result.data.asset.fixed_deposits) {
                 if (deposit_format !== '') deposit_format += '\n';
                 const formatted_depositDate = moment(fixed_deposit.depositDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formatted_maturityDate = moment(fixed_deposit.maturityDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -514,7 +527,7 @@ module.exports = {
 | 예금일: ${formatted_depositDate}
 | 만기일: ${formatted_maturityDate}`;
             }
-            for (const savings_account of result.asset.savings_accounts) {
+            for (const savings_account of result.data.asset.savings_accounts) {
                 if (deposit_format !== '') deposit_format += '\n';
                 const formatted_startDate = moment(savings_account.startDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formatted_endDate = moment(savings_account.endDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -525,11 +538,11 @@ module.exports = {
 | 만기일: ${formatted_endDate}`;
             }
         } else {
-            for (const fixed_deposit of result.asset.fixed_deposits) {
+            for (const fixed_deposit of result.data.asset.fixed_deposits) {
                 if (deposit_format !== '') deposit_format += '\n';
                 deposit_format += `예금 ${fixed_deposit.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(fixed_deposit.interestRate * 100).toFixed(2)}%)`;
             }
-            for (const savings_account of result.asset.savings_accounts) {
+            for (const savings_account of result.data.asset.savings_accounts) {
                 if (deposit_format !== '') deposit_format += '\n';
                 deposit_format += `적금 ${savings_account.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(savings_account.interestRate * 100).toFixed(2)}%)`;
             }
@@ -544,7 +557,7 @@ module.exports = {
 
         let loan_format = '';
         if (loadDetails) {
-            for (const loan of result.asset.loans) {
+            for (const loan of result.data.asset.loans) {
                 if (loan_format !== '') loan_format += '\n';
                 const formatted_loanDate = moment(loan.loanDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const formatted_dueDate = moment(loan.dueDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
@@ -554,7 +567,7 @@ module.exports = {
 | 상환일: ${formatted_dueDate}`;
             }
         } else {
-            for (const loan of result.asset.loans) {
+            for (const loan of result.data.asset.loans) {
                 if (loan_format !== '') loan_format += '\n';
                 loan_format += `대출 ${loan.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (이자율: ${(loan.interestRate * 100).toFixed(2)}%)`;
             }

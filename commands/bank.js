@@ -135,16 +135,16 @@ module.exports = {
 
             const result = await loan(interaction.user.id, amount, dueDate, interestType, dueDateRel);
 
-            if (result) {
+            if (result.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x2ecc71)
                             .setTitle(':white_check_mark:  대출 승인')
-                            .setDescription(`은행으로부터 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원을 대출했습니다.`)
+                            .setDescription(`은행으로부터 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원을 대출했습니다.\n현재 대출금리는 \`${result.data}%\`입니다.`)
                     ]
                 });
-            } else if (result === null) {
+            } else if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -155,13 +155,13 @@ module.exports = {
                     ],
                 });
                 return;
-            } else {
+            } else if (result.state === 'loan_limit_over') { 
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle(':x:  대출 거절')
-                            .setDescription(`대출 한도 초과로 인해 대출 신청이 거절되었습니다.\n현재 대출 한도는 ${result}원 입니다.`)
+                            .setDescription(`대출 한도 초과로 인해 대출 신청이 거절되었습니다.\n현재 대출 한도는 ${result.data}원 입니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -172,7 +172,7 @@ module.exports = {
 
             const result = await loanRepay(interaction.user.id, loanNumber);
 
-            if (result === null) {
+            if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -183,7 +183,7 @@ module.exports = {
                     ],
                 });
                 return;
-            } else if (result.state === false) {
+            } else if (result.state === 'no_balance') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -192,7 +192,7 @@ module.exports = {
                             .setDescription(`잔액이 부족합니다.\n현재 이자를 포함하여 상환해야 할 금액은 \`${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원\` 입니다.`)
                     ]
                 });
-            } else if (result.state === true) {
+            } else if (result.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -219,16 +219,16 @@ module.exports = {
 
             const result = await openFixedDeposit(interaction.user.id, amount, parseInt(product));
 
-            if (result === true) {
+            if (result.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x2ecc71)
                             .setTitle(':white_check_mark:  예금 완료')
-                            .setDescription(`은행에 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원이 예금되었습니다.`)
+                            .setDescription(`은행에 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원이 예금되었습니다.\n현재 예금금리는 \`${result.data}%\`입니다.`)
                     ]
                 });
-            } else if (result === null) {
+            } else if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -239,7 +239,7 @@ module.exports = {
                     ],
                 });
                 return;
-            } else {
+            } else if (result.state === 'no_balance') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -255,16 +255,16 @@ module.exports = {
 
             const result = await openSavingsAccount(interaction.user.id, amount, parseInt(product));
 
-            if (result === true) {
+            if (result.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x2ecc71)
                             .setTitle(':white_check_mark:  적금 신청 완료')
-                            .setDescription(`은행에 적금 신청이 완료되었습니다.\n매일 자정에 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원이 자동으로 적금 계좌로 송금됩니다.\n중간에 잔액 부족으로 송금을 실패하면 원금은 반환받되, 이자는 지급받지 못합니다.`)
+                            .setDescription(`은행에 적금 신청이 완료되었습니다.\n현재 예금금리는 \`${result.data}%\`입니다.\n매일 자정에 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원이 자동으로 적금 계좌로 송금됩니다.\n중간에 잔액 부족으로 송금을 실패하면 원금은 반환받되, 이자는 지급받지 못합니다.`)
                     ]
                 });
-            } else if (result === null) {
+            } else if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -275,7 +275,7 @@ module.exports = {
                     ],
                 });
                 return;
-            } else {
+            } else if (result.state === 'no_balance') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -315,7 +315,7 @@ module.exports = {
 
             const userCredit = await getUserCredit(targetUser.id);
 
-            if (userCredit === null) {
+            if (userCredit.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -326,13 +326,13 @@ module.exports = {
                     ],
                 });
                 return;
-            } else {
+            } else if (userCredit.state === 'success') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xF1C40F)
                             .setTitle('신용등급')
-                            .setDescription(`\`\`\`${userCredit}%\`\`\``)
+                            .setDescription(`\`\`\`${userCredit.data}/1000\`\`\``)
                     ],
                 });
             }

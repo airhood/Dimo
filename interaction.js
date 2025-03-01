@@ -16,7 +16,7 @@ function addInteractionHandler(client) {
 
             if (action === 'sign_up_accept') {
                 const result = await createUser(interaction.user.id);
-                if (result === true) {
+                if (result.state === 'success') {
                     await interaction.update({
                         embeds: [
                             new EmbedBuilder()
@@ -26,6 +26,17 @@ function addInteractionHandler(client) {
                         ],
                         components: []
                     });
+                } else if (result.state === 'error') {
+                    await interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0xEA4144)
+                                .setTitle('서버 오류')
+                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                .setTimestamp()
+                        ],
+                    });
+                    return;
                 }
             } else if (action === 'sign_up_deny') {
                 await interaction.update({
@@ -40,7 +51,7 @@ function addInteractionHandler(client) {
             } else if (action === 'delete_account') {
                 console.log('delete_account interaction');
                 const result = await deleteUser(interaction.user.id);
-                if (result === true) {
+                if (result.state === 'success') {
                     await interaction.update({
                         embeds: [
                             new EmbedBuilder()
@@ -49,6 +60,17 @@ function addInteractionHandler(client) {
                         ],
                         components: []
                     })
+                } else if (result.state === 'error') {
+                    await interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0xEA4144)
+                                .setTitle('서버 오류')
+                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                .setTimestamp()
+                        ],
+                    });
+                    return;
                 }
             } else if (action === 'stock_previous_page') {
                 const uid = customID[2];
@@ -230,21 +252,21 @@ function addInteractionHandler(client) {
                 if (currentPage === 0) return;
 
                 const pageToLoad = currentPage - 1;
+                
+                const nextPage = new ButtonBuilder()
+                .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
+                .setLabel('이전')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(pageToLoad === pages.length - 1);
 
                 const previousPage = new ButtonBuilder()
                     .setCustomId(`notice_previous_page-${interaction.user.id}-${uid}`)
-                    .setLabel('이전')
-                    .setStyle(ButtonStyle.Primary)
-                    .setDisabled(pageToLoad === 0);
-                            
-                const nextPage = new ButtonBuilder()
-                    .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
                     .setLabel('다음')
                     .setStyle(ButtonStyle.Primary)
-                    .setDisabled(pageToLoad === pages.length - 1);
+                    .setDisabled(pageToLoad === 0);
 
                 const row = new ActionRowBuilder()
-                    .addComponents(previousPage, nextPage);
+                    .addComponents(nextPage, previousPage);
                 
                 const formattedDate = moment(pages[pageToLoad].date).tz('Asia/Seoul').format('YYYY-MM-DD');
                 
@@ -275,20 +297,20 @@ function addInteractionHandler(client) {
 
                 const pageToLoad = currentPage + 1;
 
+                const nextPage = new ButtonBuilder()
+                .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
+                .setLabel('이전')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(pageToLoad === pages.length - 1);
+                
                 const previousPage = new ButtonBuilder()
                     .setCustomId(`notice_previous_page-${interaction.user.id}-${uid}`)
-                    .setLabel('이전')
+                    .setLabel('다음')
                     .setStyle(ButtonStyle.Primary)
                     .setDisabled(pageToLoad === 0);
                 
-                const nextPage = new ButtonBuilder()
-                    .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
-                    .setLabel('다음')
-                    .setStyle(ButtonStyle.Primary)
-                    .setDisabled(pageToLoad === pages.length - 1);
-                
                 const row = new ActionRowBuilder()
-                    .addComponents(previousPage, nextPage);
+                    .addComponents(nextPage, previousPage);
                 
                 const formattedDate = moment(pages[pageToLoad].date).tz('Asia/Seoul').format('YYYY-MM-DD');
 

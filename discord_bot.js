@@ -10,7 +10,7 @@ const { setClient_status_tracker, setupStatusChannel } = require('./server/statu
 const { dimoChat } = require('./chat_bot/chat_bot');
 const { addToBucket, existsInCurrentBucket } = require('./message_reference_tracker');
 const { filterMessage } = require('./chat_bot/message_filter');
-const { setClient_koreanbots_update } = require('./koreanbots_update');
+const { setClient_koreanbots_update, setUpdateInterval } = require('./koreanbots_update');
 
 const client = new Client({
 	intents: [
@@ -53,8 +53,20 @@ module.exports = {
 		
 			try {
 				const userExists = await checkUserExists(interaction.user.id);
+				if (userExists.state === 'error') {
+					await interaction.reply({
+						embeds: [
+							new EmbedBuilder()
+								.setColor(0xEA4144)
+								.setTitle('서버 오류')
+								.setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+								.setTimestamp()
+						],
+					});
+					return;
+				}
 		
-				if ((userExists === false) && (interaction.commandName !== '회원가입')) {
+				if ((userExists.data === false) && (interaction.commandName !== '회원가입')) {
 					await interaction.reply({
 						embeds: [
 							new EmbedBuilder()

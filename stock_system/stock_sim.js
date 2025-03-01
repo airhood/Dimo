@@ -3,7 +3,8 @@ const schedule = require('node-schedule');
 const math = require('mathjs');
 const { serverLog } = require('../server/server_logger');
 const { getTicker, getStockName } = require('./stock_name');
-const { getInterestRate } = require('./bank_manager');
+const { initFuncDependencies, getInterestRate } = require('./bank_manager');
+const { getKoreanTime } = require('../korean_time');
 
 
 const sigma = 0.004;  // 변동성 (일일 변동성)
@@ -382,6 +383,8 @@ async function loadRecentStockData() {
 }
 
 async function initStockSim() {
+    initFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex);
+
     try {
         await loadRecentStockData();
         return true;
@@ -454,7 +457,7 @@ const HOURS_IN_A_WEEK = 24 * 7; // 1주일
 
 function updateFutureTimeLeft() {
     if (futureTimeLeft === null) {
-        const now = new Date();
+        const now = getKoreanTime(new Date());
         const friday = new Date(now);
 
         friday.setDate(now.getDate() + (6 - now.getDay() + 7) % 7);
@@ -514,7 +517,7 @@ function getOptionStrikePriceList(ticker) {
 
 function updateOptionTimeLeft() {
     if (optionTimeLeft === null) {
-        const now = new Date();
+        const now = getKoreanTime(new Date());
         const friday = new Date(now);
 
         friday.setDate(now.getDate() + (6 - now.getDay() + 7) % 7);

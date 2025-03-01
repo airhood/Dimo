@@ -1,7 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { getStockPrice, tryGetTicker } = require('../stock_system/stock_sim');
-const { getStockName } = require('../stock_system/stock_name');
-const { checkUserExists, binaryOption } = require('../database');
+const { tryGetTicker } = require('../stock_system/stock_sim');
+const { binaryOption } = require('../database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -63,7 +62,7 @@ module.exports = {
         
         const result = await binaryOption(interaction.user.id, ticker, prediction, time, amount);
 
-        if (result === null) {
+        if (result.state === 'error') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -74,7 +73,7 @@ module.exports = {
                 ],
             });
             return;
-        } else if (result === false) {
+        } else if (result.state === 'no_balance') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -84,7 +83,7 @@ module.exports = {
                         .setTimestamp()
                 ],
             });
-        } else if (result === true) {
+        } else if (result.state === 'success') {
             let direction;
             if (prediction === 'call') {
                 direction = '상승';
@@ -110,7 +109,7 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0x448FE6)
                         .setTitle(':white_check_mark:  주문 체결 완료')
-                        .setDescription(`${ticker} 주식 가격의 ${formattedTime} 후 가격이 현재 가격보다 ${direction}한다는 예측에 ${amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원을 배팅하였습니다.`)
+                        .setDescription(`${ticker} 주식 가격의 ${formattedTime} 후 가격이 현재 가격보다 ${direction}한다는 예측에 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원을 배팅하였습니다.`)
                         .setTimestamp()
                 ],
             });
