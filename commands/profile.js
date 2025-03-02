@@ -66,7 +66,7 @@ module.exports = {
                     .setColor(0x9E754F)
                     .setTitle(`${targetUser.username}님의 프로필`)
                     .addFields(
-                        { name: '레벨', value: `${levelInfo.level}레벨 (${levelInfo.state}/${levelInfo.target})` },
+                        { name: '레벨', value: `${levelInfo.data.level}레벨 (${levelInfo.data.state}/${levelInfo.data.target})` },
                     )
                     .setThumbnail(avatarURL)
             ],

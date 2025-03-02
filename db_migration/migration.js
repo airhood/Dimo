@@ -37,20 +37,20 @@ const Asset = require('../schemas/asset');
 
 const migrateAddCreditRating = async () => {
     try {
-        const result1 = await Asset.updateMany(
-            { },
-            { $set: {
-                balance: 150 * 10000, // 150만원
-                stocks: [],
-                stockShortSales: [],
-                futures: [],
-                options: [],
-                binary_options: [],
-                fixed_deposits: [],
-                savings_accounts: [],
-                loans: [],
-            } }
-        );
+        // const result1 = await Asset.updateMany(
+        //     { },
+        //     { $set: {
+        //         balance: 150 * 10000, // 150만원
+        //         stocks: [],
+        //         stockShortSales: [],
+        //         futures: [],
+        //         options: [],
+        //         binary_options: [],
+        //         fixed_deposits: [],
+        //         savings_accounts: [],
+        //         loans: [],
+        //     } }
+        // );
 
         // const result2 = await Profile.updateMany(
         //     { },
@@ -59,9 +59,15 @@ const migrateAddCreditRating = async () => {
         //         description: '디모봇을 베타 시절부터 사용했어요!',
         //     } } }
         // )
+
+        const result3 = await Profile.updateMany(
+            { credit_rating: { $exists: false } },  // credit_rating 필드가 없는 문서만 선택
+            { $set: { credit_rating: 100 } }        // credit_rating을 100으로 설정
+        )
         
-        console.log(`Matched ${result1.matchedCount} documents and updated ${result1.modifiedCount} documents.`);
+        // console.log(`Matched ${result1.matchedCount} documents and updated ${result1.modifiedCount} documents.`);
         // console.log(`Matched ${result2.matchedCount} documents and updated ${result2.modifiedCount} documents.`);
+        console.log(`Matched ${result3.matchedCount} documents and updated ${result3.modifiedCount} documents.`);
     } catch (err) {
         console.error('Error during migration:', err);
     }

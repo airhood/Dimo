@@ -43,7 +43,7 @@ const NotificationSchedule = require('./schemas/notification_schedule');
 const TransactionSchedule = require('./schemas/transaction_schedule');
 
 const Notice = require('./schemas/notice');
-const korean_time = require('./korean_time');
+const { getKoreanTime }= require('./korean_time');
 
 
 let serversideLockedAccounts = [];
@@ -788,11 +788,14 @@ module.exports = {
             }
 
             const receiveDate = userState.subsidy_recieve_date;
-            const localDate = korean_time(receiveDate);
-            const today = korean_time(new Date());
+            const localDate = getKoreanTime(receiveDate);
+            const today = getKoreanTime(new Date());
 
             localDate.setHours(0, 0, 0, 0);
             today.setHours(0, 0, 0, 0);
+
+            console.log(`localDate: ${localDate}`);
+            console.log(`today: ${today}`);
 
             if (localDate < today) {
                 return {
@@ -2064,7 +2067,7 @@ module.exports = {
                     data: null,
                 };
             }
-
+            
             const creditRating = await module.exports.getUserCredit(id);
             if (creditRating.state === 'error') {
                 return {
@@ -2073,7 +2076,7 @@ module.exports = {
                 };
             }
 
-            const loanLimit = calculateLoanLimit(userAsset, creditRating.data);
+            const loanLimit = calculateLoanLimit(userAsset, creditRating.data, dueDate);
 
             console.log(`loanLimit: ${loanLimit}`);
 

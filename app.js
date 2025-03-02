@@ -7,7 +7,7 @@ const { initResourceMonitor, checkResource } = require('./server/resource_monito
 const { initScheduleManager } = require('./stock_system/transaction_schedule_manager');
 
 const discord_bot = require('./discord_bot');
-const { initCreditSystem } = require('./stock_system/credit_system');
+const { initCreditSystem, updateCreditRating } = require('./stock_system/credit_system');
 
 require('dotenv').config();
 
@@ -41,8 +41,13 @@ module.exports = {
 
         console.log('[BOOT] Credit system loaded');
 
-        const result5 = initScheduleManager();
+        const result5 = await updateCreditRating();
         if (!result5) return false;
+
+        console.log('[BOOT] Update credit success');
+
+        const result6 = initScheduleManager();
+        if (!result6) return false;
 
         console.log('[BOOT] Schedule Manager loaded');
         

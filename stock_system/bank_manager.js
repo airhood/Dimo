@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { calculateAssetValue, getAssetTotalLoan } = require('./credit_system');
+const { calculateAssetValue, getAssetTotalLoan, initCreditSystemFuncDependencies } = require('./credit_system');
 
 function getInterestRate() {
     const currentDate = new Date();
@@ -63,17 +63,12 @@ function calculateCompoundInterestRate(r, n) {
     return r * (Math.pow(r, n) - 1) / (r - 1);
 }
 
-let getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex;
-
-function initFuncDependencies(_getStockPrice, _getFuturePrice, _getOptionPrice, _getOptionStrikePriceIndex) {
-    getStockPrice = _getStockPrice;
-    getFuturePrice = _getFuturePrice;
-    getOptionPrice = _getOptionPrice;
-    getOptionStrikePriceIndex = _getOptionStrikePriceIndex;
+function initBankManagerFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex) {
+    initCreditSystemFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex);
 }
 
-function calculateLoanLimit(userAsset, creditRating) {
-    const assetValue = calculateAssetValue(userAsset, getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex);
+function calculateLoanLimit(userAsset, creditRating, loanDueDate) {
+    const assetValue = calculateAssetValue(userAsset, loanDueDate);
 
     const totalLoan = getAssetTotalLoan(userAsset);
 
@@ -112,4 +107,4 @@ exports.calculateCompoundInterestRate = calculateCompoundInterestRate;
 
 exports.calculateLoanLimit = calculateLoanLimit;
 
-exports.initFuncDependencies = initFuncDependencies;
+exports.initBankManagerFuncDependencies = initBankManagerFuncDependencies;

@@ -3,7 +3,7 @@ const schedule = require('node-schedule');
 const math = require('mathjs');
 const { serverLog } = require('../server/server_logger');
 const { getTicker, getStockName } = require('./stock_name');
-const { initFuncDependencies, getInterestRate } = require('./bank_manager');
+const { initBankManagerFuncDependencies, getInterestRate } = require('./bank_manager');
 const { getKoreanTime } = require('../korean_time');
 
 
@@ -383,7 +383,7 @@ async function loadRecentStockData() {
 }
 
 async function initStockSim() {
-    initFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex);
+    initBankManagerFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex);
 
     try {
         await loadRecentStockData();
