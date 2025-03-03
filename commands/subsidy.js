@@ -8,7 +8,7 @@ module.exports = {
     
     async execute(interaction) {
         const subsidyReceived = await checkSubsidyReceived(interaction.user.id);
-        if (subsidyReceived === null) {
+        if (subsidyReceived.result === 'error') {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -19,7 +19,7 @@ module.exports = {
             });
             return;
         }
-        else if (subsidyReceived === true) {
+        else if (subsidyReceived.data === true) {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()

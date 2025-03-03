@@ -794,10 +794,7 @@ module.exports = {
             localDate.setHours(0, 0, 0, 0);
             today.setHours(0, 0, 0, 0);
 
-            console.log(`localDate: ${localDate}`);
-            console.log(`today: ${today}`);
-
-            if (localDate < today) {
+            if (localDate.getTime() < today.getTime()) {
                 return {
                     state: 'success',
                     data: false,
