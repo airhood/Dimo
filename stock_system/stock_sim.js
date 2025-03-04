@@ -165,28 +165,37 @@ function backupRecentData(init) {
         content += `[${ticker}]\n${stockPrices.join('\n')}\n`;
     }
 
+    let error = false;
+
     if (content !== '') {
         if (lastContent) {
             const formattedContent = `${lastContent}\n${hourDataDivider}\n${content}`;
             fs.writeFile('./data/recent-stock_prices.txt', formattedContent, 'utf-8', (err) => {
                 if (err) {
                     serverLog(`[ERROR] Error writing 'recent-stock_prices.txt': ${err}`);
+                    error = true;
                 }
             });
         } else if (!init) {
             serverLog(`[ERROR] Error writing 'recent-stock_prices.txt': lastContent undefined.`);
+            error = true;
         }
 
         fs.appendFile('./data/stock_prices.txt', '<__hr__>\n' + content, 'utf-8', (err) => {
             if (err) {
                 serverLog(`[ERROR] Error writing 'stock_prices.txt': ${err}`);
+                error = true;
             }
         });
     }
 
     lastContent = content;
 
-    serverLog('[INFO] Back-up recent stock data success');
+    if (error) {
+        serverLog('[ERROR] Back-up recent stock data failed.');
+    } else {
+        serverLog('[INFO] Back-up recent stock data success.');
+    }
 }
 
 async function loadRecentStockData() {
@@ -205,7 +214,7 @@ async function loadRecentStockData() {
 
                 if (!data.trim()) {
                     serverLog('[ERROR] \'stock_meta.txt\' is empty or unreadable.');
-                    // return reject();
+                    return reject(new Error('File data missing'));
                 }
 
                 const lines = data.split('\n');
@@ -231,7 +240,7 @@ async function loadRecentStockData() {
                         return reject(new Error('File is missing'));
                     }
         
-                    fs.readFile('./data/recent-stock_prices.txt', 'utf-8', (err, data) => {
+                    fs.readFile('./data/recent-stock_prices.txt', 'utf-8', async (err, data) => {
                         if (err) {
                             serverLog(`[ERROR] Error reading 'recent-stock_prices.txt': ${err}`);
                             return reject(new Error('Error reading file'));
@@ -283,7 +292,11 @@ async function loadRecentStockData() {
                             stocksPricesHistory.push(fillinStockData);
                             newsDataHistory.push(fillinNewsData);
                             tickerList.push(...Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]));
-                            updateOptionStrikePriceList();
+                            try {
+                                await loadOptionStrikePriceList();
+                            } catch (err) {
+                                serverLog(`[ERROR] Error loading option strike price: ${err}`);
+                            }
                             calculateNextHourFuturePrice(fillinStockData);
                             calculateNextHourOptionPrice(fillinStockData);
                             backupRecentData(true);
@@ -295,7 +308,6 @@ async function loadRecentStockData() {
                             }
                             stocksPricesHistory.push(firstStockData);
                             newsDataHistory.push(firstNewsData);
-                            updateOptionStrikePriceList();
                             calculateNextHourFuturePrice(firstStockData);
                             calculateNextHourOptionPrice(firstStockData);
                             backupRecentData(false);
@@ -360,12 +372,15 @@ async function loadRecentStockData() {
                             
                             stocksPricesHistory.push(previousHourStockData);
                             tickerList.push(...Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]));
-                            updateOptionStrikePriceList();
+                            try {
+                                await loadOptionStrikePriceList();
+                            } catch (err) {
+                                serverLog(`[ERROR] Error loading option strike price: ${err}`);
+                            }
                             calculateNextHourFuturePrice(previousHourStockData);
                             calculateNextHourOptionPrice(previousHourStockData);
                             backupRecentData(true);
                             stocksPricesHistory.push(newStockData);
-                            updateOptionStrikePriceList();
                             calculateNextHourFuturePrice(newStockData);
                             calculateNextHourOptionPrice(newStockData);
                             backupRecentData(false);
@@ -383,7 +398,7 @@ async function loadRecentStockData() {
 }
 
 async function initStockSim() {
-    initBankManagerFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex);
+    initBankManagerFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice);
 
     try {
         await loadRecentStockData();
@@ -432,14 +447,14 @@ function calculateNextHourOptionPrice(stockData) {
     for (const [ticker, stock_prices] of Object.entries(stockData)) {
         const newOptionPrices = [];
         for (const stock_price of stock_prices) {
-            const call = [];
-            const put = [];
-
+            const call = {};
+            const put = {};
+            
             for (const strikePrice of optionsStrikePricesList[ticker]) {
                 const callPrice = calculateCallOptionPrice(stock_price, strikePrice, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
                 const putPrice = calculatePutOptionPrice(stock_price, strikePrice, getInterestRate(), convertToSimTime(optionTimeLeft / 24), calculateVolatility(sigma));
-                call.push(roundPos(callPrice, 2));
-                put.push(roundPos(putPrice, 2));
+                call[strikePrice.toString()] = roundPos(callPrice, 2);
+                put[strikePrice.toString()] = roundPos(putPrice, 2);
             }
 
             newOptionPrices.push({
@@ -489,7 +504,7 @@ function calculateOptionStrikePriceDist(price) {
     const roundPrice = roundPos(price, -2);
     const standardPrice = roundPrice - (roundPrice % 200);
     const strikePrice = [];
-    const UNIT_DIFF = 200;
+    const UNIT_DIFF = 500;
     for (let diff = UNIT_DIFF * (-7); diff <= UNIT_DIFF * 7; diff += UNIT_DIFF) {
         strikePrice.push(standardPrice + diff);
     }
@@ -497,11 +512,83 @@ function calculateOptionStrikePriceDist(price) {
     return strikePrice;
 }
 
+async function loadOptionStrikePriceList() {
+    return new Promise((resolve, reject) => {
+        fs.access('./data/option_strike_prices.txt', fs.constants.F_OK, (err) => {
+            if (err) {
+                serverLog('[ERROR] File \'option_strike_prices.txt\' is missing.');
+                return reject(new Error('File \'option_strike_prices.txt\' is missing.'));
+            }
+    
+            fs.readFile('./data/option_strike_prices.txt', 'utf-8', (err, data) => {
+                if (err) {
+                    serverLog(`[ERROR] Error reading  'option_strike_prices.txt': ${err}`);
+                    return reject(new Error(`Error reading 'option_strike_prices.txt': ${err}`));
+                }
+    
+                if (!data.trim()) {
+                    updateOptionStrikePriceList();
+                    return resolve();
+                }
+    
+                const lines = data.split('\n');
+    
+                let currentTicker;
+                let currentStrikePrices = [];
+    
+                lines.forEach(line => {
+                    if (line.trim().startsWith('[') && line.trim().endsWith(']')) {
+                        if (currentTicker) {
+                            optionsStrikePricesList[currentTicker] = currentStrikePrices;
+                        }
+                        currentTicker = line.trim().slice(1, -1);
+                        currentStrikePrices = [];
+                    } else if (line.trim() !== '') {
+                        currentStrikePrices.push(parseFloat(line.trim()));
+                    }
+                });
+    
+                if (currentTicker) {
+                    optionsStrikePricesList[currentTicker] = currentStrikePrices;
+                }
+    
+                serverLog('[INFO] Loaded option strike price list.');
+                return resolve();
+            });
+        });
+    });
+}
+
+async function saveOptionStrikePriceData() {
+    let content = '';
+    for (const [ticker, optionStrikePrice] of Object.entries(optionsStrikePricesList)) {
+        content += `[${ticker}]\n${optionStrikePrice.join('\n')}\n`;
+    }
+
+    let error = false;
+
+    if (content !== '') {
+        fs.writeFile('./data/option_strike_prices.txt', content, 'utf-8', (err) => {
+            if (err) {
+                serverLog(`[ERROR] Error writing 'option_strike_prices.txt': ${err}`);
+                error = true;
+            }
+        });
+    }
+
+    if (error) {
+        serverLog('[ERROR] Save option strike price data failed.');
+    } else {
+        serverLog('[INFO] Save option strike price data failed.');
+    }
+}
+
 function updateOptionStrikePriceList() {
     for (const ticker of tickerList) {
-        const underlyingAssetPrice = getStockPrice(ticker);
+        const underlyingAssetPrice = stocksPricesHistory[stocksPricesHistory.length - 1][ticker][0];
         optionsStrikePricesList[ticker] = calculateOptionStrikePriceDist(underlyingAssetPrice);
     }
+    saveOptionStrikePriceData();
 }
 
 function getOptionStrikePriceIndex(ticker, strikePrice) {
@@ -896,15 +983,6 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
     if (!(direction === 'call') && !(direction === 'put')) return null;
 
     let error = false;
-    const strikePriceIndexList = {};
-    tickerList.forEach((ticker) => {
-        const value = getOptionStrikePriceIndex(ticker, strikePrice);
-        if (value === null) {
-            error = true;
-            return;
-        }
-        strikePriceIndexList[ticker] = value;
-    });
 
     if (error) return null;
 
@@ -942,8 +1020,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(Math.floor(targetMinuteIndex / COMPRESSION_RATE), currentMinuteIndex + 1).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
-                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
+                                if (direction === 'call') return (k.call[strikePrice] ? k.call[strikePrice] : 0);
+                                else if (direction === 'put') return (k.put[strikePrice] ? k.put[strikePrice] : 0);
                             }),
                             compressed: true,
                         };
@@ -951,8 +1029,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(Math.floor(targetMinuteIndex / COMPRESSION_RATE), Math.floor(59 / COMPRESSION_RATE) + 1).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
-                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
+                                if (direction === 'call') return (k.call[strikePrice] ? k.call[strikePrice] : 0);
+                                else if (direction === 'put') return (k.put[strikePrice] ? k.put[strikePrice] : 0);
                             }),
                             compressed: true,
                         };
@@ -960,8 +1038,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(0, Math.floor(59 / COMPRESSION_RATE) + 1).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
-                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
+                                if (direction === 'call') return (k.call[strikePrice] ? k.call[strikePrice] : 0);
+                                else if (direction === 'put') return (k.put[strikePrice] ? k.put[strikePrice] : 0);
                             }),
                             compressed: true,
                         };
@@ -969,8 +1047,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(0, Math.floor()).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
-                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
+                                if (direction === 'call') return (k.call[strikePrice] ? k.call[strikePrice] : 0);
+                                else if (direction === 'put') return (k.put[strikePrice] ? k.put[strikePrice] : 0);
                             }),
                             compressed: true,
                         };
@@ -980,8 +1058,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(targetMinuteIndex, currentMinuteIndex + 1).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
-                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
+                                if (direction === 'call') return (k.call[strikePrice] ? k.call[strikePrice] : 0);
+                                else if (direction === 'put') return (k.put[strikePrice] ? k.put[strikePrice] : 0);
                             }),
                             compressed: false,
                         };
@@ -989,8 +1067,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(targetMinuteIndex, 60).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
-                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
+                                if (direction === 'call') return (k.call[strikePrice] ? k.call[strikePrice] : 0);
+                                else if (direction === 'put') return (k.put[strikePrice] ? k.put[strikePrice] : 0);
                             }),
                             compressed: false,
                         };
@@ -998,8 +1076,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(0, currentMinuteIndex + 1).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
-                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
+                                if (direction === 'call') return (k.call[strikePrice] ? k.call[strikePrice] : 0);
+                                else if (direction === 'put') return (k.put[strikePrice] ? k.put[strikePrice] : 0);
                             }),
                             compressed: false,
                         };
@@ -1007,8 +1085,8 @@ function getOptionTimeRangeData(tickerList, hoursAgo, minutesAgo, direction, str
                         return {
                             ticker: ticker,
                             prices: stockPrices.slice(0, 60).map((k) => {
-                                if (direction === 'call') return k.call[strikePriceIndexList[ticker]];
-                                else if (direction === 'put') return k.put[strikePriceIndexList[ticker]];
+                                if (direction === 'call') return (k.call[strikePrice] ? k.call[strikePrice] : 0);
+                                else if (direction === 'put') return (k.put[strikePrice] ? k.put[strikePrice] : 0);
                             }),
                             compressed: false,
                         };

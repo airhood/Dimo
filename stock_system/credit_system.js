@@ -83,8 +83,8 @@ async function calculateCreditRating(id) {
         assetScoreIncrease = 0;
     } else {
         // 4. 자산 가치에 따른 점수 증가 (자산 가치가 많을수록 점수 상승)
-        const maxAssetValue = Math.log(10000000000); // 자산이 100억 이상일 경우 최대 상승 한도
-        assetScoreIncrease = (Math.log(assetValue) / maxAssetValue) * 1000; // 자산 비례 상승 (최대 600점)
+        const maxAssetValue = Math.log(10000000000) - Math.log(100000); // 자산이 100억 이상일 경우 최대 상승 한도
+        assetScoreIncrease = ((Math.log(assetValue) - Math.log(100000))  / maxAssetValue) * 1000; // 자산 비례 상승 (최대 600점)
     }
 
     // 자산 가치가 많을수록 점수 상승하지만 최대 1000점까지 상승
@@ -209,13 +209,13 @@ function calculateAssetValue(userAsset, loanDueDate) {
 
     userAsset.options.forEach((option) => {
         const currentOptionPrices = getOptionPrice(option.ticker);
-        const strikePriceIndex = getOptionStrikePriceIndex(option.strikePrice);
-        if (strikePriceIndex === null) return;
         let currentPrice;
         if (option.optionType === 'call') {
-            currentPrice = currentOptionPrices.call[strikePriceIndex];
+            currentPrice = currentOptionPrices.call[option.strikePrice];
+            if (!currentPrice) currentPrice = 0;
         } else if (option.optionType === 'put') {
-            currentPrice = currentOptionPrices.put[strikePriceIndex];
+            currentPrice = currentOptionPrices.put[option.strikePrice];
+            if (!currentPrice) currentPrice = 0;
         }
 
         value += currentPrice * option.quantity * OPTION_UNIT_QUANTITY;
@@ -267,13 +267,12 @@ function getAssetTotalLoan(userAsset) {
     return loanAmount;
 }
 
-let getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex;
+let getStockPrice, getFuturePrice, getOptionPrice;
 
-function initCreditSystemFuncDependencies(_getStockPrice, _getFuturePrice, _getOptionPrice, _getOptionStrikePriceIndex) {
+function initCreditSystemFuncDependencies(_getStockPrice, _getFuturePrice, _getOptionPrice) {
     getStockPrice = _getStockPrice;
     getFuturePrice = _getFuturePrice;
     getOptionPrice = _getOptionPrice;
-    getOptionStrikePriceIndex = _getOptionStrikePriceIndex;
 }
 
 exports.initCreditSystem = initCreditSystem;

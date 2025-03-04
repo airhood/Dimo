@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { mongodb_url }  = require('./config.json');
 const { serverLog } = require('./server/server_logger');
-const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionStrikePriceIndex, getOptionExpirationDate } = require('./stock_system/stock_sim');
+const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionExpirationDate } = require('./stock_system/stock_sim');
 const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, getLoanInterestRatePoint, getFixedDepositInterestRatePoint } = require('./stock_system/bank_manager');
 require('dotenv').config();
 const moment = require('moment-timezone');
@@ -1516,9 +1516,13 @@ module.exports = {
             
             const optionPrices = getOptionPrice(ticker);
             const callOptionPrice = optionPrices.call;
-            const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
-            if (strikePriceIndex === null) return 'invalid_strikePrice';
-            const currentPrice = callOptionPrice[strikePriceIndex];
+            const currentPrice = callOptionPrice[strikePrice.toString()];
+            if (!currentPrice) {
+                return {
+                    state: 'invalid_strike_price',
+                    data: null,
+                };
+            }
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
@@ -1607,9 +1611,13 @@ module.exports = {
 
             const optionPrices = getOptionPrice(ticker);
             const callOptionPrice = optionPrices.call;
-            const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
-            if (strikePriceIndex === null) return 'invalid_strikePrice';
-            const currentPrice = callOptionPrice[strikePriceIndex];
+            const currentPrice = callOptionPrice[strikePrice.toString()];
+            if (!currentPrice) {
+                return {
+                    state: 'invalid_strike_price',
+                    data: null,
+                };
+            }
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
@@ -1698,9 +1706,13 @@ module.exports = {
 
             const optionPrices = getOptionPrice(ticker);
             const putOptionPrice = optionPrices.put;
-            const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
-            if (strikePriceIndex === null) return 'invalid_strikePrice';
-            const currentPrice = putOptionPrice[strikePriceIndex];
+            const currentPrice = putOptionPrice[strikePrice.toString()];
+            if (!currentPrice) {
+                return {
+                    state: 'invalid_strike_price',
+                    data: null,
+                };
+            }
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
@@ -1789,14 +1801,13 @@ module.exports = {
 
             const optionPrices = getOptionPrice(ticker);
             const putOptionPrice = optionPrices.put;
-            const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
-            if (strikePriceIndex === null) {
+            const currentPrice = putOptionPrice[strikePrice.toString()];
+            if (!currentPrice) {
                 return {
-                    state: 'invalid_strikePrice',
+                    state: 'invalid_strike_price',
                     data: null,
                 };
             }
-            const currentPrice = putOptionPrice[strikePriceIndex];
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
@@ -1897,20 +1908,14 @@ module.exports = {
             const strikePrice = position.strikePrice;
             const currentOptionPrices = getOptionPrice(ticker);
             
-            const strikePriceIndex = getOptionStrikePriceIndex(ticker, strikePrice);
-            if (strikePriceIndex === null) {
-                return {
-                    state: 'invalid_strike_price',
-                    data: null,
-                };
-            }
-            
             let currentPrice;
             if (optionType === 'call') {
-                currentPrice = currentOptionPrices.call[strikePriceIndex];
+                currentPrice = currentOptionPrices.call[strikePrice.toString()];
             } else if (optionType === 'put') {
-                currentPrice = currentOptionPrices.put[strikePriceIndex];
+                currentPrice = currentOptionPrices.put[strikePrice.toString()];
             }
+
+            if (!currentPrice) currentPrice = 0;
 
             const currentValue = currentPrice * quantity * OPTION_UNIT_QUANTITY;
 
@@ -2861,10 +2866,17 @@ module.exports = {
 
     async getUserCredit(id) {
         try {
-            const user = await User.findOne({ userID: id }).populate('profile');
+            const userProfile = module.exports.getUserProfile(id);
+            if (userProfile.state === 'error') {
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
             return {
                 state: 'success',
-                data: user.profile.credit_rating,
+                data: userProfile.data.profile.credit_rating,
             };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getUserCredit': ${err}`);

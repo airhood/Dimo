@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { checkUserExists, getLevelInfo } = require('../database');
+const { checkUserExists, getLevelInfo, getUserProfile } = require('../database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -58,7 +58,42 @@ module.exports = {
             return;
         }
 
+        const userProfile = await getUserProfile(targetUser.id);
+        if (userProfile.state === 'error') {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xEA4144)
+                        .setTitle('서버 오류')
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTimestamp()
+                ],
+            });
+            return;
+        }
+
         const avatarURL = targetUser.displayAvatarURL({ format: 'png', size: 512 });
+
+        const achievements = {};
+        userProfile.data.profile.achievements.forEach((achievement) => {
+            if (achievements[achievement.name]) {
+                achievements[achievement.name].amount++;
+            } else {
+                achievements[achievement.name] = {
+                    achievement: achievement,
+                    amount: 1,
+                };
+            }
+        });
+
+        const achievementsContent = [];
+        for (const [name, achievement_obj] of Object.entries(achievements)) {
+            if (achievement_obj.amount === 1) {
+                achievementsContent.push(`**${achievement_obj.achievement.name}**\n${achievement_obj.achievement.description}`);
+            } else {
+                achievementsContent.push(`**${achievement_obj.achievement.name}** x${achievement_obj.amount}\n${achievement_obj.achievement.description}`);
+            }
+        }
 
         await interaction.reply({
             embeds: [
@@ -66,7 +101,8 @@ module.exports = {
                     .setColor(0x9E754F)
                     .setTitle(`${targetUser.username}님의 프로필`)
                     .addFields(
-                        { name: '레벨', value: `${levelInfo.data.level}레벨 (${levelInfo.data.state}/${levelInfo.data.target})` },
+                        { name: ':sparkles: 레벨', value: `${levelInfo.data.level}레벨 (${levelInfo.data.state}/${levelInfo.data.target})` },
+                        { name: ':diamond_shape_with_a_dot_inside: 업적', value: achievementsContent.join('\n') },
                     )
                     .setThumbnail(avatarURL)
             ],

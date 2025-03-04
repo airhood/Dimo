@@ -31,7 +31,7 @@ module.exports = {
             return;
         }
 
-        const result1 = await addBalance(interaction.user.id, 50000);
+        const result1 = await addBalance(interaction.user.id, 10000 * 20);
         if (result1.state === 'error') {
             await interaction.reply({
                 embeds: [
@@ -71,7 +71,7 @@ module.exports = {
                 new EmbedBuilder()
                     .setColor(0xF1C40F)
                     .setTitle('지원금 도착')
-                    .setDescription('지원금 5만원이 도착했습니다!')
+                    .setDescription('지원금 20만원이 도착했습니다!')
                     .setFields(fields)
             ],
         });

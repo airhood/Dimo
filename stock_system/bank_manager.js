@@ -63,8 +63,8 @@ function calculateCompoundInterestRate(r, n) {
     return r * (Math.pow(r, n) - 1) / (r - 1);
 }
 
-function initBankManagerFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex) {
-    initCreditSystemFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice, getOptionStrikePriceIndex);
+function initBankManagerFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice) {
+    initCreditSystemFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice);
 }
 
 function calculateLoanLimit(userAsset, creditRating, loanDueDate) {

@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { tryGetTicker, getOptionPrice, getOptionStrikePriceList, getOptionTimeRangeData, getOptionStrikePriceIndex, getOptionExpirationDate } = require('../stock_system/stock_sim');
+const { tryGetTicker, getOptionPrice, getOptionStrikePriceList, getOptionTimeRangeData, getOptionExpirationDate } = require('../stock_system/stock_sim');
 const { callOptionBuy, callOptionSell, putOptionBuy, putOptionSell, optionLiquidate } = require('../database');
 const { generateStockChartImage } = require('../stock_system/stock_chart');
 const { serverLog } = require('../server/server_logger');
@@ -221,8 +221,10 @@ module.exports = {
                 const fields = [];
 
                 let callFormat = '';
-                for (let i = 0; i < call.length; i++) {
-                    callFormat += `\n${strikePriceList[i].toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원: ${call[i]}`;
+                for (let i = 0; i < Object.entries(call).length; i++) {
+                    let price = call[strikePriceList[i].toString()];
+                    if (!price) price = '---';
+                    callFormat += `\n${strikePriceList[i].toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원: ${price}`;
                 }
 
                 fields.push({
@@ -231,8 +233,10 @@ module.exports = {
                 });
                 
                 let putFormat = '';
-                for (let i = 0; i < put.length; i++) {
-                    putFormat += `\n${strikePriceList[i].toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원: ${put[i]}`;
+                for (let i = 0; i < Object.entries(put).length; i++) {
+                    let price = put[strikePriceList[i].toString()];
+                    if (!price) price = '---';
+                    putFormat += `\n${strikePriceList[i].toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원: ${price}`;
                 }
 
                 fields.push({
@@ -269,19 +273,6 @@ module.exports = {
             const direction = interaction.options.getString('종류');
             const strikePrice = interaction.options.getInteger('행사가격');
 
-            if (getOptionStrikePriceIndex(ticker, strikePrice) === null) {
-                await interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xEA4144)
-                            .setTitle(':x:  차트 불러오기 실패')
-                            .setDescription(`존재하지 않는 행사가격입니다.`)
-                            .setTimestamp()
-                    ],
-                });
-                return;
-            }
-
             let days = interaction.options.getInteger('일');
             let hours = interaction.options.getInteger('시간');
             let minutes = interaction.options.getInteger('분');
@@ -306,9 +297,9 @@ module.exports = {
                             .setImage(`attachment://${result.filename}`)
                     ],
                     files: [{
-                        attachment: await result.filepath,
+                        attachment: result.filepath,
                         name: result.filename,
-                     }],
+                    }],
                 });
 
                 try {
