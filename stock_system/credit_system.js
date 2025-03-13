@@ -2,7 +2,7 @@ const { serverLog } = require('../server/server_logger');
 const schedule = require('node-schedule');
 const User = require('../schemas/user');
 const Profile = require('../schemas/profile');
-const { OPTION_UNIT_QUANTITY } = require('../database');
+const { OPTION_UNIT_QUANTITY } = require('../setting');
 
 const userDataList = {};
 
@@ -66,7 +66,7 @@ async function calculateCreditRating(id) {
     if (!user) return null;
 
     // 1. 자산 가치 계산 (대출 날짜를 기준으로 예금 및 적금에서 이자 제외)
-    const assetValue = calculateAssetValue(user.asset, new Date());
+    const assetValue = calculateAssetValue(user.asset);
 
     // 2. 기본 신용 점수 설정 (100점으로 설정)
     let creditRating = 100;
@@ -186,7 +186,7 @@ async function initCreditSystem() {
     return true;
 }
 
-function calculateAssetValue(userAsset, loanDueDate) {
+function calculateAssetValue(userAsset, loanDueDate = new Date()) {
     let value = 0;
 
     value += userAsset.balance;
@@ -267,12 +267,13 @@ function getAssetTotalLoan(userAsset) {
     return loanAmount;
 }
 
-let getStockPrice, getFuturePrice, getOptionPrice;
+let getStockPrice, getFuturePrice, getOptionPrice, getLoanInterestRate;
 
-function initCreditSystemFuncDependencies(_getStockPrice, _getFuturePrice, _getOptionPrice) {
+function initCreditSystemFuncDependencies(_getStockPrice, _getFuturePrice, _getOptionPrice, _getLoanInterestRate) {
     getStockPrice = _getStockPrice;
     getFuturePrice = _getFuturePrice;
     getOptionPrice = _getOptionPrice;
+    getLoanInterestRate = _getLoanInterestRate;
 }
 
 exports.initCreditSystem = initCreditSystem;

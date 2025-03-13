@@ -1,8 +1,9 @@
-const { getTransactionScheduleData, OPTION_UNIT_QUANTITY, deleteTransactionSchedule } = require("../database");
+const { getTransactionScheduleData, deleteTransactionSchedule } = require("../database");
 const { setOnFutureExpireListener, setOnOptionExpireListener, getStockPrice } = require("./stock_sim");
 const { program } = require('commander');
 const { serverLog } = require("../server/server_logger");
 const schedule = require('node-schedule');
+const { OPTION_UNIT_QUANTITY } = require('../setting');
 
 const future_execute_list = {};
 const option_execute_list = {};

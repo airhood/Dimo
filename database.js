@@ -6,6 +6,8 @@ const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, ge
 require('dotenv').config();
 const moment = require('moment-timezone');
 const fs = require('fs');
+const { getKoreanTime }= require('./korean_time');
+const { INITIAL_BALANCE, SHORT_SELL_MARGIN_RATE, OPTION_UNIT_QUANTITY } = require('./setting');
 
 
 mongoose.connection.on('connected', () => {
@@ -25,25 +27,17 @@ mongoose.connection.on('reconnectFailed', () => {
 });
 
 
-const INITIAL_BALANCE = 1000000; // 100만운
-
-const SHORT_SELL_MARGIN_RATE = 1.4;
-const OPTION_BUY_MARGIN_RATE = 1;
-const OPTION_SELL_MARGIN_RATE = 1.5;
-const OPTION_UNIT_QUANTITY = 100;
-
-
 const User = require('./schemas/user');
 const Profile = require('./schemas/profile');
 const Asset = require('./schemas/asset');
 const State = require('./schemas/state');
 const Ban = require('./schemas/ban');
 const NotificationSchedule = require('./schemas/notification_schedule');
+const Fund = require('./schemas/fund');
 
 const TransactionSchedule = require('./schemas/transaction_schedule');
 
 const Notice = require('./schemas/notice');
-const { getKoreanTime }= require('./korean_time');
 
 
 let serversideLockedAccounts = [];
@@ -76,8 +70,6 @@ function isServersideLocked(id) {
 
 
 module.exports = {
-    OPTION_UNIT_QUANTITY: OPTION_UNIT_QUANTITY,
-
     loadServersideLockData() {
         fs.access('serverside_locked_accounts.txt', fs.constants.F_OK, (err) => {
             if (err) return false;
@@ -260,35 +252,35 @@ module.exports = {
             );
             const result5 = await user.deleteOne();
             if (result1.deletedCount === 0) {
-                serverLog(`[ERROR] delete user profile data failed. matching id not found.`)
+                serverLog(`[ERROR] Delete user profile data failed. matching id not found.`)
                 return {
                     state: 'error',
                     data: null,
                 };
             }
             if (result2.deletedCount === 0) {
-                serverLog(`[ERROR] delete user asset data failed. matching id not found.`)
+                serverLog(`[ERROR] Delete user asset data failed. matching id not found.`)
                 return {
                     state: 'error',
                     data: null,
                 };
             }
             if (result3.deletedCount === 0) {
-                serverLog(`[ERROR] delete user state data failed. matching id not found.`)
+                serverLog(`[ERROR] Delete user state data failed. matching id not found.`)
                 return {
                     state: 'error',
                     data: null,
                 };
             }
             if (result5.deletedCount === 0) {
-                serverLog(`[ERROR] delete user data failed. matching id not found.`)
+                serverLog(`[ERROR] Delete user data failed. matching id not found.`)
                 return {
                     state: 'error',
                     data: null,
                 };
             }
 
-            serverLog(`[INFO] account deleted. userID: ${id}.`);
+            serverLog(`[INFO] Account deleted. userID: ${id}.`);
 
             return {
                 state: 'success',
@@ -2866,7 +2858,7 @@ module.exports = {
 
     async getUserCredit(id) {
         try {
-            const userProfile = module.exports.getUserProfile(id);
+            const userProfile = await module.exports.getUserProfile(id);
             if (userProfile.state === 'error') {
                 return {
                     state: 'error',
@@ -2892,12 +2884,419 @@ module.exports = {
             const data = await User.find();
 
             if (data.length === 0) {
-                return null;
+                return {
+                    state: 'success',
+                    data: null,
+                };
             }
-            return data;
+
+            return {
+                state: 'success',
+                data: data,
+            };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getAllUser': ${err}`);
-            return false;
+            return {
+                state: 'error',
+                data: null,
+            };
         }
     },
+
+    async getAllUserAsset() {
+        try {
+            const data = await User.find().populate('asset');
+
+            if (data.length === 0) {
+                return {
+                    state: 'success',
+                    data: null,
+                };
+            }
+
+            return {
+                state: 'success',
+                data: data,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getAllUserAsset': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async fundCreate(id, fundName, description, fee) {
+        try {
+            const asset = await Asset.create({
+                balance: 0,
+                stocks: [],
+                stockShortSales: [],
+                futures: [],
+                options: [],
+                binary_options: [],
+                fixed_deposits: [],
+                savings_accounts: [],
+                loans: [],
+            });
+
+            if (!asset) {
+                serverLog('[ERROR] Create fund failed. Failed to create fund asset.');
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            const fund = await Fund.create({
+                name: fundName,
+                description: description,
+                fee: fee,
+                administrators: [{
+                    userID: id,
+                    isTopAdmin: true,
+                }],
+                asset: asset._id,
+            });
+
+            if (!fund) {
+                serverLog('[ERROR] Create fund failed. Failed to create fund data.');
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            asset.fund = fund._id;
+
+            const saveResult = await asset.save();
+            if (!saveResult) {
+                serverLog('[ERROR] Create fund failed. Failed to save fund asset data.');
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            return {
+                state: 'success',
+                data: null,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:createFund': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async fundDelete(id, fundName, description) {
+        try {
+            const fund = await Fund.findOne({ name: fundName });
+
+            const fundAsset = fund.asset;
+            
+            const fundResult = await fund.deleteOne();
+            if (fundResult.deletedCount === 0) {
+                serverLog(`[ERROR] Delete fund data failed. matching fund not found.`)
+                return {
+                    state: 'no_fund',
+                    data: null,
+                };
+            }
+            
+            const assetResult = await Asset.deleteOne({ _id: fundAsset });
+            if (assetResult.deletedCount === 0) {
+                serverLog(`[ERROR] Delete fund asset data failed. matching fund not found.`)
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+            
+            return {
+                state: 'success',
+                data: null,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:deleteFund': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async getFundInfo(fundName) {
+        try {
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                serverLog('[ERROR] Error finding fund');
+                return {
+                    state: 'no_fund',
+                    data: null,
+                };
+            }
+
+            return {
+                state: 'success',
+                data: fund,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:deleteFund': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async getFundList() {
+        try {
+            const funds = await Fund.find().populate('asset');
+            if (funds.length === 0) {
+                serverLog('[ERROR] Error finding fund');
+                return {
+                    state: 'no_fund',
+                    data: null,
+                };
+            }
+
+            return {
+                state: 'success',
+                data: funds,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getFundList': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async fundAddAdministrator(id, fundName, admin) {
+        try {
+            const fund = await Fund.findOne({ name: fundName });
+            if (!fund) {
+                serverLog('[ERROR] Error finding fund');
+                return {
+                    state: 'no_fund',
+                    data: null,
+                };
+            }
+
+            fund.administrators.push({
+                userID: admin,
+                isTopAdmin: false,
+            });
+
+            const saveResult = await fund.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Fund add administrator failed. Failed to save fund data. fundName: ${fundName}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            return {
+                state: 'success',
+                data: null,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:fundAddAdmin': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async fundRemoveAdministrator(id, fundName, administratorNum) {
+        try {
+            const fund = await Fund.findOne({ name: fundName });
+            if (!fund) {
+                serverLog('[ERROR] Error finding fund');
+                return {
+                    state: 'no_fund',
+                    data: null,
+                };
+            }
+
+            if (fund.administrators.length < administratorNum) {
+                return {
+                    state: 'invalid_admin_num',
+                    data: null,
+                };
+            }
+
+            const administrator = fund.administrators[administratorNum - 1];
+
+            fund.administrators.splice(administratorNum - 1, 1);
+
+            const saveResult = await fund.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Fund remove administrator failed. Failed to save fund data. fundName: ${fundName}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            return {
+                state: 'success',
+                data: administrator.userID,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:fundRemoveAdmin': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async fundGetAdministrators(fundName) {
+        try {
+            const fund = await Fund.findOne({ name: fundName });
+            if (!fund) {
+                serverLog('[ERROR] Error finding fund');
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            return {
+                state: 'success',
+                data: fund.administrators,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:fundGetAdministrators': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async fundLogin(id, fundName) {
+        try {
+            const fund = await Fund.findOne({ name: fundName });
+            if (!fund) {
+                serverLog('[ERROR] Error finding fund');
+                return {
+                    state: 'no_fund',
+                    data: null,
+                };
+            }
+
+            const isAdministrator = fund.administrators.some((administrator) => {
+                return administrator.userID === id;
+            });
+
+            if (!isAdministrator) {
+                serverLog(`[INFO] Failed to login to fund '${fundName}'. ${id} is not administrator.`);
+                return {
+                    state: 'not_admin',
+                    data: null,
+                };
+            }
+
+            const user = await User.findOne({ userID: id });
+            if (!user) {
+                serverLog('[ERROR] Error finding user');
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            const userState = await State.findById(user.state);
+            if (!userState) {
+                serverLog('[ERROR] Error finding user state');
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            userState.currentAccount = `@fund_${fundName}`;
+
+            const saveResult = await userState.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Login fund administrator failed. Failed to save user state data. id: ${id}, fundName: ${fundName}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            return {
+                state: 'success',
+                data: null,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:fundLogin': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async fundLogout(id) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) {
+                serverLog('[ERROR] Error finding user');
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            const userState = await State.findById(user.state);
+            if (!userState) {
+                serverLog('[ERROR] Error finding user state');
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            if (userState.currentAccount === '@self') {
+                serverLog(`[ERROR] Logout fund administrator failed. User is not loggin into any fund. id: ${id}`);
+                return {
+                    state: 'not_logged_in',
+                    data: null,
+                }
+            }
+
+            userState.currentAccount = '@self';
+
+            const saveResult = await userState.save();
+            if (!saveResult) {
+                serverLog(`[ERROR] Logout fund administrator failed. Failed to save user state data. id: ${id}, fundName: ${fundName}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            return {
+                state: 'success',
+                data: null,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:fundLogout': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    }
 }

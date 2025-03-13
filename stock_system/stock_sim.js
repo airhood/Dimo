@@ -465,7 +465,7 @@ function calculateNextHourOptionPrice(stockData) {
         newOptionData[ticker] = newOptionPrices;
     }
 
-    optionsPricesHistory.push(newOptionData)
+    optionsPricesHistory.push(newOptionData);
 }
 
 const HOURS_IN_A_WEEK = 24 * 7; // 1주일
@@ -504,7 +504,7 @@ function calculateOptionStrikePriceDist(price) {
     const roundPrice = roundPos(price, -2);
     const standardPrice = roundPrice - (roundPrice % 200);
     const strikePrice = [];
-    const UNIT_DIFF = 500;
+    const UNIT_DIFF = 1000;
     for (let diff = UNIT_DIFF * (-7); diff <= UNIT_DIFF * 7; diff += UNIT_DIFF) {
         strikePrice.push(standardPrice + diff);
     }

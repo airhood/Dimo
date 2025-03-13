@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, CommandInteractionOptionResolver } = require('discord.js');
-const { loan, loanRepay, openFixedDeposit, openSavingsAccount, getUserCredit } = require('../database');
+const { loan, loanRepay, openFixedDeposit, openSavingsAccount, getUserCredit, checkUserExists } = require('../database');
 const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint } = require('../stock_system/bank_manager');
 
 module.exports = {
@@ -311,6 +311,32 @@ module.exports = {
             let targetUser = interaction.options.getUser('유저');
             if (!targetUser) {
                 targetUser = interaction.user;
+            }
+
+            const userExists = await checkUserExists(targetUser.id);
+            if (userExists.state === 'error') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
+
+            if (userExists.data === false) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('존재하지 않는 계정입니다')
+                            .setDescription(`<@${targetUser.id}>의 계정이 존재하지 않습니다.`)
+                    ],
+                });
+                return;
             }
 
             const userCredit = await getUserCredit(targetUser.id);

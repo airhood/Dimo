@@ -64,7 +64,7 @@ function calculateCompoundInterestRate(r, n) {
 }
 
 function initBankManagerFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice) {
-    initCreditSystemFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice);
+    initCreditSystemFuncDependencies(getStockPrice, getFuturePrice, getOptionPrice, getLoanInterestRate);
 }
 
 function calculateLoanLimit(userAsset, creditRating, loanDueDate) {

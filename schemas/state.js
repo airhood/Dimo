@@ -10,6 +10,10 @@ const StateSchema = new Schema({
     subsidy_recieve_date: {
         type: Date,
         required: true,
+    },
+    currentAccount: {
+        type: String,
+        required: true,
     }
 });
 

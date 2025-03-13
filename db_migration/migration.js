@@ -34,10 +34,11 @@ async function connectDatabase() {
 
 const Profile = require('../schemas/profile');
 const Asset = require('../schemas/asset');
+const State = require('../schemas/state');
 
 const migrateAddCreditRating = async () => {
     try {
-        // const result1 = await Asset.updateMany(
+        // const result = await Asset.updateMany(
         //     { },
         //     { $set: {
         //         balance: 150 * 10000, // 150만원
@@ -52,27 +53,37 @@ const migrateAddCreditRating = async () => {
         //     } }
         // );
 
-        // const result2 = await Profile.updateMany(
+        // const result = await Profile.updateMany(
         //     { },
         //     { $push: { achievements: {
         //         name: '초기유저',
         //         description: '디모봇을 베타 시절부터 사용했어요!',
         //     } } }
-        // )
+        // );
 
-        const result3 = await Profile.updateMany(
-            { credit_rating: { $exists: false } },  // credit_rating 필드가 없는 문서만 선택
-            { $set: { credit_rating: 100 } }        // credit_rating을 100으로 설정
-        )
-        
-        // console.log(`Matched ${result1.matchedCount} documents and updated ${result1.modifiedCount} documents.`);
-        // console.log(`Matched ${result2.matchedCount} documents and updated ${result2.modifiedCount} documents.`);
-        console.log(`Matched ${result3.matchedCount} documents and updated ${result3.modifiedCount} documents.`);
+        // const result = await Profile.updateMany(
+        //     { credit_rating: { $exists: false } },  // credit_rating 필드가 없는 문서만 선택
+        //     { $set: { credit_rating: 100 } }        // credit_rating을 100으로 설정
+        // );
+
+        // const result = await State.updateMany(
+        //     { currentAccount: { $exists: false } },
+        //     { $set: { currentAccount: '@self' } }
+        // );
+
+        // const result = await Asset.updateMany(
+        //     { funds: { $exists: false } },
+        //     { $set: { funds: [] } }
+        // );
+
+        console.log(`Matched ${result.matchedCount} documents and updated ${result.modifiedCount} documents.`);
     } catch (err) {
         console.error('Error during migration:', err);
     }
 };
 
-connectDatabase().then(() => {
-    migrateAddCreditRating();
+connectDatabase().then(async () => {
+    await migrateAddCreditRating();
+}).then(() => {
+    process.exit();
 });

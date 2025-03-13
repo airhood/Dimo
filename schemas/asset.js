@@ -5,7 +5,10 @@ const AssetSchema = new Schema({
     user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
+    },
+    fund: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Fund',
     },
     balance: {
         type: Number,
@@ -57,7 +60,7 @@ const AssetSchema = new Schema({
         uid: {
             type: Number,
             required: true,
-        }
+        },
     }],
     futures: [{
         ticker: {
@@ -87,7 +90,7 @@ const AssetSchema = new Schema({
         margin: {
             type: Number,
             required: true,
-        }
+        },
     }],
     options: [{
         ticker: {
@@ -149,7 +152,7 @@ const AssetSchema = new Schema({
         uid: {
             type: Number,
             required: true,
-        }
+        },
     }],
     fixed_deposits: [{
         amount: {
@@ -175,7 +178,7 @@ const AssetSchema = new Schema({
         uid: {
             type: Number,
             required: true,
-        }
+        },
     }],
     savings_accounts: [{
         amount: {
@@ -201,7 +204,7 @@ const AssetSchema = new Schema({
         uid: {
             type: Number,
             required: true,
-        }
+        },
     }],
     loans: [{
         amount: {
@@ -227,7 +230,25 @@ const AssetSchema = new Schema({
         uid: {
             type: Number,
             required: true,
-        }
+        },
+    }],
+    funds: [{
+        name: {
+            type: String,
+            required: true,
+        },
+        unit: {
+            type: Number,
+            required: true,
+        },
+        purchasePrice: {
+            type: Number,
+            required: true,
+        },
+        purchaseDate: {
+            type: Date,
+            required: true,
+        },
     }],
 });
 

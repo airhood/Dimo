@@ -1,8 +1,11 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { checkUserExists, getUserAsset, OPTION_UNIT_QUANTITY } = require('../database');
+const { checkUserExists, getUserAsset } = require('../database');
 const moment = require('moment-timezone');
 const { getStockPrice, getFuturePrice, getCallOptionPrice, getPutOptionPrice, getOptionPrice, getOptionStrikePriceIndex } = require('../stock_system/stock_sim');
 const asset = require('../schemas/asset');
+const { getFundPrice } = require('../stock_system/fund_price');
+const { OPTION_UNIT_QUANTITY } = require('../setting');
+
 
 const ROUND_POS = 3;
 
@@ -529,13 +532,13 @@ module.exports = {
             }
             for (const savings_account of result.data.asset.savings_accounts) {
                 if (deposit_format !== '') deposit_format += '\n';
-                const formatted_startDate = moment(savings_account.startDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
-                const formatted_endDate = moment(savings_account.endDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                const formattedStartDate = moment(savings_account.startDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                const formattedEndDate = moment(savings_account.endDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 deposit_format += `적금 ${savings_account.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 상품: ${savings_account.product}
 | 이자율: ${(savings_account.interestRate * 100).toFixed(2)}%
-| 가입일: ${formatted_startDate}
-| 만기일: ${formatted_endDate}`;
+| 가입일: ${formattedStartDate}
+| 만기일: ${formattedEndDate}`;
             }
         } else {
             for (const fixed_deposit of result.data.asset.fixed_deposits) {
@@ -559,12 +562,12 @@ module.exports = {
         if (loadDetails) {
             for (const loan of result.data.asset.loans) {
                 if (loan_format !== '') loan_format += '\n';
-                const formatted_loanDate = moment(loan.loanDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
-                const formatted_dueDate = moment(loan.dueDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                const formattedLoanDate = moment(loan.loanDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                const formattedDueDate = moment(loan.dueDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 loan_format += `대출 ${loan.amount.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 이자율: ${(loan.interestRate * 100).toFixed(2)}%
-| 대출일: ${formatted_loanDate}
-| 상환일: ${formatted_dueDate}`;
+| 대출일: ${formattedLoanDate}
+| 상환일: ${formattedDueDate}`;
             }
         } else {
             for (const loan of result.data.asset.loans) {
@@ -579,14 +582,57 @@ module.exports = {
                 value: `\`\`\`${loan_format}\`\`\``,
             });
         }
+
+        
+        let fund_format = '';
+        if (loadDetails) {
+            for (const fund of result.data.asset.funds) {
+                const formattedPurchaseDate = moment(future.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                const investmentAmount = fund.unit * fund.purchasePrice;
+
+                const currentFundPrice = getFundPrice(fund.name);
+                
+                let earnSign;
+                if (currentFundPrice > fund.purchasePrice) {
+                    earnSign = '+';
+                } else if (currentFundPrice < fund.purchasePrice) {
+                    earnSign = '-';
+                } else {
+                    earnSign = '';
+                }
+
+                fund_format += `${fund.name} 펀드 ${investmentAmount}원
+| 평가손익: ${(fund.unit * (currentFundPrice - fund.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((currentFundPrice - fund.purchasePrice) / fund.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
+| 좌수: ${fund.unit}
+| 매수날짜: ${formattedPurchaseDate}
+| 현재가격: ${currentFundPrice}원
+| 매수가격: ${fund.purchasePrice}원`;
+            }
+        } else {
+            for (const fund of result.data.asset.funds) {
+                const formattedPurchaseDate = moment(future.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                const investmentAmount = fund.unit * fund.purchasePrice;
+                
+                let earnSign;
+                if (currentFundPrice > fund.purchasePrice) {
+                    earnSign = '+';
+                } else if (currentFundPrice < fund.purchasePrice) {
+                    earnSign = '-';
+                } else {
+                    earnSign = '';
+                }
+
+                fund_format += `${fund.name} 펀드 ${investmentAmount}원 (평가손익: ${(fund.unit * (getFundPrice(fund.name) - fund.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((getFundPrice(fund.name) - fund.purchasePrice) / fund.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
+            }
+        }
         
         await interaction.reply({
             embeds: [
                 new EmbedBuilder()
-                .setColor(0xF1C40F)
-                .setTitle(`:bank:  자산 [${targetUser.username}]`)
-                .addFields(fields)
-                .setTimestamp()
+                    .setColor(0xF1C40F)
+                    .setTitle(`:bank:  자산 [${targetUser.username}]`)
+                    .addFields(fields)
+                    .setTimestamp()
             ]
         });
     }

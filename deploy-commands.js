@@ -1,7 +1,7 @@
 const { REST, Routes } = require('discord.js');
 let { clientId, token } = require('./config.json');
-clientId = "1328957929117978706";
-token = "MTMyODk1NzkyOTExNzk3ODcwNg.GKnHN1.A4ZIfTai5NvRFE3tLLBLvGQL1kUa-ldX36cY3k";
+// clientId = "1328957929117978706";
+// token = "MTMyODk1NzkyOTExNzk3ODcwNg.GKnHN1.A4ZIfTai5NvRFE3tLLBLvGQL1kUa-ldX36cY3k";
 const fs = require('node:fs');
 const path = require('node:path');
 
