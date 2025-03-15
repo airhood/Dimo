@@ -2697,6 +2697,7 @@ module.exports = {
             let error = false;
 
             for (let i = 1; i < product; i++) {
+                const date = new Date();
                 const targetDate = date.setDate(startDate.getDate() + i);
                 const result = await module.exports.setTransactionSchedule(`${id}-savings_account_${uid}_${i}`, id, `pay_money_savings_account ${id} ${userAsset._id} ${uid} ${i} at ${targetDate.getTime()}`);
                 if (result.state === 'error') {
