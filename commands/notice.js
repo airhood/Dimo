@@ -44,20 +44,20 @@ module.exports = {
         createCache(uid, 15);
         saveCache(uid, cacheData);
 
-        const nextPage = new ButtonBuilder()
-            .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
-            .setLabel('이전')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(pageToLoad === pages.length - 1);
-            
         const previousPage = new ButtonBuilder()
             .setCustomId(`notice_previous_page-${interaction.user.id}-${uid}`)
+            .setLabel('이전')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(true);
+
+        const nextPage = new ButtonBuilder()
+            .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
             .setLabel('다음')
             .setStyle(ButtonStyle.Primary)
-            .setDisabled(pageToLoad === 0);
+            .setDisabled(!(notices.data.length > 1));
         
         const row = new ActionRowBuilder()
-            .addComponents(nextPage, previousPage);
+            .addComponents(previousPage, nextPage);
 
         const formattedDate = moment(notices.data[0].date).tz('Asia/Seoul').format('YYYY-MM-DD');
         
