@@ -182,6 +182,7 @@ module.exports = {
             const newState = await State.create({
                 user: newUser._id,
                 subsidy_recieve_date: initDate,
+                currentAccount: '@self',
             });
 
             if (!newState) {

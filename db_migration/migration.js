@@ -66,17 +66,39 @@ const migrateAddCreditRating = async () => {
         //     { $set: { credit_rating: 100 } }        // credit_rating을 100으로 설정
         // );
 
-        // const result = await State.updateMany(
-        //     { currentAccount: { $exists: false } },
-        //     { $set: { currentAccount: '@self' } }
-        // );
+        const result = await State.updateMany(
+            { currentAccount: { $exists: false } },
+            { $set: { currentAccount: '@self' } }
+        );
 
         // const result = await Asset.updateMany(
         //     { funds: { $exists: false } },
         //     { $set: { funds: [] } }
         // );
 
-        console.log(`Matched ${result.matchedCount} documents and updated ${result.modifiedCount} documents.`);
+        // const find = await Asset.findOne(
+        //     { _id: '67cd88f2d615039c8d8ece6a' },
+        // );
+
+        // if (!find) {
+        //     console.error('Asset not found!!');
+        //     return;
+        // }
+
+
+        // find.fixed_deposits.forEach((fixed_deposit) => {
+        //     // find.balance += fixed_deposit.amount * fixed_deposit.interestRate;
+        // });
+
+        // find.fixed_deposits = [];
+
+        // const result = await find.save();
+        // if (!result) {
+        //     console.error('Save asset failed!!');
+        //     return;
+        // }
+
+        // console.log(`Matched ${result.matchedCount} documents and updated ${result.modifiedCount} documents.`);
     } catch (err) {
         console.error('Error during migration:', err);
     }
