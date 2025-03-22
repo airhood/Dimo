@@ -32,9 +32,11 @@ async function connectDatabase() {
     return true;
 }
 
+const User = require('../schemas/user');
 const Profile = require('../schemas/profile');
 const Asset = require('../schemas/asset');
 const State = require('../schemas/state');
+const NotificationSchedule = require('../schemas/notification_schedule');
 
 const migrateAddCreditRating = async () => {
     try {
@@ -66,10 +68,10 @@ const migrateAddCreditRating = async () => {
         //     { $set: { credit_rating: 100 } }        // credit_rating을 100으로 설정
         // );
 
-        const result = await State.updateMany(
-            { currentAccount: { $exists: false } },
-            { $set: { currentAccount: '@self' } }
-        );
+        // const result = await State.updateMany(
+        //     { currentAccount: { $exists: false } },
+        //     { $set: { currentAccount: '@self' } }
+        // );
 
         // const result = await Asset.updateMany(
         //     { funds: { $exists: false } },
@@ -99,6 +101,23 @@ const migrateAddCreditRating = async () => {
         // }
 
         // console.log(`Matched ${result.matchedCount} documents and updated ${result.modifiedCount} documents.`);
+
+
+        const users = await User.find();
+
+        for (const user of users) {
+            const newNotificationSchedule = new NotificationSchedule({
+                user: user._id,
+                notifications: [],
+            });
+
+            const savedNotificationSchedule = await newNotificationSchedule.save();
+
+            user.notification_schedule = savedNotificationSchedule._id,
+            await user.save();
+        }
+
+        console.log('Done data migration.')
     } catch (err) {
         console.error('Error during migration:', err);
     }

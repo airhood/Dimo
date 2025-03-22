@@ -29,7 +29,7 @@ async function cacheTransactionScheduleData() {
         const result = Promise.all(data.data.map(async (transaction_schedule) => {
             console.log(`command: ${transaction_schedule.command}`);
             const commandArgs = transaction_schedule.command.split(' ');
-            commandArgs.push('|', transaction_schedule.identification_code);
+            commandArgs.push(transaction_schedule.identification_code);
 
             try {
                 await program.parseAsync(commandArgs, { from: 'user' });
@@ -47,7 +47,7 @@ const { calculateCompoundInterestRate, getLoanInterestRate } = require("./bank_m
 
 module.exports = {
     async initScheduleManager() {
-        program.command('buyback stock <id> <asset_id> <uid> at <date> | <identification_code>')
+        program.command('buyback stock <id> <asset_id> <uid> at <date> <identification_code>')
             .action((id, asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
@@ -121,7 +121,7 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
-        program.command('execute_future <id> <asset_id> | <identification_code>')
+        program.command('execute_future <id> <asset_id> <identification_code>')
             .action((id, asset_id, identification_code) => {
                 const transaction_schedule = {
                     id: id,
@@ -131,7 +131,7 @@ module.exports = {
                 future_execute_list[identification_code] = transaction_schedule;
             });
         
-        program.command('execute_option <id> <asset_id> | <identification_code>')
+        program.command('execute_option <id> <asset_id> <identification_code>')
             .action((id, asset_id, identification_code) => {
                 const transaction_schedule = {
                     id: id,
@@ -141,7 +141,7 @@ module.exports = {
                 option_execute_list[identification_code] = transaction_schedule;
             });
         
-        program.command('execute_binary_option <id> <asset_id> <uid> <expiration_date> | <identification_code>')
+        program.command('execute_binary_option <id> <asset_id> <uid> <expiration_date> <identification_code>')
             .action((id, asset_id, uid, expiration_date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(expiration_date);
@@ -215,7 +215,7 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
-        program.command('repay_loan <id> <asset_id> <uid> at <date> | <identification_code>')
+        program.command('repay_loan <id> <asset_id> <uid> at <date> <identification_code>')
             .action((id, asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
@@ -267,7 +267,7 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
-        program.command('pay_interest_fixed_deposit <id> <asset_id> <uid> at <date> | <identification_code>')
+        program.command('pay_interest_fixed_deposit <id> <asset_id> <uid> at <date> <identification_code>')
             .action((id, asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
@@ -313,7 +313,7 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
-        program.command('pay_interest_savings_account <id> <asset_id> <uid> at <date> | <identification_code>')
+        program.command('pay_interest_savings_account <id> <asset_id> <uid> at <date> <identification_code>')
             .action((id, asset_id, uid, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
@@ -360,7 +360,7 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
-        program.command('pay_money_savings_account <id> <asset_id> <uid> <cycle> at <date> | <identification_code>')
+        program.command('pay_money_savings_account <id> <asset_id> <uid> <cycle> at <date> <identification_code>')
             .action((id, asset_id, uid, cycle, date, identification_code) => {
                 const dateObj = new Date();
                 dateObj.setTime(date);
@@ -431,10 +431,11 @@ module.exports = {
         if (!result) return false;
 
         setOnFutureExpireListener(async () => {
-            const results = await Promise.all(future_execute_list.map(async (transaction_schedule) => {
+            console.log(`future_execute_list: ${JSON.stringify(future_execute_list)}`);
+            const results = await Promise.all(Object.entries(future_execute_list).map(async ([identification_code, transaction_schedule]) => {
                 const userAsset = await Asset.findById(transaction_schedule.asset_id);
                 if (!userAsset) {
-                    serverLog('[ERROR] Error finding user');
+                    serverLog('[ERROR] Error finding user asset');
                     return null;
                 }
 
@@ -476,7 +477,7 @@ module.exports = {
                     }
                 }));
 
-                if (!error) {
+                if (error) {
                     serverLog(`[ERROR] Failed to execute future. asset_id: ${transaction_schedule.asset_id}`);
                 } else {
                     userAsset.futures = [];
@@ -484,7 +485,6 @@ module.exports = {
                     const saveResult = await userAsset.save();
                     if (!saveResult) {
                         serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${transaction_schedule.asset_id}`);
-                        error = true;
                         return null;
                     }
 
@@ -500,7 +500,7 @@ module.exports = {
         });
 
         setOnOptionExpireListener(async () => {
-            const results = await Promise.all(option_execute_list.map(async (transaction_schedule) => {
+            const results = await Promise.all(Object.entries(option_execute_list).map(async ([identification_code, transaction_schedule]) => {
                 const userAsset = await Asset.findById(transaction_schedule.asset_id);
                 if (!userAsset) {
                     serverLog('[ERROR] Error finding user');
@@ -574,6 +574,7 @@ module.exports = {
 
                             if (quantityLeft !== 0) {
                                 serverLog(`[ERROR] Option execute optionExecuteQuantity calculation error. Wrong value. asset_id: ${transaction_schedule.asset_id}`);
+                                error = true;
                                 return null;
                             }
 
@@ -587,7 +588,7 @@ module.exports = {
                     userAsset.options.splice(index, 1);
                 }));
 
-                if (!error) {
+                if (error) {
                     serverLog(`[ERROR] Failed to execute option. asset_id: ${transaction_schedule.asset_id}`);
                 } else {
                     userAsset.options = [];
@@ -595,7 +596,6 @@ module.exports = {
                     const saveResult = await userAsset.save();
                     if (!saveResult) {
                         serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${transaction_schedule.asset_id}`);
-                        error = true;
                         return null;
                     }
     
@@ -616,7 +616,7 @@ module.exports = {
     async addTransactionScheduleData(transaction_schedule) {
         if (!transaction_schedule) return;
         const commandArgs = transaction_schedule.command.split(' ');
-        commandArgs.push('|', transaction_schedule.identification_code);
+        commandArgs.push(transaction_schedule.identification_code);
 
         try {
             await program.parseAsync(commandArgs, { from: 'user' });

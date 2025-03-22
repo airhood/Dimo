@@ -1127,3 +1127,8 @@ exports.getOptionTimeRangeData = getOptionTimeRangeData;
 
 exports.getOptionStrikePriceIndex = getOptionStrikePriceIndex;
 exports.getOptionStrikePriceList = getOptionStrikePriceList;
+
+// test
+setTimeout(() => {
+    futureExpireCallback();
+}, 1000 * 7);
