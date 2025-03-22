@@ -251,7 +251,8 @@ module.exports = {
             const result4 = await TransactionSchedule.deleteMany(
                 { subject: id },
             );
-            const result5 = await user.deleteOne();
+            const result5 = await NotificationSchedule.deleteOne({ _id: user.notification_schedule });
+            const result6 = await user.deleteOne();
             if (result1.deletedCount === 0) {
                 serverLog(`[ERROR] Delete user profile data failed. matching id not found.`)
                 return {
@@ -274,6 +275,13 @@ module.exports = {
                 };
             }
             if (result5.deletedCount === 0) {
+                serverLog(`[ERROR] Delete user notification schedule data failed. matching id not found.`)
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+            if (result6.deletedCount === 0) {
                 serverLog(`[ERROR] Delete user data failed. matching id not found.`)
                 return {
                     state: 'error',

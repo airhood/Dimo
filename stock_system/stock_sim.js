@@ -659,7 +659,7 @@ function updateProductTimeLeft() {
     updateOptionTimeLeft();
 }
 
-const STOCK_PRICE_HISTORY_SIZE = 24 * 28; // 4주일
+const STOCK_PRICE_HISTORY_SIZE = 24 * 2; // 4주일
 
 function updateStockData() {
     if (stocksPricesHistory.length >= STOCK_PRICE_HISTORY_SIZE) {
@@ -1127,8 +1127,3 @@ exports.getOptionTimeRangeData = getOptionTimeRangeData;
 
 exports.getOptionStrikePriceIndex = getOptionStrikePriceIndex;
 exports.getOptionStrikePriceList = getOptionStrikePriceList;
-
-// test
-setTimeout(() => {
-    futureExpireCallback();
-}, 1000 * 7);

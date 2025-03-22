@@ -1,7 +1,7 @@
 const schedule = require('node-schedule');
 const { serverLog } = require('./server_logger');
 
-const MEMORY_THRESHOLD = 200 * 1024 * 1024;
+const MEMORY_THRESHOLD = 250 * 1024 * 1024;
 
 module.exports = {
     initResourceMonitor() {        

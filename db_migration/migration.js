@@ -103,19 +103,38 @@ const migrateAddCreditRating = async () => {
         // console.log(`Matched ${result.matchedCount} documents and updated ${result.modifiedCount} documents.`);
 
 
-        const users = await User.find();
+        // const users = await User.find();
 
-        for (const user of users) {
-            const newNotificationSchedule = new NotificationSchedule({
-                user: user._id,
-                notifications: [],
-            });
+        // for (const user of users) {
+        //     const newNotificationSchedule = new NotificationSchedule({
+        //         user: user._id,
+        //         notifications: [],
+        //     });
 
-            const savedNotificationSchedule = await newNotificationSchedule.save();
+        //     const savedNotificationSchedule = await newNotificationSchedule.save();
 
-            user.notification_schedule = savedNotificationSchedule._id,
-            await user.save();
-        }
+        //     user.notification_schedule = savedNotificationSchedule._id,
+        //     await user.save();
+        // }
+
+
+        // const assets = await Asset.find();
+
+        // for (const asset of assets) {
+        //     const user = await User.findById(asset.user);
+        //     if (!user) {
+        //         await Asset.deleteOne({ _id: asset._id });
+        //     }
+        // }
+
+        // const notification_schedules = await NotificationSchedule.find();
+
+        // for (const notification_schedule of notification_schedules) {
+        //     const user = await User.findById(notification_schedule.user);
+        //     if (!user) {
+        //         await NotificationSchedule.deleteOne({ _id: notification_schedule._id });
+        //     }
+        // }
 
         console.log('Done data migration.')
     } catch (err) {
