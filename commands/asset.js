@@ -369,16 +369,14 @@ module.exports = {
                 if (option_format !== '') option_format += '\n\n';
                 let formattedOptionType;
                 const optionPrices = getOptionPrice(option.ticker);
-                const strikePriceIndex = getOptionStrikePriceIndex(option.ticker, option.strikePrice);
-                if (strikePriceIndex === null) continue;
 
                 let currentPrice;
                 if (option.optionType === 'call') {
                     formattedOptionType = '콜';
-                    currentPrice = optionPrices.call[strikePriceIndex];
+                    currentPrice = optionPrices.call[option.strikePrice.toString()];
                 } else if (option.optionType === 'put') {
                     formattedOptionType = '풋';
-                    currentPrice = optionPrices.put[strikePriceIndex];
+                    currentPrice = optionPrices.put[option.strikePrice.toString()];
                 }
                 
                 const earnRate = (currentPrice - option.purchasePrice) / option.purchasePrice;
@@ -409,16 +407,14 @@ module.exports = {
                 if (option_format !== '') option_format += '\n\n';
                 let formattedOptionType;
                 const optionPrices = getOptionPrice(option.ticker);
-                const strikePriceIndex = getOptionStrikePriceIndex(option.ticker, option.strikePrice);
-                if (strikePriceIndex === null) continue;
                 
                 let currentPrice;
                 if (option.optionType === 'call') {
                     formattedOptionType = '콜';
-                    currentPrice = optionPrices.call[strikePriceIndex];
+                    currentPrice = optionPrices.call[option.strikePrice.toString()];
                 } else if (option.optionType === 'put') {
                     formattedOptionType = '풋';
-                    currentPrice = optionPrices.put[strikePriceIndex];
+                    currentPrice = optionPrices.put[option.strikePrice.toString()];
                 }
 
                 const earnRate = (currentPrice - option.purchasePrice) / option.purchasePrice;
