@@ -52,7 +52,16 @@ function filterMessage(message) {
     }
 }
 
+function wrapMentions(message) {
+    // @everyone과 @here만 감싸기 위한 정규 표현식
+    const mentionPattern = /(@everyone|@here)/g;
+    
+    // 멘션을 `로 감싸기
+    return message.replace(mentionPattern, '`$&`');
+}
+
 exports.loadKeywordsFromFile = loadKeywordsFromFile;
 exports.addKeyword = addKeyword;
 exports.removeKeyword = removeKeyword;
 exports.filterMessage = filterMessage;
+exports.wrapMentions = wrapMentions;

@@ -9,7 +9,7 @@ const { serverLog, setClient_server_logger, setupAdminChannel } = require('./ser
 const { setClient_status_tracker, setupStatusChannel } = require('./server/status_tracker');
 const { dimoChat } = require('./chat_bot/chat_bot');
 const { addToBucket, existsInCurrentBucket } = require('./message_reference_tracker');
-const { filterMessage } = require('./chat_bot/message_filter');
+const { filterMessage, wrapMentions } = require('./chat_bot/message_filter');
 const { setClient_koreanbots_update, setUpdateInterval } = require('./koreanbots_update');
 
 const client = new Client({
@@ -146,7 +146,8 @@ module.exports = {
 								
 								let messageID;
 								if (filterMessage(formattedContent)) {
-									const sent = await message.reply(formattedContent);
+									const wrappedContent = wrapMentions(formattedContent);
+									const sent = await message.reply(wrappedContent);
 									addToBucket(sent, false);
 									messageID = sent.id;
 								} else {
@@ -176,7 +177,8 @@ module.exports = {
 		
 								let messageID;
 								if (filterMessage(formattedContent)) {
-									const sent = await message.reply(formattedContent);
+									const wrappedContent = wrapMentions(formattedContent);
+									const sent = await message.reply(wrappedContent);
 									addToBucket(sent, false);
 									messageID = sent.id;
 								} else {
@@ -209,7 +211,8 @@ module.exports = {
 		
 							let messageID;
 							if (filterMessage(formattedContent)) {
-								const sent = await message.reply(formattedContent);
+								const wrappedContent = wrapMentions(formattedContent);
+								const sent = await message.reply(wrappedContent);
 								addToBucket(sent, false);
 								messageID = sent.id;
 							} else {
