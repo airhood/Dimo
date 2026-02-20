@@ -1,0 +1,17 @@
+MSKO|마스코|전문 청소/위생 업체
+NERI|Nerica Astronomy|우주 기업
+SSGS|순살건설|건설 업체
+GRPW|그린파워|친환경에너지 (태양광, 수력, 풍력, 바이오에너지) 시설 기업
+BLWV|BlueWavve|평균 활성 이용자 수가 2억명이 넘는 유명 SNS
+OMGA|OMEGA Lab|핵융합 에너지 연구 기업
+SLRM|솔라리움|태양광 에너지 기업
+NXTL|넥스텔라|다국적 간식 기업
+CHYG|조선해양그룹|조선 및 선박 관리 기업
+KWNG|광일네트워크|국내 최대 규모 통신사
+PPHT|PurplePhoto|사진 공유 플렛폼
+YEGC|일영건설|초고층 건물 전문 건설 업체
+RBNX|로보넥스|로봇 연구 기업
+WDUV|WorldUniverse|우주 기업
+DMFL|DreamFly|해외 항공사
+ARON|에이리온|시스템 반도체 기업
+HPMB|HyperMobile|모바일 기기 전문 기업

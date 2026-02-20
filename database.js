@@ -6,24 +6,25 @@ const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, ge
 require('dotenv').config();
 const moment = require('moment-timezone');
 const fs = require('fs');
-const { getKoreanTime }= require('./korean_time');
 const { INITIAL_BALANCE, SHORT_SELL_MARGIN_RATE, OPTION_UNIT_QUANTITY } = require('./setting');
 
 
+const mongoLog = !process.argv.includes('--no-mongo-log');
+
 mongoose.connection.on('connected', () => {
-    console.log('[MONGO_DB] Database connected');
+    if (mongoLog) console.log('[MONGO_DB] Database connected');
 });
 
 mongoose.connection.on('disconnected', () => {
-    console.log('[MONGO_DB] Database disconnected');
+    if (mongoLog) console.log('[MONGO_DB] Database disconnected');
 });
 
 mongoose.connection.on('reconnected', () => {
-    console.log('[MONGO_DB] Database reconnected');
+    if (mongoLog) console.log('[MONGO_DB] Database reconnected');
 });
 
 mongoose.connection.on('reconnectFailed', () => {
-    console.log('[MONGO_DB] Database reconnectFailed');
+    if (mongoLog) console.log('[MONGO_DB] Database reconnectFailed');
 });
 
 
@@ -34,6 +35,7 @@ const State = require('./schemas/state');
 const Ban = require('./schemas/ban');
 const NotificationSchedule = require('./schemas/notification_schedule');
 const Fund = require('./schemas/fund');
+const TransactionLog = require('./schemas/transaction_log');
 
 const TransactionSchedule = require('./schemas/transaction_schedule');
 
@@ -789,13 +791,12 @@ module.exports = {
             }
 
             const receiveDate = userState.subsidy_recieve_date;
-            const localDate = getKoreanTime(receiveDate);
-            const today = getKoreanTime(new Date());
+            const today = new Date();
 
-            localDate.setHours(0, 0, 0, 0);
+            receiveDate.setHours(0, 0, 0, 0);
             today.setHours(0, 0, 0, 0);
 
-            if (localDate.getTime() < today.getTime()) {
+            if (receiveDate.getTime() < today.getTime()) {
                 return {
                     state: 'success',
                     data: false,
@@ -1196,6 +1197,13 @@ module.exports = {
 
             const currentPrice = getFuturePrice(ticker);
 
+            if (userAsset.balance < 0) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
+
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
                 if (quantity === 0) {
@@ -1323,6 +1331,13 @@ module.exports = {
             }
 
             const currentPrice = getStockPrice(ticker);
+
+            if (userAsset.balance < 0) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
 
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / currentPrice);
@@ -1525,6 +1540,13 @@ module.exports = {
                 };
             }
 
+            if (userAsset.balance < 0) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
+
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
                 if (quantity === 0) {
@@ -1616,6 +1638,13 @@ module.exports = {
             if (!currentPrice) {
                 return {
                     state: 'invalid_strike_price',
+                    data: null,
+                };
+            }
+
+            if (userAsset.balance < 0) {
+                return {
+                    state: 'no_balance',
                     data: null,
                 };
             }
@@ -1715,6 +1744,13 @@ module.exports = {
                 };
             }
 
+            if (userAsset.balance < 0) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
+            }
+
             if (quantity === 0) {
                 quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
                 if (quantity === 0) {
@@ -1806,6 +1842,13 @@ module.exports = {
             if (!currentPrice) {
                 return {
                     state: 'invalid_strike_price',
+                    data: null,
+                };
+            }
+
+            if (userAsset.balance < 0) {
+                return {
+                    state: 'no_balance',
                     data: null,
                 };
             }
@@ -2599,16 +2642,16 @@ module.exports = {
                 };
             }
 
-            const interestRate = getFixedDepositInterestRate();
+            const interestRate = (getFixedDepositInterestRate() / 10) * product;
             const depositDate = new Date();
             const maturityDate = new Date();
             maturityDate.setDate(depositDate.getDate() + product);
 
             let uid;
-            if (userAsset.futures.length === 0) {
+            if (userAsset.fixed_deposits.length === 0) {
                 uid = 0;
             } else {
-                uid = userAsset.futures[userAsset.futures.length - 1].uid + 1;
+                uid = userAsset.fixed_deposits[userAsset.fixed_deposits.length - 1].uid + 1;
             }
 
             userAsset.fixed_deposits.push({
@@ -2641,7 +2684,7 @@ module.exports = {
 
             return {
                 state: 'success',
-                data: getFixedDepositInterestRatePoint(),
+                data: ((getFixedDepositInterestRatePoint() / 10) * product),
             };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:openFixedDeposit': ${err}`);
@@ -2679,16 +2722,16 @@ module.exports = {
                 };
             }
 
-            const interestRate = getFixedDepositInterestRate();
+            const interestRate = getFixedDepositInterestRate() / 10;
             const startDate = new Date();
             const endDate = new Date();
             endDate.setDate(startDate.getDate() + product);
 
             let uid;
-            if (userAsset.futures.length === 0) {
+            if (userAsset.savings_accounts.length === 0) {
                 uid = 0;
             } else {
-                uid = userAsset.futures[userAsset.futures.length - 1].uid + 1;
+                uid = userAsset.savings_accounts[userAsset.savings_accounts.length - 1].uid + 1;
             }
 
             userAsset.savings_accounts.push({
@@ -2738,7 +2781,7 @@ module.exports = {
             }
             return {
                 state: 'success',
-                data: null,
+                data: (getFixedDepositInterestRatePoint() / 10),
             };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:openSavingsAccount': ${err}`);
@@ -2937,10 +2980,26 @@ module.exports = {
         }
     },
 
-    async fundCreate(id, fundName, description, fee) {
+    async fundCreate(id, fundName, description, fee, initialAmount) {
         try {
+            // Verify creator has sufficient balance
+            const creatorUser = await User.findOne({ userID: id });
+            if (!creatorUser) {
+                serverLog('[ERROR] Create fund failed. Creator user not found.');
+                return { state: 'error', data: null };
+            }
+            const creatorAsset = await Asset.findById(creatorUser.asset);
+            if (!creatorAsset) {
+                serverLog('[ERROR] Create fund failed. Creator asset not found.');
+                return { state: 'error', data: null };
+            }
+            if (creatorAsset.balance < initialAmount) {
+                serverLog(`[INFO] Fund create failed. Insufficient balance. balance: ${creatorAsset.balance}, required: ${initialAmount}`);
+                return { state: 'insufficient_balance', data: { balance: creatorAsset.balance } };
+            }
+
             const asset = await Asset.create({
-                balance: 0,
+                balance: initialAmount,
                 stocks: [],
                 stockShortSales: [],
                 futures: [],
@@ -2963,6 +3022,7 @@ module.exports = {
                 name: fundName,
                 description: description,
                 fee: fee,
+                total_units: Math.floor(initialAmount / 1000),
                 administrators: [{
                     userID: id,
                     isTopAdmin: true,
@@ -2989,6 +3049,10 @@ module.exports = {
                 };
             }
 
+            // Deduct initial investment from creator's balance
+            creatorAsset.balance -= initialAmount;
+            await creatorAsset.save();
+
             return {
                 state: 'success',
                 data: null,
@@ -2999,6 +3063,201 @@ module.exports = {
                 state: 'error',
                 data: null,
             };
+        }
+    },
+
+    async fundInvest(id, fundName, amount) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) {
+                serverLog('[ERROR] Fund invest failed. User not found.');
+                return { state: 'error', data: null };
+            }
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) {
+                serverLog('[ERROR] Fund invest failed. User asset not found.');
+                return { state: 'error', data: null };
+            }
+            if (userAsset.balance < amount) {
+                return { state: 'insufficient_balance', data: null };
+            }
+
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                return { state: 'no_fund', data: null };
+            }
+
+            const fundAsset = fund.asset;
+
+            // Calculate current unit price from fund's total asset value
+            let totalFundValue = fundAsset.balance;
+            fundAsset.stocks.forEach(stock => {
+                const price = getStockPrice(stock.ticker);
+                if (price) totalFundValue += price * stock.quantity;
+            });
+            fundAsset.stockShortSales.forEach(short => {
+                const price = getStockPrice(short.ticker);
+                if (price) totalFundValue -= price * short.quantity;
+            });
+            fundAsset.futures.forEach(future => {
+                totalFundValue += future.margin;
+                const price = getFuturePrice(future.ticker);
+                if (price) totalFundValue += (price - future.purchasePrice) * future.quantity * future.leverage;
+            });
+            fundAsset.binary_options.forEach(bo => {
+                totalFundValue += bo.amount;
+            });
+
+            const unitPrice = fund.total_units > 0 ? totalFundValue / fund.total_units : 1000;
+            const units = amount / unitPrice;
+
+            // Deduct from user, record holding
+            userAsset.balance -= amount;
+            userAsset.funds.push({
+                name: fundName,
+                unit: units,
+                purchasePrice: unitPrice,
+                purchaseDate: new Date(),
+            });
+            await userAsset.save();
+
+            // Add cash to fund
+            fundAsset.balance += amount;
+            await fundAsset.save();
+
+            // Update total units
+            fund.total_units += units;
+            await fund.save();
+
+            serverLog('[INFO] Fund invest success. id: ' + id + ', fund: ' + fundName + ', amount: ' + amount + ', units: ' + units);
+            return { state: 'success', data: { unitPrice, units } };
+        } catch (err) {
+            serverLog("[ERROR] Error at 'database.js:fundInvest': " + err);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async fundRedeem(id, fundName, redeemUnits) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) {
+                serverLog('[ERROR] Fund redeem failed. User not found.');
+                return { state: 'error', data: null };
+            }
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) {
+                serverLog('[ERROR] Fund redeem failed. User asset not found.');
+                return { state: 'error', data: null };
+            }
+
+            // Check user's holdings (FIFO order)
+            const holdings = userAsset.funds
+                .filter(f => f.name === fundName)
+                .sort((a, b) => new Date(a.purchaseDate) - new Date(b.purchaseDate));
+
+            const totalHeld = holdings.reduce((sum, h) => sum + h.unit, 0);
+            if (totalHeld < redeemUnits) {
+                return { state: 'insufficient_units', data: { held: totalHeld } };
+            }
+
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                return { state: 'no_fund', data: null };
+            }
+
+            const fundAsset = fund.asset;
+
+            // Calculate current unit price
+            let totalFundValue = fundAsset.balance;
+            fundAsset.stocks.forEach(stock => {
+                const price = getStockPrice(stock.ticker);
+                if (price) totalFundValue += price * stock.quantity;
+            });
+            fundAsset.stockShortSales.forEach(short => {
+                const price = getStockPrice(short.ticker);
+                if (price) totalFundValue -= price * short.quantity;
+            });
+            fundAsset.futures.forEach(future => {
+                totalFundValue += future.margin;
+                const price = getFuturePrice(future.ticker);
+                if (price) totalFundValue += (price - future.purchasePrice) * future.quantity * future.leverage;
+            });
+            fundAsset.binary_options.forEach(bo => {
+                totalFundValue += bo.amount;
+            });
+
+            const unitPrice = fund.total_units > 0 ? totalFundValue / fund.total_units : 1000;
+            const redeemValue = redeemUnits * unitPrice;
+
+            // FIFO profit calculation for fee
+            let remainingToRedeem = redeemUnits;
+            let totalProfit = 0;
+            for (const holding of holdings) {
+                if (remainingToRedeem <= 0) break;
+                const consumed = Math.min(holding.unit, remainingToRedeem);
+                totalProfit += consumed * (unitPrice - holding.purchasePrice);
+                remainingToRedeem -= consumed;
+            }
+
+            const profit = Math.max(0, totalProfit);
+            const feeAmount = Math.round(profit * (fund.fee / 100));
+
+            // Pay fee to top admin
+            const topAdmin = fund.administrators.find(a => a.isTopAdmin);
+            if (topAdmin && feeAmount > 0) {
+                const topAdminUser = await User.findOne({ userID: topAdmin.userID });
+                if (topAdminUser) {
+                    const topAdminAsset = await Asset.findById(topAdminUser.asset);
+                    if (topAdminAsset) {
+                        topAdminAsset.balance += feeAmount;
+                        await topAdminAsset.save();
+                    }
+                }
+            }
+
+            // Pay user (redeemValue - fee)
+            const userReceives = Math.round(redeemValue - feeAmount);
+            userAsset.balance += userReceives;
+
+            // Remove units FIFO
+            let unitsLeft = redeemUnits;
+            const otherFunds = userAsset.funds.filter(f => f.name !== fundName);
+            const remaining = [];
+            for (const holding of holdings) {
+                if (unitsLeft <= 0) {
+                    remaining.push(holding);
+                    continue;
+                }
+                if (holding.unit <= unitsLeft) {
+                    unitsLeft -= holding.unit;
+                } else {
+                    remaining.push({
+                        name: holding.name,
+                        unit: holding.unit - unitsLeft,
+                        purchasePrice: holding.purchasePrice,
+                        purchaseDate: holding.purchaseDate,
+                    });
+                    unitsLeft = 0;
+                }
+            }
+            userAsset.funds = [...otherFunds, ...remaining];
+            await userAsset.save();
+
+            // Deduct from fund balance (can go negative)
+            fundAsset.balance -= redeemValue;
+            await fundAsset.save();
+
+            fund.total_units = Math.max(0, fund.total_units - redeemUnits);
+            await fund.save();
+
+            serverLog('[INFO] Fund redeem success. id: ' + id + ', fund: ' + fundName + ', units: ' + redeemUnits + ', unitPrice: ' + unitPrice + ', fee: ' + feeAmount);
+            return {
+                state: 'success',
+                data: { unitPrice, redeemValue, feeAmount, userReceives },
+            };
+        } catch (err) {
+            serverLog("[ERROR] Error at 'database.js:fundRedeem': " + err);
+            return { state: 'error', data: null };
         }
     },
 
@@ -3066,13 +3325,6 @@ module.exports = {
     async getFundList() {
         try {
             const funds = await Fund.find().populate('asset');
-            if (funds.length === 0) {
-                serverLog('[ERROR] Error finding fund');
-                return {
-                    state: 'no_fund',
-                    data: null,
-                };
-            }
 
             return {
                 state: 'success',
@@ -3303,6 +3555,84 @@ module.exports = {
             };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:fundLogout': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async writeTransactionLog(id, content) {
+        try {
+            const now = new Date();
+            const transaction_log = await TransactionLog.create({
+                userID: id,
+                logMessage: content,
+                transactionDate: now,
+            });
+    
+            if (!transaction_log) {
+                serverLog(`[ERROR] Failed to create transaction log. id: ${id}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+
+            return {
+                state: 'success',
+                data: null,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:writeTransactionLog': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async getTransactionLog(id, count) {
+        try {
+            const transaction_logs = await TransactionLog.find({ userID: id }).limit(count);
+            if (transaction_logs.length === 0) {
+                serverLog(`[ERROR] Error finding transaction log. id: ${id}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+    
+            return {
+                state: 'success',
+                data: transaction_logs,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getTransactionLog': ${err}`);
+            return {
+                state: 'error',
+                data: null,
+            };
+        }
+    },
+
+    async getAllTransactionLog(id) {
+        try {
+            const transaction_logs = await TransactionLog.find({ userID: id });
+            if (transaction_logs.length === 0) {
+                serverLog(`[ERROR] Error finding transaction log. id: ${id}`);
+                return {
+                    state: 'error',
+                    data: null,
+                };
+            }
+    
+            return {
+                state: 'success',
+                data: transaction_logs,
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getAllTransactionLog': ${err}`);
             return {
                 state: 'error',
                 data: null,

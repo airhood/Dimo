@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { Client, Events, GatewayIntentBits, Collection, EmbedBuilder } = require('discord.js');
+const { Client, Events, GatewayIntentBits, Collection, EmbedBuilder, MessageFlags } = require('discord.js');
 const { token } = require('./config.json');
 
 const { increaseLevelPoint, checkUserExists } = require('./database');
@@ -159,9 +159,8 @@ module.exports = {
 								result.callback(messageID.trim());
 							} else if (result.result === 'reply_timeout') {
 								await message.reply('내용이 기억이 안나.');
-								console.log('a');
 								addToBucket(null, true);
-							} else if ('error') {
+							} else if (result.result === 'error') {
 								await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
 								addToBucket(null, true);
 							}
@@ -191,7 +190,7 @@ module.exports = {
 							} else if (result.result === 'reply_timeout') {
 								await message.reply('내용이 기억이 안나.');
 								addToBucket(null, true);
-							} else if ('error') {
+							} else if (result.result === 'error') {
 								await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
 								addToBucket(null, true);
 							}
@@ -225,7 +224,7 @@ module.exports = {
 						} else if (result.result === 'reply_timeout') {
 							await message.reply('내용이 기억이 안나.');
 							addToBucket(null, true);
-						} else if ('error') {
+						} else if (result.result === 'error') {
 							await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
 							addToBucket(null, true);
 						}
