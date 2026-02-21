@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, userMention } = require('discord.js');
-const { fundAddAdministrator, fundRemoveAdministrator, fundGetAdministrators, fundLogin, fundLogout, fundCreate, getFundInfo, getFundList } = require('../database');
+const { fundAddAdministrator, fundRemoveAdministrator, fundGetAdministrators, fundLogin, fundLogout, fundCreate, getFundInfo, getFundList, getUserState, investFund, sellFundInvestment, fundTransferOwnership } = require('../database');
 const { calculateAssetValue } = require('../stock_system/credit_system');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
@@ -59,17 +59,42 @@ module.exports = {
                         .setRequired(true)
                 )
         )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('매수')
+                .setDescription('펀드를 매수합니다.')
+                .addStringOption((option) =>
+                    option.setName('이름')
+                        .setDescription('매수할 펀드의 이름')
+                        .setRequired(true)
+                )
+                .addIntegerOption((option) =>
+                    option.setName('금액')
+                        .setDescription('투자할 금액 (원)')
+                        .setMinValue(1)
+                        .setRequired(true)
+                )
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('매도')
+                .setDescription('보유 중인 펀드를 매도합니다.')
+                .addStringOption((option) =>
+                    option.setName('이름')
+                        .setDescription('매도할 펀드의 이름')
+                        .setRequired(true)
+                )
+                .addIntegerOption((option) =>
+                    option.setName('좌수')
+                        .setDescription('매도할 좌수')
+                        .setMinValue(1)
+                        .setRequired(true)
+                )
+        )
         .addSubcommandGroup((subCommandGroup) =>
             subCommandGroup.setName('관리자')
                 .setDescription('펀드의 관리자 페이지')
                 .addSubcommand((subCommand) =>
                     subCommand.setName('추가')
                         .setDescription('펀드의 관리자를 추가합니다.')
-                        .addStringOption((option) =>
-                            option.setName('이름')
-                                .setDescription('펀드의 이름')
-                                .setRequired(true)
-                        )
                         .addUserOption((option) =>
                             option.setName('유저')
                                 .setDescription('펀드의 관리자로 등록할 유저')
@@ -79,11 +104,6 @@ module.exports = {
                 .addSubcommand((subCommand) =>
                     subCommand.setName('삭제')
                         .setDescription('펀드의 관리자를 삭제합니다.')
-                        .addStringOption((option) =>
-                            option.setName('이름')
-                                .setDescription('펀드의 이름')
-                                .setRequired(true)
-                        )
                         .addIntegerOption((option) =>
                             option.setName('관리자번호')
                                 .setDescription('펀드의 관리자에서 제거할 관리자의 번호. (관리자 번호는 **/펀드 관리자목록**을 통해 확인할 수 있습니다)')
@@ -107,6 +127,15 @@ module.exports = {
                     subCommand.setName('로그아웃')
                         .setDescription('펀드의 관리자에서 로그아웃합니다. (로그아웃시 모든 거래는 원래대로 본인 명의로 진행됩니다)')
                 )
+                .addSubcommand((subCommand) =>
+                    subCommand.setName('소유권이전')
+                        .setDescription('펀드의 소유권을 다른 관리자에게 이전합니다. (현재 로그인된 펀드 기준, 소유자만 가능)')
+                        .addUserOption((option) =>
+                            option.setName('유저')
+                                .setDescription('소유권을 이전할 관리자 유저')
+                                .setRequired(true)
+                        )
+                )
         ),
     
     async execute(interaction) {
@@ -114,96 +143,109 @@ module.exports = {
         const subCommand = interaction.options.getSubcommand();
 
         if (subCommandGroup === '관리자') {
+            // Helper: get currently logged-in fund name from state
+            const getFundNameFromState = async () => {
+                const userState = await getUserState(interaction.user.id);
+                if (userState.state === 'error') return { error: true };
+                const currentAccount = userState.data.state.currentAccount;
+                if (currentAccount === '@self') return { notLoggedIn: true };
+                return { fundName: currentAccount.replace('@fund_', '') };
+            };
+
             if (subCommand === '추가') {
-                const fundName = interaction.options.getString('이름');
                 const administrator = interaction.options.getUser('유저');
+
+                const stateResult = await getFundNameFromState();
+                if (stateResult.error) {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                    });
+                    return;
+                }
+                if (stateResult.notLoggedIn) {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  펀드 로그인 필요').setDescription(`펀드 관리자로 로그인된 상태에서만 사용할 수 있습니다.\n**/펀드 관리자 로그인** 명령어를 통해 로그인해주세요.`).setTimestamp()],
+                    });
+                    return;
+                }
+                const fundName = stateResult.fundName;
 
                 const result = await fundAddAdministrator(interaction.user.id, fundName, administrator.id);
 
                 if (result.state === 'error') {
                     await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle('서버 오류')
-                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                                .setTimestamp()
-                        ],
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
                     });
                     return;
                 } else if (result.state === 'success') {
                     await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0x2ecc71)
-                                .setTitle(':white_check_mark:  펀드 관리자 추가 완료')
-                                .setDescription(`**${fundName}** 펀드에 ${userMention(administrator.id)}를 관리자로 추가했습니다.`)
-                                .setTimestamp()
-                        ],
+                        embeds: [new EmbedBuilder().setColor(0x2ecc71).setTitle(':white_check_mark:  펀드 관리자 추가 완료').setDescription(`**${fundName}** 펀드에 ${userMention(administrator.id)}를 관리자로 추가했습니다.`).setTimestamp()],
                     });
                 }
             } else if (subCommand === '삭제') {
-                const fundName = interaction.options.getString('이름');
                 const administratorNum = interaction.options.getInteger('관리자번호');
+
+                const stateResult = await getFundNameFromState();
+                if (stateResult.error) {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                    });
+                    return;
+                }
+                if (stateResult.notLoggedIn) {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  펀드 로그인 필요').setDescription(`펀드 관리자로 로그인된 상태에서만 사용할 수 있습니다.\n**/펀드 관리자 로그인** 명령어를 통해 로그인해주세요.`).setTimestamp()],
+                    });
+                    return;
+                }
+                const fundName = stateResult.fundName;
 
                 const result = await fundRemoveAdministrator(interaction.user.id, fundName, administratorNum);
 
                 if (result.state === 'error') {
                     await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle('서버 오류')
-                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                                .setTimestamp()
-                        ],
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
                     });
                     return;
-                } else if (result.state === 'no_fund') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  존재하지 않는 펀드')
-                                .setDescription(`**${fundName}** 펀드는 존재하지 않는 펀드입니다.`)
-                                .setTimestamp()
-                        ],
-                    });
                 } else if (result.state === 'invalid_admin_num') {
                     await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  올바르지 않은 관리자 번호')
-                                .setDescription(`올바른 관리자 번호가 아닙니다.`)
-                                .setTimestamp()
-                        ],
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  올바르지 않은 관리자 번호').setDescription(`올바른 관리자 번호가 아닙니다.`).setTimestamp()],
+                    });
+                } else if (result.state === 'cannot_remove_owner') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  소유자 삭제 불가').setDescription(`펀드 소유자는 관리자에서 삭제할 수 없습니다.\n소유권을 먼저 이전한 후 삭제해주세요.`).setTimestamp()],
                     });
                 } else {
                     await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0x2ecc71)
-                                .setTitle(':white_check_mark:  펀드 관리자 삭제 완료')
-                                .setDescription(`**${fundName}** 펀드에서 ${userMention(result.data)}를 관리자에서 삭제했습니다.`)
-                                .setTimestamp()
-                        ],
+                        embeds: [new EmbedBuilder().setColor(0x2ecc71).setTitle(':white_check_mark:  펀드 관리자 삭제 완료').setDescription(`**${fundName}** 펀드에서 ${userMention(result.data)}를 관리자에서 삭제했습니다.`).setTimestamp()],
                     });
                 }
             } else if (subCommand === '목록') {
-                const fundName = interaction.options.getString('이름');
+                const stateResult = await getFundNameFromState();
+                if (stateResult.error) {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                    });
+                    return;
+                }
+                if (stateResult.notLoggedIn) {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  펀드 로그인 필요').setDescription(`펀드 관리자로 로그인된 상태에서만 사용할 수 있습니다.\n**/펀드 관리자 로그인** 명령어를 통해 로그인해주세요.`).setTimestamp()],
+                    });
+                    return;
+                }
+                const fundName = stateResult.fundName;
 
                 const adminResult = await fundGetAdministrators(fundName);
 
                 if (adminResult.state === 'error') {
                     await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle('서버 오류')
-                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                                .setTimestamp()
-                        ],
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                    });
+                    return;
+                } else if (adminResult.state === 'no_fund') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  존재하지 않는 펀드').setDescription(`**${fundName}** 펀드는 존재하지 않는 펀드입니다.`).setTimestamp()],
                     });
                     return;
                 }
@@ -301,6 +343,43 @@ module.exports = {
                                 .setDescription(`펀드 관리자에서 로그아웃을 성공했습니다.`)
                                 .setTimestamp()
                         ],
+                    });
+                }
+            } else if (subCommand === '소유권이전') {
+                const newOwner = interaction.options.getUser('유저');
+
+                const stateResult = await getFundNameFromState();
+                if (stateResult.error) {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                    });
+                    return;
+                }
+                if (stateResult.notLoggedIn) {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  펀드 로그인 필요').setDescription(`펀드 관리자로 로그인된 상태에서만 사용할 수 있습니다.\n**/펀드 관리자 로그인** 명령어를 통해 로그인해주세요.`).setTimestamp()],
+                    });
+                    return;
+                }
+                const fundName = stateResult.fundName;
+
+                const result = await fundTransferOwnership(interaction.user.id, fundName, newOwner.id);
+
+                if (result.state === 'error') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                    });
+                } else if (result.state === 'not_owner') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':no_entry:  권한 없음').setDescription(`펀드 소유자만 소유권을 이전할 수 있습니다.`).setTimestamp()],
+                    });
+                } else if (result.state === 'not_admin') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  관리자 아님').setDescription(`${userMention(newOwner.id)}은(는) **${fundName}** 펀드의 관리자가 아닙니다.\n먼저 관리자로 추가한 후 소유권을 이전해주세요.`).setTimestamp()],
+                    });
+                } else if (result.state === 'success') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0x2ecc71).setTitle(':white_check_mark:  소유권 이전 완료').setDescription(`**${fundName}** 펀드의 소유권을 ${userMention(newOwner.id)}에게 이전했습니다.`).setTimestamp()],
                     });
                 }
             }
@@ -482,6 +561,87 @@ module.exports = {
                                 { name: '수익률', value: returnRateStr },
                                 { name: '총 유닛', value: fund.total_units.toLocaleString() },
                                 { name: '운용자산', value: `${Math.round(totalAssetValue).toLocaleString()}원` },
+                            )
+                            .setTimestamp()
+                    ],
+                });
+            }
+        } else if (subCommand === '매수') {
+            const fundName = interaction.options.getString('이름');
+            const amount = interaction.options.getInteger('금액');
+
+            const result = await investFund(interaction.user.id, fundName, amount);
+
+            if (result.state === 'error') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                });
+            } else if (result.state === 'no_fund') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  존재하지 않는 펀드').setDescription(`**${fundName}** 펀드는 존재하지 않는 펀드입니다.`).setTimestamp()],
+                });
+            } else if (result.state === 'insufficient_balance') {
+                const balanceStr = result.data.balance.toLocaleString();
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  잔고 부족').setDescription(`잔고가 부족합니다.\n현재 잔고: **${balanceStr}원**`).setTimestamp()],
+                });
+            } else if (result.state === 'insufficient_amount') {
+                const unitPriceStr = Math.round(result.data.unitPrice).toLocaleString();
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  금액 부족').setDescription(`현재 유닛 가격은 **${unitPriceStr}원**입니다.\n최소 **${unitPriceStr}원** 이상 투자해야 합니다.`).setTimestamp()],
+                });
+            } else if (result.state === 'success') {
+                const { units, unitPrice, actualCost } = result.data;
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ecc71)
+                            .setTitle(':white_check_mark:  펀드 매수 완료')
+                            .addFields(
+                                { name: '펀드', value: fundName },
+                                { name: '매수 좌수', value: `${units.toLocaleString()}좌` },
+                                { name: '매수 단가', value: `${Math.round(unitPrice).toLocaleString()}원/좌` },
+                                { name: '총 투자금액', value: `${Math.round(actualCost).toLocaleString()}원` },
+                            )
+                            .setTimestamp()
+                    ],
+                });
+            }
+        } else if (subCommand === '매도') {
+            const fundName = interaction.options.getString('이름');
+            const units = interaction.options.getInteger('좌수');
+
+            const result = await sellFundInvestment(interaction.user.id, fundName, units);
+
+            if (result.state === 'error') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                });
+            } else if (result.state === 'no_fund') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  존재하지 않는 펀드').setDescription(`**${fundName}** 펀드는 존재하지 않는 펀드입니다.`).setTimestamp()],
+                });
+            } else if (result.state === 'no_investment') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  보유 내역 없음').setDescription(`**${fundName}** 펀드에 투자한 내역이 없습니다.`).setTimestamp()],
+                });
+            } else if (result.state === 'insufficient_units') {
+                const ownedStr = result.data.ownedUnits.toLocaleString();
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  좌수 부족').setDescription(`보유 좌수가 부족합니다.\n현재 보유 좌수: **${ownedStr}좌**`).setTimestamp()],
+                });
+            } else if (result.state === 'success') {
+                const { units: soldUnits, unitPrice, proceeds } = result.data;
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ecc71)
+                            .setTitle(':white_check_mark:  펀드 매도 완료')
+                            .addFields(
+                                { name: '펀드', value: fundName },
+                                { name: '매도 좌수', value: `${soldUnits.toLocaleString()}좌` },
+                                { name: '매도 단가', value: `${Math.round(unitPrice).toLocaleString()}원/좌` },
+                                { name: '총 수령금액', value: `${Math.round(proceeds).toLocaleString()}원` },
                             )
                             .setTimestamp()
                     ],

@@ -6,6 +6,7 @@ const { initResourceMonitor, checkResource } = require('./server/resource_monito
 const { initScheduleManager } = require('./stock_system/transaction_schedule_manager');
 const discord_bot = require('./discord_bot');
 const { initCreditSystem, updateCreditRating } = require('./stock_system/credit_system');
+const { initFundPriceSystem } = require('./stock_system/fund_price');
 const { setTimezone } = require('./korean_time');
 
 require('dotenv').config();
@@ -36,7 +37,12 @@ module.exports = {
         if (!result3) return false;
 
         console.log('[BOOT] Stock simulation loaded');
-        
+
+        const result3b = await initFundPriceSystem();
+        if (!result3b) return false;
+
+        console.log('[BOOT] Fund price system loaded');
+
         const result4 = await initCreditSystem();
         if (!result4) return false;
 

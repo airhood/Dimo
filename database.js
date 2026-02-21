@@ -3,7 +3,7 @@ const { mongodb_url }  = require('./config.json');
 const { serverLog } = require('./server/server_logger');
 const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionExpirationDate } = require('./stock_system/stock_sim');
 const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, getLoanInterestRatePoint, getFixedDepositInterestRatePoint } = require('./stock_system/bank_manager');
-const { calculateFundCreditRating } = require('./stock_system/credit_system');
+const { calculateFundCreditRating, calculateAssetValue } = require('./stock_system/credit_system');
 require('dotenv').config();
 const moment = require('moment-timezone');
 const fs = require('fs');
@@ -2992,7 +2992,6 @@ module.exports = {
         try {
             const funds = await Fund.find().populate('asset');
             if (funds.length === 0) {
-                serverLog('[ERROR] Error finding fund');
                 return {
                     state: 'no_fund',
                     data: null,
@@ -3016,7 +3015,7 @@ module.exports = {
         try {
             const fund = await Fund.findOne({ name: fundName });
             if (!fund) {
-                serverLog('[ERROR] Error finding fund');
+                serverLog(`[INFO] fundAddAdministrator: fund not found. fundName: ${fundName}`);
                 return {
                     state: 'no_fund',
                     data: null,
@@ -3054,7 +3053,7 @@ module.exports = {
         try {
             const fund = await Fund.findOne({ name: fundName });
             if (!fund) {
-                serverLog('[ERROR] Error finding fund');
+                serverLog(`[INFO] fundRemoveAdministrator: fund not found. fundName: ${fundName}`);
                 return {
                     state: 'no_fund',
                     data: null,
@@ -3069,6 +3068,13 @@ module.exports = {
             }
 
             const administrator = fund.administrators[administratorNum - 1];
+
+            if (administrator.isTopAdmin) {
+                return {
+                    state: 'cannot_remove_owner',
+                    data: null,
+                };
+            }
 
             fund.administrators.splice(administratorNum - 1, 1);
 
@@ -3098,9 +3104,9 @@ module.exports = {
         try {
             const fund = await Fund.findOne({ name: fundName });
             if (!fund) {
-                serverLog('[ERROR] Error finding fund');
+                serverLog(`[INFO] fundGetAdministrators: fund not found. fundName: ${fundName}`);
                 return {
-                    state: 'error',
+                    state: 'no_fund',
                     data: null,
                 };
             }
@@ -3122,7 +3128,7 @@ module.exports = {
         try {
             const fund = await Fund.findOne({ name: fundName });
             if (!fund) {
-                serverLog('[ERROR] Error finding fund');
+                serverLog(`[INFO] fundLogin: fund not found. fundName: ${fundName}`);
                 return {
                     state: 'no_fund',
                     data: null,
@@ -3232,6 +3238,161 @@ module.exports = {
                 state: 'error',
                 data: null,
             };
+        }
+    },
+
+    async fundTransferOwnership(id, fundName, newOwnerId) {
+        try {
+            const fund = await Fund.findOne({ name: fundName });
+            if (!fund) {
+                serverLog(`[INFO] fundTransferOwnership: fund not found. fundName: ${fundName}`);
+                return { state: 'no_fund', data: null };
+            }
+
+            const currentOwner = fund.administrators.find(a => a.isTopAdmin);
+            if (!currentOwner || currentOwner.userID !== id) {
+                serverLog(`[INFO] fundTransferOwnership: not owner. id: ${id}, fundName: ${fundName}`);
+                return { state: 'not_owner', data: null };
+            }
+
+            const newOwnerAdmin = fund.administrators.find(a => a.userID === newOwnerId);
+            if (!newOwnerAdmin) {
+                return { state: 'not_admin', data: null };
+            }
+
+            currentOwner.isTopAdmin = false;
+            newOwnerAdmin.isTopAdmin = true;
+
+            await fund.save();
+
+            return { state: 'success', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:fundTransferOwnership': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async investFund(id, fundName, amount) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) {
+                serverLog(`[ERROR] investFund: user not found. id: ${id}`);
+                return { state: 'error', data: null };
+            }
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) {
+                serverLog(`[ERROR] investFund: user asset not found. id: ${id}`);
+                return { state: 'error', data: null };
+            }
+
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                serverLog(`[INFO] investFund: fund not found. fundName: ${fundName}`);
+                return { state: 'no_fund', data: null };
+            }
+
+            const totalAssetValue = calculateAssetValue(fund.asset);
+            const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
+
+            const units = Math.floor(amount / unitPrice);
+            if (units <= 0) {
+                return { state: 'insufficient_amount', data: { unitPrice } };
+            }
+
+            const actualCost = units * unitPrice;
+
+            if (userAsset.balance < actualCost) {
+                return { state: 'insufficient_balance', data: { balance: userAsset.balance } };
+            }
+
+            userAsset.balance -= actualCost;
+            fund.asset.balance += actualCost;
+            fund.total_units += units;
+
+            userAsset.funds.push({
+                name: fundName,
+                unit: units,
+                purchasePrice: unitPrice,
+                purchaseDate: new Date(),
+            });
+
+            await userAsset.save();
+            await fund.asset.save();
+            await fund.save();
+
+            return { state: 'success', data: { units, unitPrice, actualCost } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:investFund': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async sellFundInvestment(id, fundName, units) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) {
+                serverLog(`[ERROR] sellFundInvestment: user not found. id: ${id}`);
+                return { state: 'error', data: null };
+            }
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) {
+                serverLog(`[ERROR] sellFundInvestment: user asset not found. id: ${id}`);
+                return { state: 'error', data: null };
+            }
+
+            const totalUserUnits = userAsset.funds
+                .filter(f => f.name === fundName)
+                .reduce((sum, f) => sum + f.unit, 0);
+
+            if (totalUserUnits === 0) {
+                return { state: 'no_investment', data: null };
+            }
+            if (totalUserUnits < units) {
+                return { state: 'insufficient_units', data: { ownedUnits: totalUserUnits } };
+            }
+
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                serverLog(`[INFO] sellFundInvestment: fund not found. fundName: ${fundName}`);
+                return { state: 'no_fund', data: null };
+            }
+
+            const totalAssetValue = calculateAssetValue(fund.asset);
+            const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
+            const proceeds = units * unitPrice;
+
+            // FIFO: remove units oldest-first
+            let unitsToRemove = units;
+            const newFunds = [];
+            for (const holding of userAsset.funds) {
+                if (holding.name !== fundName || unitsToRemove <= 0) {
+                    newFunds.push(holding);
+                    continue;
+                }
+                if (holding.unit <= unitsToRemove) {
+                    unitsToRemove -= holding.unit;
+                } else {
+                    holding.unit -= unitsToRemove;
+                    unitsToRemove = 0;
+                    newFunds.push(holding);
+                }
+            }
+            userAsset.funds = newFunds;
+
+            userAsset.balance += proceeds;
+            fund.asset.balance -= proceeds;
+            fund.total_units -= units;
+
+            await userAsset.save();
+            await fund.asset.save();
+            await fund.save();
+
+            return { state: 'success', data: { units, unitPrice, proceeds } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:sellFundInvestment': ${err}`);
+            return { state: 'error', data: null };
         }
     }
 }

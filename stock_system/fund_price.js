@@ -32,15 +32,21 @@ async function updateFundPrices() {
 }
 
 function getFundPrice(fundName) {
-    if (fundsPricesHistory[fundsPricesHistory.length - 1][fundName]) {
-        return fundsPricesHistory[fundsPricesHistory.length - 1][fundName];
-    }
-    return null;
+    if (fundsPricesHistory.length === 0) return null;
+    return fundsPricesHistory[fundsPricesHistory.length - 1][fundName] ?? null;
 }
 
-schedule.scheduleJob('0 0 * * *', () => {
+schedule.scheduleJob('0 * * * *', () => {
     serverLog('[INFO] Update fund price');
     updateFundPrices();
 });
 
+async function initFundPriceSystem() {
+    serverLog('[INFO] Initializing fund prices...');
+    await updateFundPrices();
+    serverLog('[INFO] Fund prices initialized');
+    return true;
+}
+
 exports.getFundPrice = getFundPrice;
+exports.initFundPriceSystem = initFundPriceSystem;

@@ -583,43 +583,53 @@ module.exports = {
         let fund_format = '';
         if (loadDetails) {
             for (const fund of result.data.asset.funds) {
-                const formattedPurchaseDate = moment(future.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                if (fund_format !== '') fund_format += '\n';
+                const formattedPurchaseDate = moment(fund.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
                 const investmentAmount = fund.unit * fund.purchasePrice;
 
                 const currentFundPrice = getFundPrice(fund.name);
-                
-                let earnSign;
-                if (currentFundPrice > fund.purchasePrice) {
-                    earnSign = '+';
-                } else if (currentFundPrice < fund.purchasePrice) {
-                    earnSign = '-';
-                } else {
-                    earnSign = '';
+                if (currentFundPrice === null) {
+                    fund_format += `${fund.name} 펀드 ${investmentAmount.toLocaleString()}원\n| 좌수: ${fund.unit.toLocaleString()}\n| 매수날짜: ${formattedPurchaseDate}\n| (가격 정보 없음)`;
+                    continue;
                 }
 
-                fund_format += `${fund.name} 펀드 ${investmentAmount}원
-| 평가손익: ${(fund.unit * (currentFundPrice - fund.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((currentFundPrice - fund.purchasePrice) / fund.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
-| 좌수: ${fund.unit}
+                const earnRate = (currentFundPrice - fund.purchasePrice) / fund.purchasePrice;
+                let earnSign = earnRate > 0 ? '+' : '';
+
+                totalEarn += fund.unit * (currentFundPrice - fund.purchasePrice);
+
+                fund_format += `${fund.name} 펀드 ${investmentAmount.toLocaleString()}원
+| 평가손익: ${(fund.unit * (currentFundPrice - fund.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(earnRate * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
+| 좌수: ${fund.unit.toLocaleString()}
 | 매수날짜: ${formattedPurchaseDate}
-| 현재가격: ${currentFundPrice}원
-| 매수가격: ${fund.purchasePrice}원`;
+| 현재가격: ${Math.round(currentFundPrice).toLocaleString()}원
+| 매수가격: ${Math.round(fund.purchasePrice).toLocaleString()}원`;
             }
         } else {
             for (const fund of result.data.asset.funds) {
-                const formattedPurchaseDate = moment(future.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+                if (fund_format !== '') fund_format += '\n';
                 const investmentAmount = fund.unit * fund.purchasePrice;
-                
-                let earnSign;
-                if (currentFundPrice > fund.purchasePrice) {
-                    earnSign = '+';
-                } else if (currentFundPrice < fund.purchasePrice) {
-                    earnSign = '-';
-                } else {
-                    earnSign = '';
+                const currentFundPrice = getFundPrice(fund.name);
+
+                if (currentFundPrice === null) {
+                    fund_format += `${fund.name} 펀드 ${investmentAmount.toLocaleString()}원 (${fund.unit.toLocaleString()}좌, 가격 정보 없음)`;
+                    continue;
                 }
 
-                fund_format += `${fund.name} 펀드 ${investmentAmount}원 (평가손익: ${(fund.unit * (getFundPrice(fund.name) - fund.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((getFundPrice(fund.name) - fund.purchasePrice) / fund.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
+                const earnRate = (currentFundPrice - fund.purchasePrice) / fund.purchasePrice;
+                let earnSign = earnRate > 0 ? '+' : '';
+
+                totalEarn += fund.unit * (currentFundPrice - fund.purchasePrice);
+
+                fund_format += `${fund.name} 펀드 ${fund.unit.toLocaleString()}좌 (평가손익: ${(fund.unit * (currentFundPrice - fund.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(earnRate * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%))`;
             }
+        }
+
+        if (fund_format !== '') {
+            fields.push({
+                name: ':bar_chart:  펀드',
+                value: `\`\`\`${fund_format}\`\`\``,
+            });
         }
         
         const embedTitle = result.isFund
