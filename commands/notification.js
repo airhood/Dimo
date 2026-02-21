@@ -278,8 +278,10 @@ module.exports = {
                     subjectText = '[계좌] 전체 평가손익';
                 }
 
-                listText += `**${i + 1}.** ${subjectText} → ${n.targetPnL.toLocaleString()}원 ${directionText}\n`;
-                listText += `　다음 확인: ${nextCheck}\n`;
+                if (i > 0) listText += '\n';
+                listText += `${i + 1}. ${subjectText}\n`;
+                listText += `   목표: ${n.targetPnL.toLocaleString()}원 ${directionText}\n`;
+                listText += `   확인: ${nextCheck}`;
             }
 
             await interaction.reply({
@@ -287,7 +289,7 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0x5865F2)
                         .setTitle('알림 목록')
-                        .setDescription(listText)
+                        .setDescription(`\`\`\`${listText}\`\`\``)
                         .setFooter({ text: '/알림 삭제 번호 로 삭제할 수 있습니다.' }),
                 ],
                 flags: MessageFlags.Ephemeral,
