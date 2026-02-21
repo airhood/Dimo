@@ -2647,17 +2647,19 @@ module.exports = {
         }
     },
 
-    async addNotification(userID, type, ticker, targetPnL, direction, strikePrice) {
+    async addNotification(userID, alertScope, targetPnL, direction, options = {}) {
         try {
-            const now = new Date();
+            const { type, positionNum, ticker, strikePrice } = options;
             const notification = await Notification.create({
                 userID,
-                type,
-                ticker,
+                alertScope,
+                type: type ?? undefined,
+                positionNum: positionNum ?? undefined,
+                ticker: ticker ?? undefined,
                 strikePrice: strikePrice ?? undefined,
                 targetPnL,
                 direction,
-                nextCheckAt: now,
+                nextCheckAt: new Date(),
             });
             if (!notification) {
                 serverLog(`[ERROR] addNotification: failed to create notification.`);

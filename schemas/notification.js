@@ -6,18 +6,28 @@ const NotificationSchema = new Schema({
         type: String,
         required: true,
     },
-    // 'stock' | 'future' | 'call_option' | 'put_option' | 'fund'
+    // 'position': 포지션별 | 'ticker': 종목별 | 'account': 전체 계좌
+    alertScope: {
+        type: String,
+        enum: ['position', 'ticker', 'account'],
+        required: true,
+    },
+    // For position/ticker scope: 'stock' | 'future' | 'option' | 'binary_option' | 'fund'
     type: {
         type: String,
-        enum: ['stock', 'future', 'call_option', 'put_option', 'fund'],
-        required: true,
+        enum: ['stock', 'future', 'option', 'binary_option', 'fund'],
     },
+    // For position scope: 1-based index into the asset array
+    positionNum: {
+        type: Number,
+    },
+    // For ticker scope
     ticker: {
         type: String,
-        required: true,
     },
+    // For option ticker scope (optional strike price filter)
     strikePrice: {
-        type: Number, // 콜/풋옵션 전용
+        type: Number,
     },
     targetPnL: {
         type: Number,
