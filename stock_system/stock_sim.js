@@ -669,6 +669,15 @@ function updateProductTimeLeft() {
 
 const STOCK_PRICE_HISTORY_SIZE = 24 * 2; // 4주일
 
+// NASDAQ 방식: 기준 시총 대비 현재 시총의 비율 × 기준 포인트
+const BASE_INDEX_POINT = 1000;
+let baseIndexMarketCap = null;
+
+function calculateNormalizedIndex(marketCap) {
+    if (!baseIndexMarketCap) return BASE_INDEX_POINT;
+    return Math.round((marketCap / baseIndexMarketCap) * BASE_INDEX_POINT * 100) / 100;
+}
+
 // 주어진 시간대의 주식 데이터에서 매 분(60개)의 지수값을 계산해 히스토리에 저장
 function pushIndexHistory(stockHourData) {
     const tickers = Object.keys(stockHourData);
@@ -682,7 +691,10 @@ function pushIndexHistory(stockHourData) {
                 totalMarketCap += minutePrice * totalQty;
             }
         }
-        prices.push(Math.round(totalMarketCap));
+        if (baseIndexMarketCap === null) {
+            baseIndexMarketCap = totalMarketCap;
+        }
+        prices.push(calculateNormalizedIndex(totalMarketCap));
     }
     indexPricesHistory.push(prices);
 }
@@ -1198,6 +1210,7 @@ exports.getOptionTimeRangeData = getOptionTimeRangeData;
 
 exports.getIndexPrice = getIndexPrice;
 exports.getIndexTimeRangeData = getIndexTimeRangeData;
+exports.calculateNormalizedIndex = calculateNormalizedIndex;
 
 exports.getOptionStrikePriceIndex = getOptionStrikePriceIndex;
 exports.getOptionStrikePriceList = getOptionStrikePriceList;
