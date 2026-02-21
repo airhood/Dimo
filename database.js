@@ -3335,8 +3335,14 @@ module.exports = {
                 return { state: 'no_fund', data: null };
             }
 
-            const totalAssetValue = calculateAssetValue(fund.asset);
-            const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
+            // Use cached price (same as /자산 display) to ensure consistency
+            const { getFundPrice } = require('./stock_system/fund_price');
+            let unitPrice = getFundPrice(fundName);
+            if (unitPrice === null) {
+                // Fall back to live calculation if cache not yet available
+                const totalAssetValue = calculateAssetValue(fund.asset);
+                unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
+            }
 
             const units = Math.floor(amount / unitPrice);
             if (units <= 0) {
@@ -3402,8 +3408,14 @@ module.exports = {
                 return { state: 'no_fund', data: null };
             }
 
-            const totalAssetValue = calculateAssetValue(fund.asset);
-            const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
+            // Use cached price (same as /자산 display) to ensure consistency
+            const { getFundPrice } = require('./stock_system/fund_price');
+            let unitPrice = getFundPrice(fundName);
+            if (unitPrice === null) {
+                // Fall back to live calculation if cache not yet available
+                const totalAssetValue = calculateAssetValue(fund.asset);
+                unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
+            }
             const currentValue = units * unitPrice;
 
             // FIFO: remove units oldest-first, track weighted average purchase price
