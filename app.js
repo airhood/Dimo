@@ -7,6 +7,7 @@ const { initScheduleManager } = require('./stock_system/transaction_schedule_man
 const discord_bot = require('./discord_bot');
 const { initCreditSystem, updateCreditRating } = require('./stock_system/credit_system');
 const { initFundPriceSystem } = require('./stock_system/fund_price');
+const { initNotificationScheduler } = require('./stock_system/notification_checker');
 const { setTimezone } = require('./korean_time');
 
 require('dotenv').config();
@@ -57,6 +58,11 @@ module.exports = {
         if (!result6) return false;
 
         console.log('[BOOT] Schedule Manager loaded');
+
+        const result7 = initNotificationScheduler();
+        if (!result7) return false;
+
+        console.log('[BOOT] Notification scheduler loaded');
         
         await discord_bot.setup();
 

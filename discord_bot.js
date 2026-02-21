@@ -11,6 +11,7 @@ const { dimoChat } = require('./chat_bot/chat_bot');
 const { addToBucket, existsInCurrentBucket } = require('./message_reference_tracker');
 const { filterMessage, wrapMentions } = require('./chat_bot/message_filter');
 const { setClient_koreanbots_update, setUpdateInterval } = require('./koreanbots_update');
+const { setClientForNotifications } = require('./stock_system/notification_checker');
 
 const client = new Client({
 	intents: [
@@ -112,6 +113,7 @@ module.exports = {
 			setClient_server_logger(client);
 			setClient_status_tracker(client);
 			setClient_koreanbots_update(client);
+			setClientForNotifications(client);
 			setupAdminChannel();
 			setupStatusChannel();
 			if (process.env.NODE_ENV === 'production') {

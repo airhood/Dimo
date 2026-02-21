@@ -34,6 +34,7 @@ const Asset = require('./schemas/asset');
 const State = require('./schemas/state');
 const Ban = require('./schemas/ban');
 const NotificationSchedule = require('./schemas/notification_schedule');
+const Notification = require('./schemas/notification');
 const Fund = require('./schemas/fund');
 
 const TransactionSchedule = require('./schemas/transaction_schedule');
@@ -2646,20 +2647,62 @@ module.exports = {
         }
     },
 
-    async addNotification(id, command) {
-
+    async addNotification(userID, type, ticker, targetPnL, direction, strikePrice) {
+        try {
+            const now = new Date();
+            const notification = await Notification.create({
+                userID,
+                type,
+                ticker,
+                strikePrice: strikePrice ?? undefined,
+                targetPnL,
+                direction,
+                nextCheckAt: now,
+            });
+            if (!notification) {
+                serverLog(`[ERROR] addNotification: failed to create notification.`);
+                return { state: 'error', data: null };
+            }
+            return { state: 'success', data: notification };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:addNotification': ${err}`);
+            return { state: 'error', data: null };
+        }
     },
 
-    async deleteNotification(id, notificationNum) {
-
+    async deleteNotification(userID, notificationNum) {
+        try {
+            const notifications = await Notification.find({ userID }).sort({ createdAt: 1 });
+            if (notificationNum < 1 || notificationNum > notifications.length) {
+                return { state: 'invalid_num', data: null };
+            }
+            const target = notifications[notificationNum - 1];
+            await Notification.deleteOne({ _id: target._id });
+            return { state: 'success', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:deleteNotification': ${err}`);
+            return { state: 'error', data: null };
+        }
     },
 
-    async getNotificationList() {
-
+    async getNotifications(userID) {
+        try {
+            const notifications = await Notification.find({ userID }).sort({ createdAt: 1 });
+            return { state: 'success', data: notifications };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getNotifications': ${err}`);
+            return { state: 'error', data: null };
+        }
     },
 
-    async resetNotification() {
-
+    async resetNotification(userID) {
+        try {
+            await Notification.deleteMany({ userID });
+            return { state: 'success', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:resetNotification': ${err}`);
+            return { state: 'error', data: null };
+        }
     },
 
     async setCreditRating(id, creditRating) {
