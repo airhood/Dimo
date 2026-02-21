@@ -146,6 +146,7 @@ const stocksTotalQuantity = {};
 const stocksPricesHistory = [];
 const futuresPricesHistory = [];
 const optionsPricesHistory = [];
+const indexPricesHistory = [];
 
 const optionsStrikePricesList = [];
 
@@ -290,6 +291,7 @@ async function loadRecentStockData() {
                             }
                             stocksPricesHistory.push(fillinStockData);
                             newsDataHistory.push(fillinNewsData);
+                            pushIndexHistory(fillinStockData);
                             tickerList.push(...Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]));
                             try {
                                 await loadOptionStrikePriceList();
@@ -307,6 +309,7 @@ async function loadRecentStockData() {
                             }
                             stocksPricesHistory.push(firstStockData);
                             newsDataHistory.push(firstNewsData);
+                            pushIndexHistory(firstStockData);
                             calculateNextHourFuturePrice(firstStockData);
                             calculateNextHourOptionPrice(firstStockData);
                             backupRecentData(false);
@@ -370,6 +373,7 @@ async function loadRecentStockData() {
 
                             
                             stocksPricesHistory.push(previousHourStockData);
+                            pushIndexHistory(previousHourStockData);
                             tickerList.push(...Object.keys(stocksPricesHistory[stocksPricesHistory.length - 1]));
                             try {
                                 await loadOptionStrikePriceList();
@@ -380,6 +384,7 @@ async function loadRecentStockData() {
                             calculateNextHourOptionPrice(previousHourStockData);
                             backupRecentData(true);
                             stocksPricesHistory.push(newStockData);
+                            pushIndexHistory(newStockData);
                             calculateNextHourFuturePrice(newStockData);
                             calculateNextHourOptionPrice(newStockData);
                             backupRecentData(false);
@@ -421,6 +426,7 @@ function calculateNextHourPrice() {
     }
     stocksPricesHistory.push(newStockData);
     newsDataHistory.push(newNewsData);
+    pushIndexHistory(newStockData);
 
     calculateNextHourFuturePrice(newStockData);
     calculateNextHourOptionPrice(newStockData);
@@ -663,9 +669,72 @@ function updateProductTimeLeft() {
 
 const STOCK_PRICE_HISTORY_SIZE = 24 * 2; // 4주일
 
+// 주어진 시간대의 주식 데이터에서 매 분(60개)의 지수값을 계산해 히스토리에 저장
+function pushIndexHistory(stockHourData) {
+    const tickers = Object.keys(stockHourData);
+    const prices = [];
+    for (let minute = 0; minute < 60; minute++) {
+        let totalMarketCap = 0;
+        for (const ticker of tickers) {
+            const minutePrice = stockHourData[ticker][minute];
+            const totalQty = stocksTotalQuantity[ticker];
+            if (minutePrice !== undefined && totalQty !== undefined) {
+                totalMarketCap += minutePrice * totalQty;
+            }
+        }
+        prices.push(Math.round(totalMarketCap));
+    }
+    indexPricesHistory.push(prices);
+}
+
+function getIndexPrice() {
+    if (indexPricesHistory.length === 0) return null;
+    const minutes = new Date().getMinutes();
+    return indexPricesHistory[indexPricesHistory.length - 1][minutes];
+}
+
+function getIndexTimeRangeData(hoursAgo, minutesAgo) {
+    if (indexPricesHistory.length === 0) return [];
+
+    const currentHourIndex = indexPricesHistory.length - 1;
+    const currentMinuteIndex = new Date().getMinutes();
+
+    let targetHourIndex = currentHourIndex - hoursAgo;
+    let targetMinuteIndex = currentMinuteIndex - minutesAgo;
+
+    if (targetMinuteIndex < 0) {
+        targetHourIndex -= 1;
+        targetMinuteIndex = 60 + targetMinuteIndex;
+    }
+    if (targetHourIndex < 0) {
+        targetHourIndex = 0;
+        targetMinuteIndex = 0;
+    }
+
+    const timeRangeData = [];
+    for (let hourIndex = targetHourIndex; hourIndex <= currentHourIndex && hourIndex < indexPricesHistory.length; hourIndex++) {
+        const hourPrices = indexPricesHistory[hourIndex];
+        let prices;
+        if (targetHourIndex === currentHourIndex) {
+            prices = hourPrices.slice(targetMinuteIndex, currentMinuteIndex + 1);
+        } else if (hourIndex === targetHourIndex) {
+            prices = hourPrices.slice(targetMinuteIndex, 60);
+        } else if (hourIndex === currentHourIndex) {
+            prices = hourPrices.slice(0, currentMinuteIndex + 1);
+        } else {
+            prices = hourPrices.slice(0, 60);
+        }
+        timeRangeData.push(prices);
+    }
+    return timeRangeData;
+}
+
 function updateStockData() {
     if (stocksPricesHistory.length >= STOCK_PRICE_HISTORY_SIZE) {
         stocksPricesHistory.splice(0, 1);
+    }
+    if (indexPricesHistory.length >= STOCK_PRICE_HISTORY_SIZE) {
+        indexPricesHistory.splice(0, 1);
     }
     updateProductTimeLeft();
     calculateNextHourPrice();
@@ -1126,6 +1195,9 @@ exports.getTickerList = getTickerList;
 exports.getStockTimeRangeData = getStockTimeRangeData;
 exports.getFutureTimeRangeData = getFutureTimeRangeData;
 exports.getOptionTimeRangeData = getOptionTimeRangeData;
+
+exports.getIndexPrice = getIndexPrice;
+exports.getIndexTimeRangeData = getIndexTimeRangeData;
 
 exports.getOptionStrikePriceIndex = getOptionStrikePriceIndex;
 exports.getOptionStrikePriceList = getOptionStrikePriceList;

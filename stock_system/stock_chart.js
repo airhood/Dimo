@@ -107,3 +107,52 @@ async function generateStockChartImage(ticker, timeRangeData, targetMinuteIndex)
 }
 
 exports.generateStockChartImage = generateStockChartImage;
+
+// timeRangeData: [[price, price, ...], [price, price, ...], ...]
+// 각 내부 배열이 한 시간(최대 60분)의 지수값
+async function generateIndexChartImage(indexName, timeRangeData) {
+    let time = 0;
+    const data = [];
+    timeRangeData.forEach((hourPrices) => {
+        hourPrices.forEach((price) => {
+            time += 1;
+            data.push([time, price]);
+        });
+    });
+
+    if (data.length === 0) {
+        throw new Error('No index data available');
+    }
+
+    const finalTime = data[data.length - 1][0];
+    const formattedData = data.map(([t, p]) => [t - finalTime, p]);
+
+    const chartOptions = {
+        chart: { type: 'area' },
+        title: { text: indexName },
+        dataLabels: { enabled: false },
+        stroke: { width: 1 },
+        series: [{ name: indexName, data: formattedData }],
+        xaxis: {
+            type: 'linear',
+            title: { text: '시간 (분)' },
+        },
+        yaxis: {
+            title: { text: '지수' },
+        },
+    };
+
+    const response = await axios.post('https://quickchart.io/apex-charts/render', {
+        width: 600,
+        height: 300,
+        config: chartOptions,
+    }, { responseType: 'arraybuffer' });
+
+    const filepath = `assets/charts/chart_${chartFileIndex}.png`;
+    const filename = `chart_${chartFileIndex}.png`;
+    fs.writeFileSync(filepath, response.data);
+    chartFileIndex++;
+    return { filepath, filename };
+}
+
+exports.generateIndexChartImage = generateIndexChartImage;

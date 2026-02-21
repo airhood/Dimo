@@ -1,4 +1,4 @@
-const { getTickerList, getStockInfo } = require('./stock_sim');
+const { getTickerList, getStockInfo, getIndexPrice, getIndexTimeRangeData } = require('./stock_sim');
 
 function getDISDAQIndex() {
     const tickers = getTickerList();
@@ -14,4 +14,14 @@ function getDISDAQIndex() {
     return Math.round(totalMarketCap);
 }
 
+function getDISDAQIndexPrice() {
+    return getIndexPrice();
+}
+
+function getDISDAQIndexTimeRangeData(hoursAgo, minutesAgo) {
+    return getIndexTimeRangeData(hoursAgo, minutesAgo);
+}
+
 exports.getDISDAQIndex = getDISDAQIndex;
+exports.getDISDAQIndexPrice = getDISDAQIndexPrice;
+exports.getDISDAQIndexTimeRangeData = getDISDAQIndexTimeRangeData;
