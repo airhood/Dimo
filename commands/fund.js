@@ -595,7 +595,7 @@ module.exports = {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
-                            .setColor(0x2ecc71)
+                            .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  펀드 매수 완료')
                             .addFields(
                                 { name: '펀드', value: fundName },
@@ -635,7 +635,6 @@ module.exports = {
 
                 const avgPurchasePrice = weightedPurchaseCost / soldUnits;
                 const profitSign = profit >= 0 ? '+' : '';
-                const profitColor = profit >= 0 ? 0x2ecc71 : 0xEA4144;
 
                 const fields = [
                     { name: '펀드', value: fundName, inline: false },
@@ -652,7 +651,7 @@ module.exports = {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
-                            .setColor(profitColor)
+                            .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  펀드 매도 완료')
                             .addFields(fields)
                             .setTimestamp()
