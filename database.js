@@ -476,12 +476,12 @@ module.exports = {
                 const fundName = userState.currentAccount.replace('@fund_', '');
                 const fund = await Fund.findOne({ name: fundName }).populate('asset');
                 if (!fund) return { state: 'error', data: null };
-                return { state: 'success', data: fund.asset };
+                return { state: 'success', data: fund.asset, isFund: true, fundName };
             }
 
             const userAsset = await Asset.findById(user.asset);
             if (!userAsset) return { state: 'error', data: null };
-            return { state: 'success', data: userAsset };
+            return { state: 'success', data: userAsset, isFund: false };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getActiveAsset': ${err}`);
             return { state: 'error', data: null };
@@ -2195,11 +2195,7 @@ module.exports = {
         try {
             const result = await TransactionSchedule.deleteOne({ identification_code: identification_code });
             if (result.deletedCount === 0) {
-                serverLog(`[ERROR] Cannot delete transaction schedule. Matching transaction schedule not found.`);
-                return {
-                    state: 'error',
-                    data: null,
-                };
+                serverLog(`[WARN] deleteTransactionSchedule: schedule not found. identification_code: ${identification_code}`);
             }
             return {
                 state: 'success',
