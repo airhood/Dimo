@@ -3555,6 +3555,51 @@ module.exports = {
         }
     },
 
+    async checkAndGrantAchievements(id) {
+        try {
+            const { ACHIEVEMENTS } = require('./stock_system/achievement_system');
+
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            const profile = await Profile.findById(user.profile);
+            if (!profile) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            // 한 번의 집계 쿼리로 모든 거래 타입별 카운트 수집
+            const typeCounts = await TransactionLog.aggregate([
+                { $match: { userID: id } },
+                { $group: { _id: '$type', count: { $sum: 1 } } },
+            ]);
+            const logCounts = {};
+            typeCounts.forEach(t => { logCounts[t._id] = t.count; });
+            const totalTransactions = Object.values(logCounts).reduce((s, c) => s + c, 0);
+
+            const earnedNames = new Set(profile.achievements.map(a => a.name));
+            const context = { level: profile.level.level, asset: userAsset, logCounts, totalTransactions };
+
+            const newAchievements = [];
+            for (const achievement of ACHIEVEMENTS) {
+                if (earnedNames.has(achievement.name)) continue;
+                if (achievement.check(context)) {
+                    profile.achievements.push({ name: achievement.name, description: achievement.description });
+                    newAchievements.push({ name: achievement.name, description: achievement.description });
+                }
+            }
+
+            if (newAchievements.length > 0) {
+                await profile.save();
+            }
+
+            return { state: 'success', data: newAchievements };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:checkAndGrantAchievements': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
     addTransactionLog(userID, type, logMessage) {
         TransactionLog.create({ userID, type, logMessage }).catch((err) => {
             serverLog(`[ERROR] Error at 'database.js:addTransactionLog': ${err}`);
