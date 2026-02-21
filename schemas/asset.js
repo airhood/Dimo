@@ -250,6 +250,20 @@ const AssetSchema = new Schema({
             required: true,
         },
     }],
+    loanHistory: [{
+        amount: {
+            type: Number,
+            required: true,
+        },
+        onTime: {
+            type: Boolean,
+            required: true,
+        },
+        repaidAt: {
+            type: Date,
+            required: true,
+        },
+    }],
 });
 
 module.exports = mongoose.model('Asset', AssetSchema);

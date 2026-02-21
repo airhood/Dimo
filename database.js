@@ -3,6 +3,7 @@ const { mongodb_url }  = require('./config.json');
 const { serverLog } = require('./server/server_logger');
 const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionExpirationDate } = require('./stock_system/stock_sim');
 const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, getLoanInterestRatePoint, getFixedDepositInterestRatePoint } = require('./stock_system/bank_manager');
+const { calculateFundCreditRating } = require('./stock_system/credit_system');
 require('dotenv').config();
 const moment = require('moment-timezone');
 const fs = require('fs');
@@ -1966,16 +1967,22 @@ module.exports = {
                 };
             }
             const userAsset = activeAsset.data;
-            
-            const creditRating = await module.exports.getUserCredit(id);
-            if (creditRating.state === 'error') {
-                return {
-                    state: 'error',
-                    data: null,
-                };
+
+            let creditRatingValue;
+            if (activeAsset.isFund) {
+                creditRatingValue = calculateFundCreditRating(userAsset);
+            } else {
+                const creditRating = await module.exports.getUserCredit(id);
+                if (creditRating.state === 'error') {
+                    return {
+                        state: 'error',
+                        data: null,
+                    };
+                }
+                creditRatingValue = creditRating.data;
             }
 
-            const loanLimit = calculateLoanLimit(userAsset, creditRating.data, dueDate);
+            const loanLimit = calculateLoanLimit(userAsset, creditRatingValue, dueDate);
 
             console.log(`loanLimit: ${loanLimit}`);
 
@@ -2090,6 +2097,13 @@ module.exports = {
             }
 
             userAsset.balance -= transactionAmount;
+
+            const isOnTime = new Date() <= new Date(loan.dueDate);
+            userAsset.loanHistory.push({
+                amount: loan.amount,
+                onTime: isOnTime,
+                repaidAt: new Date(),
+            });
 
             userAsset.loans.splice(loanNumber - 1, 1);
 

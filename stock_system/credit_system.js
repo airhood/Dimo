@@ -61,74 +61,85 @@ async function cacheUsers() {
     return false;
 }
 
+function _calculateRatingFromAsset(asset) {
+    const currentDate = new Date();
+
+    let creditRating = 500;
+
+    // 1. 순자산 가치 평가 (0~+200 / 음수 시 -200)
+    const assetValue = calculateAssetValue(asset);
+    if (assetValue > 0) {
+        const maxAssetLog = Math.log(10000000000); // 100억 기준
+        const assetLog = Math.max(0, Math.log(assetValue));
+        const assetBonus = (assetLog / maxAssetLog) * 200;
+        creditRating += Math.min(assetBonus, 200);
+    } else {
+        creditRating -= 200;
+    }
+
+    // 2. 대출 상환 이력 평가
+    if (asset.loanHistory && asset.loanHistory.length > 0) {
+        asset.loanHistory.forEach(record => {
+            if (record.onTime) {
+                creditRating += 20; // 기한 내 상환: +20
+            } else {
+                creditRating -= 50; // 연체 후 상환: -50
+            }
+        });
+    }
+
+    // 3. 현재 활성 대출 평가
+    let totalDebt = 0;
+    asset.loans.forEach(loan => {
+        totalDebt += loan.amount;
+        creditRating -= 30; // 활성 대출 1건당 -30
+        if (new Date(loan.dueDate) < currentDate) {
+            creditRating -= 100; // 연체 중인 대출 1건당 추가 -100
+        }
+    });
+
+    // 4. 부채 비율 페널티 (0~-300)
+    if (assetValue > 0 && totalDebt > 0) {
+        const debtRatio = totalDebt / assetValue;
+        creditRating -= Math.min(debtRatio * 300, 300);
+    }
+
+    // 5. 마진 부채 비율 페널티 (공매도·선물, 0~-100)
+    let marginDebt = 0;
+    asset.stockShortSales.forEach(sale => { marginDebt += sale.margin; });
+    asset.futures.forEach(future => { marginDebt += future.margin; });
+    if (assetValue > 0 && marginDebt > 0) {
+        const marginRatio = marginDebt / assetValue;
+        creditRating -= Math.min(marginRatio * 100, 100);
+    }
+
+    return Math.max(0, Math.min(1000, Math.round(creditRating)));
+}
+
 async function calculateCreditRating(id) {
     const user = await User.findOne({ userID: id }).populate('asset').populate('profile');
     if (!user) return null;
+    return _calculateRatingFromAsset(user.asset);
+}
 
-    // 1. 자산 가치 계산 (대출 날짜를 기준으로 예금 및 적금에서 이자 제외)
-    const assetValue = calculateAssetValue(user.asset);
+function calculateFundCreditRating(fundAsset) {
+    return _calculateRatingFromAsset(fundAsset);
+}
 
-    // 2. 기본 신용 점수 설정 (100점으로 설정)
-    let creditRating = 100;
-
-    // 3. 대출 상환 이력 평가
-    user.asset.loans.forEach(loan => {
-        const currentDate = new Date();
-        const dueDate = new Date(loan.dueDate);
-        creditRating -= 50;
-    });
-
-    let assetScoreIncrease;
-    if (assetValue <= 0) {
-        assetScoreIncrease = 0;
-    } else {
-        // 4. 자산 가치에 따른 점수 증가 (자산 가치가 많을수록 점수 상승)
-        const maxAssetValue = Math.log(10000000000) - Math.log(100000); // 자산이 100억 이상일 경우 최대 상승 한도
-        assetScoreIncrease = ((Math.log(assetValue) - Math.log(100000))  / maxAssetValue) * 1000; // 자산 비례 상승 (최대 600점)
-    }
-
-    // 자산 가치가 많을수록 점수 상승하지만 최대 1000점까지 상승
-    creditRating += Math.min(assetScoreIncrease, 1000);
-
-    // 5. 부채 수준 평가 (대출 및 마진 거래의 부채 합산)
-    let totalDebt = 0;
-
-    // 대출 부채 평가
-    user.asset.loans.forEach(loan => {
-        totalDebt += loan.amount;
-    });
-
-    // 마진 거래 부채 평가 (주식 공매도, 선물 등)
-    user.asset.stockShortSales.forEach(sale => {
-        totalDebt += sale.margin;  // 공매도의 마진 금액
-    });
-
-    user.asset.futures.forEach(future => {
-        totalDebt += future.margin;  // 선물 거래의 마진 금액
-    });
-
-    let debtReduction;
-    if (assetValue === 0) {
-        debtReduction = 0;
-    } else {
-        // 6. 부채로 인한 신용 감소 계산
-        const maxDebtReduction = 700; // 최대 신용 감소 폭 (300점)
-        debtReduction = Math.min((totalDebt / assetValue) * maxDebtReduction, maxDebtReduction);
-    }
-
-    // 부채로 인한 신용 점수 감소
-    creditRating -= debtReduction;
-
-    // 7. 자산이 0 이하인 경우 신용 점수 150점 감소
-    if (assetValue <= 0) {
-        creditRating -= 150;
-    }
-
-    // 8. 신용 점수 범위 제한 (최소 0점, 최대 1000점)
-    creditRating = Math.max(0, Math.min(creditRating, 1000));
-    creditRating = Math.round(creditRating);
-
-    return creditRating;
+function getCreditGrade(score) {
+    if (score >= 900) return 'A+';
+    if (score >= 850) return 'A';
+    if (score >= 800) return 'A-';
+    if (score >= 750) return 'B+';
+    if (score >= 700) return 'B';
+    if (score >= 650) return 'B-';
+    if (score >= 600) return 'C+';
+    if (score >= 550) return 'C';
+    if (score >= 500) return 'C-';
+    if (score >= 450) return 'D+';
+    if (score >= 400) return 'D';
+    if (score >= 350) return 'D-';
+    return 'F';
 }
 
 // test
@@ -280,6 +291,8 @@ exports.initCreditSystem = initCreditSystem;
 
 exports.calculateAssetValue = calculateAssetValue;
 exports.getAssetTotalLoan = getAssetTotalLoan;
+exports.getCreditGrade = getCreditGrade;
+exports.calculateFundCreditRating = calculateFundCreditRating;
 
 exports.updateCreditRating = updateCreditRating;
 

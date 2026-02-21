@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, CommandInteractionOptionResolver } = require('discord.js');
 const { loan, loanRepay, openFixedDeposit, openSavingsAccount, getUserCredit, checkUserExists } = require('../database');
 const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint } = require('../stock_system/bank_manager');
+const { getCreditGrade } = require('../stock_system/credit_system');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -358,7 +359,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0xF1C40F)
                             .setTitle('신용등급')
-                            .setDescription(`\`\`\`${userCredit.data}/1000\`\`\``)
+                            .setDescription(`\`\`\`${userCredit.data}/1000 (${getCreditGrade(userCredit.data)})\`\`\``)
                     ],
                 });
             }
