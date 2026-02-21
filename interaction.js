@@ -1,5 +1,5 @@
-const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { createUser, deleteUser, addBalance } = require('./database');
+const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
+const { createUser, deleteUser } = require('./database');
 const { loadCache, saveCache } = require('./cache');
 const moment = require('moment-timezone');
 
@@ -253,25 +253,25 @@ function addInteractionHandler(client) {
                 if (currentPage === 0) return;
 
                 const pageToLoad = currentPage - 1;
+                
+                const nextPage = new ButtonBuilder()
+                .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
+                .setLabel('이전')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(pageToLoad === pages.length - 1);
 
-                const ieoJeon = new ButtonBuilder()
-                    .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
-                    .setLabel('이전')
-                    .setStyle(ButtonStyle.Primary)
-                    .setDisabled(pageToLoad === pages.length - 1);
-
-                const daEum = new ButtonBuilder()
+                const previousPage = new ButtonBuilder()
                     .setCustomId(`notice_previous_page-${interaction.user.id}-${uid}`)
                     .setLabel('다음')
                     .setStyle(ButtonStyle.Primary)
                     .setDisabled(pageToLoad === 0);
 
                 const row = new ActionRowBuilder()
-                    .addComponents(ieoJeon, daEum);
-
+                    .addComponents(nextPage, previousPage);
+                
                 const formattedDate = moment(pages[pageToLoad].date).tz('Asia/Seoul').format('YYYY-MM-DD');
-
-                await interaction.update({
+                
+                await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                         .setColor(0xE57E22)
@@ -298,24 +298,24 @@ function addInteractionHandler(client) {
 
                 const pageToLoad = currentPage + 1;
 
-                const ieoJeon = new ButtonBuilder()
-                    .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
-                    .setLabel('이전')
-                    .setStyle(ButtonStyle.Primary)
-                    .setDisabled(pageToLoad === pages.length - 1);
-
-                const daEum = new ButtonBuilder()
+                const nextPage = new ButtonBuilder()
+                .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
+                .setLabel('이전')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(pageToLoad === pages.length - 1);
+                
+                const previousPage = new ButtonBuilder()
                     .setCustomId(`notice_previous_page-${interaction.user.id}-${uid}`)
                     .setLabel('다음')
                     .setStyle(ButtonStyle.Primary)
                     .setDisabled(pageToLoad === 0);
-
+                
                 const row = new ActionRowBuilder()
-                    .addComponents(ieoJeon, daEum);
-
+                    .addComponents(nextPage, previousPage);
+                
                 const formattedDate = moment(pages[pageToLoad].date).tz('Asia/Seoul').format('YYYY-MM-DD');
 
-                await interaction.update({
+                await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                         .setColor(0xE57E22)
@@ -329,7 +329,7 @@ function addInteractionHandler(client) {
 
                 const newCache = { pages: pages, currentPage: pageToLoad };
                 saveCache(uid, newCache);
-            } else if (action === 'transaction_log_previous_page') {
+            } else if (action === 'fund_previous_page') {
                 const uid = customID[2];
                 if (!uid) return;
 
@@ -343,13 +343,13 @@ function addInteractionHandler(client) {
                 const pageToLoad = currentPage - 1;
 
                 const previousPage = new ButtonBuilder()
-                    .setCustomId(`transaction_log_previous_page-${interaction.user.id}-${uid}`)
+                    .setCustomId(`fund_previous_page-${interaction.user.id}-${uid}`)
                     .setLabel('이전')
                     .setStyle(ButtonStyle.Primary)
                     .setDisabled(pageToLoad === 0);
 
                 const nextPage = new ButtonBuilder()
-                    .setCustomId(`transaction_log_next_page-${interaction.user.id}-${uid}`)
+                    .setCustomId(`fund_next_page-${interaction.user.id}-${uid}`)
                     .setLabel('다음')
                     .setStyle(ButtonStyle.Primary)
                     .setDisabled(pageToLoad === pages.length - 1);
@@ -360,17 +360,17 @@ function addInteractionHandler(client) {
                 await interaction.update({
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle(`거래 내역 [${interaction.user.username}]`)
-                            .setDescription(`${pages[pageToLoad].join('\n')}`)
+                            .setColor(0xF1C40F)
+                            .setTitle(':bar_chart:  펀드 목록')
+                            .setDescription(`${pages[pageToLoad].join('\n\n')}`)
                             .setTimestamp()
                     ],
                     components: [row],
                     fetchReply: true
                 });
 
-                const newCache = { pages: pages, currentPage: pageToLoad };
-                saveCache(uid, newCache);
-            } else if (action === 'transaction_log_next_page') {
+                saveCache(uid, { pages, currentPage: pageToLoad });
+            } else if (action === 'fund_next_page') {
                 const uid = customID[2];
                 if (!uid) return;
 
@@ -379,18 +379,18 @@ function addInteractionHandler(client) {
 
                 const { pages, currentPage } = cache;
 
-                if (currentPage === (pages.length - 1)) return;
+                if (currentPage === pages.length - 1) return;
 
                 const pageToLoad = currentPage + 1;
 
                 const previousPage = new ButtonBuilder()
-                    .setCustomId(`transaction_log_previous_page-${interaction.user.id}-${uid}`)
+                    .setCustomId(`fund_previous_page-${interaction.user.id}-${uid}`)
                     .setLabel('이전')
                     .setStyle(ButtonStyle.Primary)
                     .setDisabled(pageToLoad === 0);
 
                 const nextPage = new ButtonBuilder()
-                    .setCustomId(`transaction_log_next_page-${interaction.user.id}-${uid}`)
+                    .setCustomId(`fund_next_page-${interaction.user.id}-${uid}`)
                     .setLabel('다음')
                     .setStyle(ButtonStyle.Primary)
                     .setDisabled(pageToLoad === pages.length - 1);
@@ -401,75 +401,16 @@ function addInteractionHandler(client) {
                 await interaction.update({
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle(`거래 내역 [${interaction.user.username}]`)
-                            .setDescription(`${pages[pageToLoad].join('\n')}`)
+                            .setColor(0xF1C40F)
+                            .setTitle(':bar_chart:  펀드 목록')
+                            .setDescription(`${pages[pageToLoad].join('\n\n')}`)
                             .setTimestamp()
                     ],
                     components: [row],
                     fetchReply: true
                 });
 
-                const newCache = { pages: pages, currentPage: pageToLoad };
-                saveCache(uid, newCache);
-            } else if (action === 'quiz_answer') {
-                const uid = customID[2];
-                if (!uid) return;
-
-                const modal = new ModalBuilder()
-                    .setCustomId(`quiz_answer_modal-${uid}`)
-                    .setTitle('정답 제출');
-                
-                const answerInput = new TextInputBuilder()
-                    .setCustomId(`quiz_answer_modal_input`)
-                    .setLabel('정답')
-                    .setStyle(TextInputStyle.Short)
-                    .setPlaceholder('정답을 입력하세요')
-                    .setRequired(true);
-                
-                const firstActionRow = new ActionRowBuilder()
-                    .addComponents(answerInput);
-
-                modal.addComponents(firstActionRow);
-
-                await interaction.showModal(modal);
-            }
-        } else if (interaction.isModalSubmit()) {
-            const customID = interaction.customId.split('-');
-
-            const action = customID[0];
-
-            if (action === 'quiz_answer_modal') {
-                const uid = customID[1];
-                if (!uid) return;
-
-                const cache = loadCache(uid);
-                if (!cache) return;
-
-                const answerInput = interaction.fields.getTextInputValue('quiz_answer_modal_input');
-
-                if (cache.answer === answerInput) {
-                    await addBalance(interaction.user.id, cache.prize);
-                    const formatted = cache.prize.toLocaleString();
-                    await interaction.update({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0x2ecc71)
-                                .setTitle(':white_check_mark:  정답!')
-                                .setDescription(`정답입니다! **${formatted}원**이 지급되었습니다.`)
-                        ],
-                        components: []
-                    });
-                } else {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  오답')
-                                .setDescription(`정답이 아닙니다!\n정답은 \`${cache.answer}\`였습니다.`)
-                        ],
-                        components: []
-                    });
-                }
+                saveCache(uid, { pages, currentPage: pageToLoad });
             }
         }
     });

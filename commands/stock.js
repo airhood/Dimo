@@ -213,7 +213,6 @@ module.exports = {
                     .setTimestamp()
                 ],
                 components: [row],
-                fetchReply: true
             });
         } else if (subCommand === '정보') {
             const ticker_input = interaction.options.getString('종목');
@@ -407,13 +406,14 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
+                return;
             }
 
             const quantity = interaction.options.getInteger('수량');
 
             const result = await stockSell(interaction.user.id, ticker, quantity);
 
-            if (result.state === null) {
+            if (result.state === 'error') {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -459,6 +459,7 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
+                return;
             }
 
             const quantity = interaction.options.getInteger('수량');

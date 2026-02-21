@@ -95,6 +95,13 @@ module.exports = {
             }
         }
 
+        let achievementsString;
+        if (achievementsContent.length === 0) {
+            achievementsString = " ";
+        } else {
+            achievementsString = achievementsContent.join('\n');
+        }
+
         await interaction.reply({
             embeds: [
                 new EmbedBuilder()
@@ -102,7 +109,7 @@ module.exports = {
                     .setTitle(`${targetUser.username}님의 프로필`)
                     .addFields(
                         { name: ':sparkles: 레벨', value: `${levelInfo.data.level}레벨 (${levelInfo.data.state}/${levelInfo.data.target})` },
-                        { name: ':diamond_shape_with_a_dot_inside: 업적', value: achievementsContent.join('\n') },
+                        { name: ':diamond_shape_with_a_dot_inside: 업적', value: achievementsString },
                     )
                     .setThumbnail(avatarURL)
             ],

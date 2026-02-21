@@ -1,5 +1,8 @@
+
 module.exports = {
-    getKoreanTime: (date) => {
-        return new Date(date.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+    setTimezone: () => {
+        process.env.TZ = 'Asia/Seoul';
+        const date = new Date();
+        console.log(`[BOOT] Timezone set complete. Current time: ${date.toString()}`);
     }
 }

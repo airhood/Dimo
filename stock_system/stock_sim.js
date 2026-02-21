@@ -4,7 +4,6 @@ const math = require('mathjs');
 const { serverLog } = require('../server/server_logger');
 const { getTicker, getStockName } = require('./stock_name');
 const { initBankManagerFuncDependencies, getInterestRate } = require('./bank_manager');
-const { getKoreanTime } = require('../korean_time');
 
 
 const sigma = 0.004;  // 변동성 (일일 변동성)
@@ -202,7 +201,7 @@ async function loadRecentStockData() {
     return new Promise((resolve, reject) => {
         fs.access('./data/stock_meta.txt', fs.constants.F_OK, (err) => {
             if (err) {
-                serverLog('[ERROR] File \'stock_meta.txt\' is missing');
+                serverLog(`[ERROR] File 'stock_meta.txt' is missing`);
                 return reject(new Error('File is missing'));
             }
 
@@ -213,7 +212,7 @@ async function loadRecentStockData() {
                 }
 
                 if (!data.trim()) {
-                    serverLog('[ERROR] \'stock_meta.txt\' is empty or unreadable.');
+                    serverLog(`[ERROR] 'stock_meta.txt' is empty or unreadable.`);
                     return reject(new Error('File data missing'));
                 }
 
@@ -472,7 +471,7 @@ const HOURS_IN_A_WEEK = 24 * 7; // 1주일
 
 function updateFutureTimeLeft() {
     if (futureTimeLeft === null) {
-        const now = getKoreanTime(new Date());
+        const now = new Date();
         const friday = new Date(now);
 
         friday.setDate(now.getDate() + (6 - now.getDay() + 7) % 7);
@@ -604,7 +603,7 @@ function getOptionStrikePriceList(ticker) {
 
 function updateOptionTimeLeft() {
     if (optionTimeLeft === null) {
-        const now = getKoreanTime(new Date());
+        const now = new Date();
         const friday = new Date(now);
 
         friday.setDate(now.getDate() + (6 - now.getDay() + 7) % 7);

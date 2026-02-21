@@ -293,7 +293,7 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xF1C40F)
                         .setTitle('예금금리')
-                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\``)
+                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\`\n-# 예금금리는 10일 기준 이자로 1일 기준 이자는 10으로 나누어야 합니다.`)
                 ],
             });
         } else if (subCommand === '적금금리') {
@@ -304,7 +304,7 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xF1C40F)
                         .setTitle('적금금리')
-                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\``)
+                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\`\n-# 적금금리는 10일 기준 이자로 1일 기준 이자는 10으로 나누어야 합니다.`)
                 ],
             });
         } else if (subCommand === '신용등급') {

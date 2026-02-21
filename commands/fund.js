@@ -1,8 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder, userMention } = require('discord.js');
-const { fundAddAdministrator, fundRemoveAdministrator, fundGetAdministrators, fundLogin, fundLogout, fundCreate, getFundInfo, getFundList, fundInvest, fundRedeem } = require('../database');
+const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, userMention } = require('discord.js');
+const { fundAddAdministrator, fundRemoveAdministrator, fundGetAdministrators, fundLogin, fundLogout, fundCreate, getFundInfo, getFundList } = require('../database');
 const { calculateAssetValue } = require('../stock_system/credit_system');
-
-const MIN_INITIAL_AMOUNT = 1_000_000_000; // 10억
+const { createCache, saveCache } = require('../cache');
+const { v4: uuidv4 } = require('uuid');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -25,7 +25,7 @@ module.exports = {
         )
         .addSubcommand((subCommand) =>
             subCommand.setName('등록')
-                .setDescription('펀드를 등록합니다. 최소 10억원이 필요합니다.')
+                .setDescription('펀드를 등록합니다.')
                 .addStringOption((option) =>
                     option.setName('이름')
                         .setDescription('등록할 펀드의 이름')
@@ -45,8 +45,8 @@ module.exports = {
                 )
                 .addIntegerOption((option) =>
                     option.setName('초기투자금')
-                        .setDescription('펀드 창설 시 투자할 금액 (최소 10억원)')
-                        .setMinValue(MIN_INITIAL_AMOUNT)
+                        .setDescription('펀드에 초기 투자할 금액 (최소 10억원)')
+                        .setMinValue(1000000000)
                         .setRequired(true)
                 )
         )
@@ -56,36 +56,6 @@ module.exports = {
                 .addStringOption((option) =>
                     option.setName('이름')
                         .setDescription('펀드의 이름')
-                        .setRequired(true)
-                )
-        )
-        .addSubcommand((subCommand) =>
-            subCommand.setName('투자')
-                .setDescription('펀드에 투자합니다.')
-                .addStringOption((option) =>
-                    option.setName('이름')
-                        .setDescription('투자할 펀드의 이름')
-                        .setRequired(true)
-                )
-                .addIntegerOption((option) =>
-                    option.setName('금액')
-                        .setDescription('투자할 금액 (원)')
-                        .setMinValue(1)
-                        .setRequired(true)
-                )
-        )
-        .addSubcommand((subCommand) =>
-            subCommand.setName('환매')
-                .setDescription('펀드 투자금을 환매합니다.')
-                .addStringOption((option) =>
-                    option.setName('이름')
-                        .setDescription('환매할 펀드의 이름')
-                        .setRequired(true)
-                )
-                .addNumberOption((option) =>
-                    option.setName('유닛수')
-                        .setDescription('환매할 유닛 수')
-                        .setMinValue(0.000001)
                         .setRequired(true)
                 )
         )
@@ -123,11 +93,6 @@ module.exports = {
                 .addSubcommand((subCommand) =>
                     subCommand.setName('목록')
                         .setDescription('펀드의 관리자 목록을 가져옵니다.')
-                        .addStringOption((option) =>
-                            option.setName('이름')
-                                .setDescription('펀드의 이름')
-                                .setRequired(true)
-                        )
                 )
                 .addSubcommand((subCommand) =>
                     subCommand.setName('로그인')
@@ -143,313 +108,12 @@ module.exports = {
                         .setDescription('펀드의 관리자에서 로그아웃합니다. (로그아웃시 모든 거래는 원래대로 본인 명의로 진행됩니다)')
                 )
         ),
-
+    
     async execute(interaction) {
         const subCommandGroup = interaction.options.getSubcommandGroup(false);
         const subCommand = interaction.options.getSubcommand();
 
-        if (subCommandGroup === null) {
-            if (subCommand === '목록') {
-                const sortingOption = interaction.options.getString('정렬기준');
-                const fund_list = await getFundList();
-
-                if (fund_list.state === 'error') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle('서버 오류')
-                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                }
-
-                if (!fund_list.data || fund_list.data.length === 0) {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xE57E22)
-                                .setTitle(':bar_chart:  펀드 목록')
-                                .setDescription('등록된 펀드가 없습니다.')
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                }
-
-                // Calculate unit price and return rate for each fund
-                const fundsWithMetrics = fund_list.data.map(fund => {
-                    const assetValue = calculateAssetValue(fund.asset);
-                    const unitPrice = fund.total_units > 0 ? assetValue / fund.total_units : 1000;
-                    const initialUnitPrice = 1000;
-                    const returnRate = ((unitPrice - initialUnitPrice) / initialUnitPrice) * 100;
-                    return { fund, assetValue, unitPrice, returnRate };
-                });
-
-                let sorted = [...fundsWithMetrics];
-                if (sortingOption === '수익률(높은순)') {
-                    sorted.sort((a, b) => b.returnRate - a.returnRate);
-                } else if (sortingOption === '수익률(낮은순)') {
-                    sorted.sort((a, b) => a.returnRate - b.returnRate);
-                } else if (sortingOption === '등록일(최신순)') {
-                    sorted.sort((a, b) => new Date(b.fund._id.getTimestamp()) - new Date(a.fund._id.getTimestamp()));
-                } else if (sortingOption === '등록일(오래된순)') {
-                    sorted.sort((a, b) => new Date(a.fund._id.getTimestamp()) - new Date(b.fund._id.getTimestamp()));
-                }
-
-                const lines = sorted.map(({ fund, assetValue, unitPrice, returnRate }) => {
-                    const asset_str = Math.round(assetValue).toLocaleString();
-                    const price_str = Math.round(unitPrice).toLocaleString();
-                    const rate_str = returnRate >= 0 ? `+${returnRate.toFixed(2)}` : returnRate.toFixed(2);
-                    return `**${fund.name}** | 단가 ${price_str}원 | 수익률 ${rate_str}% | 운용자산 ${asset_str}원`;
-                });
-
-                await interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xF1C40F)
-                            .setTitle(':bar_chart:  펀드 목록')
-                            .setDescription(lines.join('\n'))
-                            .setTimestamp()
-                    ],
-                });
-
-            } else if (subCommand === '등록') {
-                const fundName = interaction.options.getString('이름');
-                const description = interaction.options.getString('설명');
-                const fee = interaction.options.getInteger('수수료');
-                const initialAmount = interaction.options.getInteger('초기투자금');
-
-                if (initialAmount === null || initialAmount < MIN_INITIAL_AMOUNT) {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  초기 투자금 오류')
-                                .setDescription(`초기 투자금은 최소 **${MIN_INITIAL_AMOUNT.toLocaleString()}원** 이상이어야 합니다.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                }
-
-                const result = await fundCreate(interaction.user.id, fundName, description, fee, initialAmount);
-
-                if (result.state === 'error') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle('서버 오류')
-                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                } else if (result.state === 'insufficient_balance') {
-                    const currentBalance = result.data?.balance;
-                    const balanceStr = currentBalance != null ? `${currentBalance.toLocaleString()}원` : '알 수 없음';
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  잔고 부족')
-                                .setDescription(`초기 투자금 **${initialAmount.toLocaleString()}원**을 낼 잔고가 부족합니다.\n현재 잔고: **${balanceStr}**`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                } else if (result.state === 'success') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0x2ecc71)
-                                .setTitle(':white_check_mark:  펀드 등록 완료')
-                                .addFields(
-                                    { name: '이름', value: fundName },
-                                    { name: '설명', value: description },
-                                    { name: '수수료', value: `${fee}%` },
-                                    { name: '초기 투자금', value: `${initialAmount.toLocaleString()}원` },
-                                    { name: '초기 단가', value: `1,000원 / 유닛` },
-                                )
-                                .setTimestamp()
-                        ],
-                    });
-                }
-
-            } else if (subCommand === '정보') {
-                const fundName = interaction.options.getString('이름');
-
-                const result = await getFundInfo(fundName);
-                if (result.state === 'error') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle('서버 오류')
-                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                } else if (result.state === 'no_fund') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  존재하지 않는 펀드')
-                                .setDescription(`**${fundName}** 펀드는 존재하지 않습니다.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                } else if (result.state === 'success') {
-                    const fund = result.data;
-                    const assetValue = calculateAssetValue(fund.asset);
-                    const unitPrice = fund.total_units > 0 ? assetValue / fund.total_units : 1000;
-                    const returnRate = ((unitPrice - 1000) / 1000) * 100;
-                    const rate_str = returnRate >= 0 ? `+${returnRate.toFixed(2)}` : returnRate.toFixed(2);
-
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xF1C40F)
-                                .setTitle(':bar_chart:  펀드 정보')
-                                .addFields(
-                                    { name: '펀드명', value: fund.name },
-                                    { name: '설명', value: fund.description },
-                                    { name: '수수료', value: `${fund.fee}%` },
-                                    { name: '운용자산', value: `${Math.round(assetValue).toLocaleString()}원` },
-                                    { name: '현재 단가', value: `${Math.round(unitPrice).toLocaleString()}원 / 유닛` },
-                                    { name: '누적 수익률', value: `${rate_str}%` },
-                                    { name: '총 발행 유닛', value: `${fund.total_units.toFixed(4)}` },
-                                )
-                                .setTimestamp()
-                        ],
-                    });
-                }
-
-            } else if (subCommand === '투자') {
-                const fundName = interaction.options.getString('이름');
-                const amount = interaction.options.getInteger('금액');
-
-                const result = await fundInvest(interaction.user.id, fundName, amount);
-
-                if (result.state === 'error') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle('서버 오류')
-                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                } else if (result.state === 'insufficient_balance') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  잔고 부족')
-                                .setDescription(`투자금 **${amount.toLocaleString()}원**을 낼 잔고가 부족합니다.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                } else if (result.state === 'no_fund') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  존재하지 않는 펀드')
-                                .setDescription(`**${fundName}** 펀드는 존재하지 않습니다.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                } else if (result.state === 'success') {
-                    const { unitPrice, units } = result.data;
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0x2ecc71)
-                                .setTitle(':white_check_mark:  펀드 투자 완료')
-                                .addFields(
-                                    { name: '펀드명', value: fundName },
-                                    { name: '투자금액', value: `${amount.toLocaleString()}원` },
-                                    { name: '취득 단가', value: `${Math.round(unitPrice).toLocaleString()}원 / 유닛` },
-                                    { name: '취득 유닛', value: `${units.toFixed(4)} 유닛` },
-                                )
-                                .setTimestamp()
-                        ],
-                    });
-                }
-
-            } else if (subCommand === '환매') {
-                const fundName = interaction.options.getString('이름');
-                const redeemUnits = interaction.options.getNumber('유닛수');
-
-                const result = await fundRedeem(interaction.user.id, fundName, redeemUnits);
-
-                if (result.state === 'error') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle('서버 오류')
-                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                } else if (result.state === 'no_fund') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  존재하지 않는 펀드')
-                                .setDescription(`**${fundName}** 펀드는 존재하지 않습니다.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                } else if (result.state === 'insufficient_units') {
-                    const held = result.data.held;
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  유닛 부족')
-                                .setDescription(`보유 유닛이 부족합니다.\n보유: **${held.toFixed(4)} 유닛** / 요청: **${redeemUnits.toFixed(4)} 유닛**`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
-                } else if (result.state === 'success') {
-                    const { unitPrice, redeemValue, feeAmount, userReceives } = result.data;
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0x2ecc71)
-                                .setTitle(':white_check_mark:  펀드 환매 완료')
-                                .addFields(
-                                    { name: '펀드명', value: fundName },
-                                    { name: '환매 유닛', value: `${redeemUnits.toFixed(4)} 유닛` },
-                                    { name: '환매 단가', value: `${Math.round(unitPrice).toLocaleString()}원 / 유닛` },
-                                    { name: '환매금액', value: `${Math.round(redeemValue).toLocaleString()}원` },
-                                    { name: '수수료', value: `${feeAmount.toLocaleString()}원` },
-                                    { name: '수령금액', value: `${userReceives.toLocaleString()}원` },
-                                )
-                                .setTimestamp()
-                        ],
-                    });
-                }
-            }
-
-        } else if (subCommandGroup === '관리자') {
+        if (subCommandGroup === '관리자') {
             if (subCommand === '추가') {
                 const fundName = interaction.options.getString('이름');
                 const administrator = interaction.options.getUser('유저');
@@ -467,17 +131,6 @@ module.exports = {
                         ],
                     });
                     return;
-                } else if (result.state === 'no_fund') {
-                    await interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor(0xEA4144)
-                                .setTitle(':x:  존재하지 않는 펀드')
-                                .setDescription(`**${fundName}** 펀드는 존재하지 않는 펀드입니다.`)
-                                .setTimestamp()
-                        ],
-                    });
-                    return;
                 } else if (result.state === 'success') {
                     await interaction.reply({
                         embeds: [
@@ -489,7 +142,6 @@ module.exports = {
                         ],
                     });
                 }
-
             } else if (subCommand === '삭제') {
                 const fundName = interaction.options.getString('이름');
                 const administratorNum = interaction.options.getInteger('관리자번호');
@@ -527,7 +179,7 @@ module.exports = {
                                 .setTimestamp()
                         ],
                     });
-                } else if (result.state === 'success') {
+                } else {
                     await interaction.reply({
                         embeds: [
                             new EmbedBuilder()
@@ -538,13 +190,12 @@ module.exports = {
                         ],
                     });
                 }
-
             } else if (subCommand === '목록') {
                 const fundName = interaction.options.getString('이름');
 
-                const administratorList = await fundGetAdministrators(fundName);
+                const adminResult = await fundGetAdministrators(fundName);
 
-                if (!administratorList || administratorList.state === 'error') {
+                if (adminResult.state === 'error') {
                     await interaction.reply({
                         embeds: [
                             new EmbedBuilder()
@@ -557,11 +208,9 @@ module.exports = {
                     return;
                 }
 
-                const list = administratorList.data ?? administratorList;
-                const contents = list.map((administrator, i) => {
-                    const tag = administrator.isTopAdmin ? ' 👑' : '';
-                    return `${i + 1}. ${userMention(administrator.userID)}${tag}`;
-                });
+                const contents = adminResult.data.map((administrator, index) =>
+                    `**${index + 1}.** ${userMention(administrator.userID)}${administrator.isTopAdmin ? ' 👑' : ''}`
+                );
 
                 await interaction.reply({
                     embeds: [
@@ -572,7 +221,6 @@ module.exports = {
                             .setTimestamp()
                     ],
                 });
-
             } else if (subCommand === '로그인') {
                 const fundName = interaction.options.getString('이름');
 
@@ -599,7 +247,6 @@ module.exports = {
                                 .setTimestamp()
                         ],
                     });
-                    return;
                 } else if (result.state === 'not_admin') {
                     await interaction.reply({
                         embeds: [
@@ -610,7 +257,6 @@ module.exports = {
                                 .setTimestamp()
                         ],
                     });
-                    return;
                 } else if (result.state === 'success') {
                     await interaction.reply({
                         embeds: [
@@ -622,7 +268,6 @@ module.exports = {
                         ],
                     });
                 }
-
             } else if (subCommand === '로그아웃') {
                 const result = await fundLogout(interaction.user.id);
 
@@ -647,7 +292,6 @@ module.exports = {
                                 .setTimestamp()
                         ],
                     });
-                    return;
                 } else if (result.state === 'success') {
                     await interaction.reply({
                         embeds: [
@@ -659,6 +303,189 @@ module.exports = {
                         ],
                     });
                 }
+            }
+            return;
+        }
+
+        if (subCommand === '목록') {
+            const sortingOption = interaction.options.getString('정렬기준');
+
+            const result = await getFundList();
+
+            if (result.state === 'error') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else if (result.state === 'no_fund') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xF1C40F)
+                            .setTitle(':bar_chart:  펀드 목록')
+                            .setDescription('등록된 펀드가 없습니다.')
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
+
+            const fundData = result.data.map(fund => {
+                const totalAssetValue = calculateAssetValue(fund.asset);
+                const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
+                const returnRate = (unitPrice - 1000) / 1000 * 100;
+                return { fund, totalAssetValue, unitPrice, returnRate };
+            });
+
+            if (sortingOption === '수익률(높은순)') {
+                fundData.sort((a, b) => b.returnRate - a.returnRate);
+            } else if (sortingOption === '수익률(낮은순)') {
+                fundData.sort((a, b) => a.returnRate - b.returnRate);
+            } else if (sortingOption === '등록일(최신순)') {
+                fundData.sort((a, b) => b.fund._id.getTimestamp() - a.fund._id.getTimestamp());
+            } else if (sortingOption === '등록일(오래된순)') {
+                fundData.sort((a, b) => a.fund._id.getTimestamp() - b.fund._id.getTimestamp());
+            }
+
+            const items = fundData.map(({ fund, unitPrice, returnRate }, index) => {
+                const returnRateStr = returnRate >= 0 ? `+${returnRate.toFixed(2)}%` : `${returnRate.toFixed(2)}%`;
+                const unitPriceStr = Math.round(unitPrice).toLocaleString();
+                return `**${index + 1}. ${fund.name}** | ${unitPriceStr}원/유닛 (${returnRateStr})\n-# ${fund.description}`;
+            });
+
+            const ITEMS_PER_PAGE = 5;
+            const pages = [];
+            for (let i = 0; i < items.length; i += ITEMS_PER_PAGE) {
+                pages.push(items.slice(i, i + ITEMS_PER_PAGE));
+            }
+
+            const uid = uuidv4().replace(/-/g, '');
+            createCache(uid, 15);
+            saveCache(uid, { pages, currentPage: 0 });
+
+            const previousPage = new ButtonBuilder()
+                .setCustomId(`fund_previous_page-${interaction.user.id}-${uid}`)
+                .setLabel('이전')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(true);
+
+            const nextPage = new ButtonBuilder()
+                .setCustomId(`fund_next_page-${interaction.user.id}-${uid}`)
+                .setLabel('다음')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(pages.length <= 1);
+
+            const row = new ActionRowBuilder().addComponents(previousPage, nextPage);
+
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle(':bar_chart:  펀드 목록')
+                        .setDescription(pages[0].join('\n\n'))
+                        .setTimestamp()
+                ],
+                components: [row],
+            });
+        } else if (subCommand === '등록') {
+            const fundName = interaction.options.getString('이름');
+            const description = interaction.options.getString('설명');
+            const fee = interaction.options.getInteger('수수료');
+            const initialAmount = interaction.options.getInteger('초기투자금');
+
+            const result = await fundCreate(interaction.user.id, fundName, description, fee, initialAmount);
+
+            if (result.state === 'error') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else if (result.state === 'duplicate_name') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  이미 존재하는 펀드 이름')
+                            .setDescription(`**${fundName}** 이름의 펀드가 이미 존재합니다.`)
+                            .setTimestamp()
+                    ],
+                });
+            } else if (result.state === 'insufficient_balance') {
+                const balanceStr = result.data?.balance?.toLocaleString() ?? '알 수 없음';
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  잔고 부족')
+                            .setDescription(`초기 투자금 **${initialAmount.toLocaleString()}원**이 부족합니다.\n현재 잔고: **${balanceStr}원**`)
+                            .setTimestamp()
+                    ],
+                });
+            } else if (result.state === 'success') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ecc71)
+                            .setTitle(':white_check_mark:  펀드 등록 완료')
+                            .addFields(
+                                { name: '이름', value: fundName },
+                                { name: '설명', value: description },
+                                { name: '초기 투자금', value: `${initialAmount.toLocaleString()}원` },
+                            )
+                            .setTimestamp()
+                    ],
+                });
+            }
+        } else if (subCommand === '정보') {
+            const fundName = interaction.options.getString('이름');
+
+            const result = await getFundInfo(fundName);
+            if (result.state === 'error') {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('서버 오류')
+                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            } else if (result.state === 'success') {
+                const fund = result.data;
+                const totalAssetValue = calculateAssetValue(fund.asset);
+                const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
+                const returnRate = (unitPrice - 1000) / 1000 * 100;
+                const returnRateStr = returnRate >= 0 ? `+${returnRate.toFixed(2)}%` : `${returnRate.toFixed(2)}%`;
+
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xF1C40F)
+                            .setTitle(`:bar_chart:  펀드 정보 [${fund.name}]`)
+                            .addFields(
+                                { name: '설명', value: fund.description },
+                                { name: '수수료', value: `${fund.fee}%` },
+                                { name: '유닛 가격', value: `${Math.round(unitPrice).toLocaleString()}원` },
+                                { name: '수익률', value: returnRateStr },
+                                { name: '총 유닛', value: fund.total_units.toLocaleString() },
+                                { name: '운용자산', value: `${Math.round(totalAssetValue).toLocaleString()}원` },
+                            )
+                            .setTimestamp()
+                    ],
+                });
             }
         }
     }
