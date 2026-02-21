@@ -36,6 +36,14 @@ function getFundPrice(fundName) {
     return fundsPricesHistory[fundsPricesHistory.length - 1][fundName] ?? null;
 }
 
+// 펀드 생성 등 즉시 캐시 갱신이 필요할 때 사용
+function setFundPrice(fundName, price) {
+    if (fundsPricesHistory.length === 0) {
+        fundsPricesHistory.push({});
+    }
+    fundsPricesHistory[fundsPricesHistory.length - 1][fundName] = price;
+}
+
 schedule.scheduleJob('0 * * * *', () => {
     serverLog('[INFO] Update fund price');
     updateFundPrices();
@@ -49,4 +57,5 @@ async function initFundPriceSystem() {
 }
 
 exports.getFundPrice = getFundPrice;
+exports.setFundPrice = setFundPrice;
 exports.initFundPriceSystem = initFundPriceSystem;

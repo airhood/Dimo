@@ -2951,6 +2951,11 @@ module.exports = {
             creatorAsset.balance -= initialAmount;
             await creatorAsset.save();
 
+            // 생성 즉시 가격 캐시 등록 (다음 시간 업데이트 전에도 /자산에서 가격이 표시되도록)
+            const { setFundPrice } = require('./stock_system/fund_price');
+            const initialUnitPrice = fund.total_units > 0 ? initialAmount / fund.total_units : 1000;
+            setFundPrice(fundName, initialUnitPrice);
+
             return {
                 state: 'success',
                 data: null,
