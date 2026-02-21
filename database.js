@@ -429,25 +429,61 @@ module.exports = {
 
     async getUserAsset(id) {
         try {
-            const result = await User.findOne({ userID: id }).populate('asset');
-            if (result === null) {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
                 serverLog('[ERROR] Error finding user asset');
+                return { state: 'error', data: null };
+            }
+
+            const userState = await State.findById(user.state);
+            if (userState && userState.currentAccount !== '@self') {
+                const fundName = userState.currentAccount.replace('@fund_', '');
+                const fund = await Fund.findOne({ name: fundName }).populate('asset');
+                if (!fund) {
+                    serverLog(`[ERROR] Error finding fund in getUserAsset: ${fundName}`);
+                    return { state: 'error', data: null };
+                }
                 return {
-                    state: 'error',
-                    data: null,
+                    state: 'success',
+                    data: { asset: fund.asset },
+                    isFund: true,
+                    fundName,
                 };
             }
 
+            const result = await User.findOne({ userID: id }).populate('asset');
             return {
                 state: 'success',
                 data: result,
+                isFund: false,
             };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getUserAsset': ${err}`);
-            return {
-                state: 'error',
-                data: null,
-            };
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getActiveAsset(id) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            const userState = await State.findById(user.state);
+            if (!userState) return { state: 'error', data: null };
+
+            if (userState.currentAccount !== '@self') {
+                const fundName = userState.currentAccount.replace('@fund_', '');
+                const fund = await Fund.findOne({ name: fundName }).populate('asset');
+                if (!fund) return { state: 'error', data: null };
+                return { state: 'success', data: fund.asset };
+            }
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+            return { state: 'success', data: userAsset };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getActiveAsset': ${err}`);
+            return { state: 'error', data: null };
         }
     },
 
@@ -579,19 +615,12 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return {
-                    state: 'error',
-                    data: null,
-                };
+                return { state: 'error', data: null };
             }
-            
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
+                return { state: 'error', data: null };
             }
 
             userAsset.balance += amount;
@@ -625,19 +654,12 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return {
-                    state: 'error',
-                    data: null,
-                };
+                return { state: 'error', data: null };
             }
-            
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
+                return { state: 'error', data: null };
             }
 
             userAsset.balance = balance;
@@ -817,23 +839,14 @@ module.exports = {
 
     async stockBuy(id, ticker, quantity) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const currentPrice = getStockPrice(ticker);
 
@@ -895,23 +908,14 @@ module.exports = {
 
     async stockSell(id, ticker, quantity) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const currentPrice = getStockPrice(ticker);
 
@@ -984,23 +988,14 @@ module.exports = {
 
     async stockShortSell(id, ticker, quantity) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const currentPrice = getStockPrice(ticker);
 
@@ -1082,23 +1077,14 @@ module.exports = {
 
     async stockShortRepay(id, positionNum) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             if (userAsset.stockShortSales.length < positionNum) {
                 return {
@@ -1176,23 +1162,14 @@ module.exports = {
 
     async futureLong(id, ticker, quantity, leverage) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const currentPrice = getFuturePrice(ticker);
 
@@ -1304,23 +1281,14 @@ module.exports = {
 
     async futureShort(id, ticker, quantity, leverage) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const currentPrice = getStockPrice(ticker);
 
@@ -1422,23 +1390,14 @@ module.exports = {
 
     async futureLiquidate(id, positionNum) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             if (userAsset.futures.length < positionNum) {
                 return {
@@ -1497,23 +1456,14 @@ module.exports = {
 
     async callOptionBuy(id, ticker, quantity, strikePrice) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
             
             const optionPrices = getOptionPrice(ticker);
             const callOptionPrice = optionPrices.call;
@@ -1592,23 +1542,14 @@ module.exports = {
 
     async callOptionSell(id, ticker, quantity, strikePrice) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const optionPrices = getOptionPrice(ticker);
             const callOptionPrice = optionPrices.call;
@@ -1687,23 +1628,14 @@ module.exports = {
 
     async putOptionBuy(id, ticker, quantity, strikePrice) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const optionPrices = getOptionPrice(ticker);
             const putOptionPrice = optionPrices.put;
@@ -1782,23 +1714,14 @@ module.exports = {
 
     async putOptionSell(id, ticker, quantity, strikePrice) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const optionPrices = getOptionPrice(ticker);
             const putOptionPrice = optionPrices.put;
@@ -1877,23 +1800,14 @@ module.exports = {
 
     async optionLiquidate(id, positionNum) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             if (userAsset.options.length < positionNum) {
                 return {
@@ -1962,23 +1876,14 @@ module.exports = {
 
     async binaryOption(id, ticker, prediction, time, amount) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             if (userAsset.balance < amount) {
                 return {
@@ -2053,23 +1958,14 @@ module.exports = {
 
     async loan(id, amount, dueDate, interestType, days) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
             
             const creditRating = await module.exports.getUserCredit(id);
             if (creditRating.state === 'error') {
@@ -2156,23 +2052,14 @@ module.exports = {
 
     async loanRepay(id, loanNumber) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             if (userAsset.loans.length < loanNumber) {
                 return {

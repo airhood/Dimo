@@ -622,11 +622,15 @@ module.exports = {
             }
         }
         
+        const embedTitle = result.isFund
+            ? `:bank:  자산 [${result.fundName} 펀드]`
+            : `:bank:  자산 [${targetUser.username}]`;
+
         await interaction.reply({
             embeds: [
                 new EmbedBuilder()
                     .setColor(0xF1C40F)
-                    .setTitle(`:bank:  자산 [${targetUser.username}]`)
+                    .setTitle(embedTitle)
                     .addFields(fields)
                     .setTimestamp()
             ]
