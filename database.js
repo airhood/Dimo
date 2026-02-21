@@ -3340,14 +3340,9 @@ module.exports = {
                 return { state: 'no_fund', data: null };
             }
 
-            // Use cached price (same as /자산 display) to ensure consistency
-            const { getFundPrice } = require('./stock_system/fund_price');
-            let unitPrice = getFundPrice(fundName);
-            if (unitPrice === null) {
-                // Fall back to live calculation if cache not yet available
-                const totalAssetValue = calculateAssetValue(fund.asset);
-                unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
-            }
+            // 실시간 가격 계산 (요청 시점의 펀드 자산 가치 기준)
+            const totalAssetValue = calculateAssetValue(fund.asset);
+            const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
 
             const units = Math.floor(amount / unitPrice);
             if (units <= 0) {
@@ -3374,6 +3369,11 @@ module.exports = {
             await userAsset.save();
             await fund.asset.save();
             await fund.save();
+
+            // 거래 후 캐시 즉시 갱신 (가격은 수학적으로 동일하지만 /자산 표시 동기화)
+            const { setFundPrice } = require('./stock_system/fund_price');
+            const newUnitPrice = fund.total_units > 0 ? (totalAssetValue + actualCost) / fund.total_units : 1000;
+            setFundPrice(fundName, newUnitPrice);
 
             return { state: 'success', data: { units, unitPrice, actualCost } };
         } catch (err) {
@@ -3413,14 +3413,9 @@ module.exports = {
                 return { state: 'no_fund', data: null };
             }
 
-            // Use cached price (same as /자산 display) to ensure consistency
-            const { getFundPrice } = require('./stock_system/fund_price');
-            let unitPrice = getFundPrice(fundName);
-            if (unitPrice === null) {
-                // Fall back to live calculation if cache not yet available
-                const totalAssetValue = calculateAssetValue(fund.asset);
-                unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
-            }
+            // 실시간 가격 계산 (요청 시점의 펀드 자산 가치 기준)
+            const totalAssetValue = calculateAssetValue(fund.asset);
+            const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
             const currentValue = units * unitPrice;
 
             // FIFO: remove units oldest-first, track weighted average purchase price
@@ -3474,6 +3469,11 @@ module.exports = {
                     }
                 }
             }
+
+            // 거래 후 캐시 즉시 갱신
+            const { setFundPrice } = require('./stock_system/fund_price');
+            const newUnitPrice = fund.total_units > 0 ? (totalAssetValue - currentValue) / fund.total_units : 1000;
+            setFundPrice(fundName, newUnitPrice);
 
             return { state: 'success', data: { units, unitPrice, currentValue, weightedPurchaseCost, profit, feeAmount, investorProceeds } };
         } catch (err) {
