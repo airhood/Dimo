@@ -3361,10 +3361,11 @@ module.exports = {
 
             const totalAssetValue = calculateAssetValue(fund.asset);
             const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
-            const proceeds = units * unitPrice;
+            const currentValue = units * unitPrice;
 
-            // FIFO: remove units oldest-first
+            // FIFO: remove units oldest-first, track weighted average purchase price
             let unitsToRemove = units;
+            let weightedPurchaseCost = 0;
             const newFunds = [];
             for (const holding of userAsset.funds) {
                 if (holding.name !== fundName || unitsToRemove <= 0) {
@@ -3372,8 +3373,10 @@ module.exports = {
                     continue;
                 }
                 if (holding.unit <= unitsToRemove) {
+                    weightedPurchaseCost += holding.unit * holding.purchasePrice;
                     unitsToRemove -= holding.unit;
                 } else {
+                    weightedPurchaseCost += unitsToRemove * holding.purchasePrice;
                     holding.unit -= unitsToRemove;
                     unitsToRemove = 0;
                     newFunds.push(holding);
@@ -3381,15 +3384,38 @@ module.exports = {
             }
             userAsset.funds = newFunds;
 
-            userAsset.balance += proceeds;
-            fund.asset.balance -= proceeds;
+            // Fee applies only to profit
+            const profit = currentValue - weightedPurchaseCost;
+            let feeAmount = 0;
+            if (profit > 0) {
+                feeAmount = profit * (fund.fee / 100);
+            }
+            const investorProceeds = currentValue - feeAmount;
+
+            userAsset.balance += investorProceeds;
+            fund.asset.balance -= currentValue;
             fund.total_units -= units;
 
             await userAsset.save();
             await fund.asset.save();
             await fund.save();
 
-            return { state: 'success', data: { units, unitPrice, proceeds } };
+            // Transfer fee to fund owner's personal account
+            if (feeAmount > 0) {
+                const ownerAdmin = fund.administrators.find(a => a.isTopAdmin);
+                if (ownerAdmin) {
+                    const ownerUser = await User.findOne({ userID: ownerAdmin.userID });
+                    if (ownerUser) {
+                        const ownerAsset = await Asset.findById(ownerUser.asset);
+                        if (ownerAsset) {
+                            ownerAsset.balance += feeAmount;
+                            await ownerAsset.save();
+                        }
+                    }
+                }
+            }
+
+            return { state: 'success', data: { units, unitPrice, currentValue, feeAmount, investorProceeds } };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:sellFundInvestment': ${err}`);
             return { state: 'error', data: null };

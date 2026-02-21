@@ -401,6 +401,7 @@ async function initStockSim() {
 
     try {
         await loadRecentStockData();
+        updateProductTimeLeft(); // futureTimeLeft / optionTimeLeft 초기화 (null 방지)
         return true;
     } catch (err) {
         serverLog(`[ERROR] Error loading recent stock data: ${err}`);
@@ -474,10 +475,11 @@ function updateFutureTimeLeft() {
         const now = new Date();
         const friday = new Date(now);
 
-        friday.setDate(now.getDate() + (6 - now.getDay() + 7) % 7);
+        // 다음 금요일 00:00 계산 (오늘이 금요일이면 7일 후 금요일)
+        const daysUntilFriday = (5 - now.getDay() + 7) % 7 || 7;
+        friday.setDate(now.getDate() + daysUntilFriday);
         friday.setHours(0, 0, 0, 0);
 
-        // 금요일의 00:00에서 금요일 23:59까지 남은 시간 계산
         const remainingTime = (friday - now) / (1000 * 60 * 60);
 
         futureTimeLeft = Math.ceil(remainingTime);
@@ -606,10 +608,11 @@ function updateOptionTimeLeft() {
         const now = new Date();
         const friday = new Date(now);
 
-        friday.setDate(now.getDate() + (6 - now.getDay() + 7) % 7);
+        // 다음 금요일 00:00 계산 (오늘이 금요일이면 7일 후 금요일)
+        const daysUntilFriday = (5 - now.getDay() + 7) % 7 || 7;
+        friday.setDate(now.getDate() + daysUntilFriday);
         friday.setHours(0, 0, 0, 0);
 
-        // 금요일의 00:00에서 금요일 23:59까지 남은 시간 계산
         const remainingTime = (friday - now) / (1000 * 60 * 60);
 
         optionTimeLeft = Math.ceil(remainingTime);
@@ -664,8 +667,8 @@ function updateStockData() {
     if (stocksPricesHistory.length >= STOCK_PRICE_HISTORY_SIZE) {
         stocksPricesHistory.splice(0, 1);
     }
-    calculateNextHourPrice();
     updateProductTimeLeft();
+    calculateNextHourPrice();
 }
 
 schedule.scheduleJob('0 * * * *', () => {

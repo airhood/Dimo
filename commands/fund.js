@@ -631,18 +631,24 @@ module.exports = {
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  좌수 부족').setDescription(`보유 좌수가 부족합니다.\n현재 보유 좌수: **${ownedStr}좌**`).setTimestamp()],
                 });
             } else if (result.state === 'success') {
-                const { units: soldUnits, unitPrice, proceeds } = result.data;
+                const { units: soldUnits, unitPrice, currentValue, feeAmount, investorProceeds } = result.data;
+                const fields = [
+                    { name: '펀드', value: fundName },
+                    { name: '매도 좌수', value: `${soldUnits.toLocaleString()}좌` },
+                    { name: '매도 단가', value: `${Math.round(unitPrice).toLocaleString()}원/좌` },
+                    { name: '평가금액', value: `${Math.round(currentValue).toLocaleString()}원` },
+                ];
+                if (feeAmount > 0) {
+                    fields.push({ name: '수수료', value: `${Math.round(feeAmount).toLocaleString()}원` });
+                }
+                fields.push({ name: '최종 수령금액', value: `${Math.round(investorProceeds).toLocaleString()}원` });
+
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x2ecc71)
                             .setTitle(':white_check_mark:  펀드 매도 완료')
-                            .addFields(
-                                { name: '펀드', value: fundName },
-                                { name: '매도 좌수', value: `${soldUnits.toLocaleString()}좌` },
-                                { name: '매도 단가', value: `${Math.round(unitPrice).toLocaleString()}원/좌` },
-                                { name: '총 수령금액', value: `${Math.round(proceeds).toLocaleString()}원` },
-                            )
+                            .addFields(fields)
                             .setTimestamp()
                     ],
                 });
