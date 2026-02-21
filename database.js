@@ -3470,7 +3470,7 @@ module.exports = {
                 }
             }
 
-            return { state: 'success', data: { units, unitPrice, currentValue, feeAmount, investorProceeds } };
+            return { state: 'success', data: { units, unitPrice, currentValue, weightedPurchaseCost, profit, feeAmount, investorProceeds } };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:sellFundInvestment': ${err}`);
             return { state: 'error', data: null };
