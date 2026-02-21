@@ -5,6 +5,11 @@ const TransactionLogSchema = new Schema({
     userID: {
         type: String,
         required: true,
+        index: true,
+    },
+    type: {
+        type: String,
+        required: true,
     },
     logMessage: {
         type: String,

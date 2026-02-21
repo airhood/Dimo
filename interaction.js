@@ -411,6 +411,86 @@ function addInteractionHandler(client) {
                 });
 
                 saveCache(uid, { pages, currentPage: pageToLoad });
+            } else if (action === 'transaction_log_previous_page') {
+                const uid = customID[2];
+                if (!uid) return;
+
+                const cache = loadCache(uid);
+                if (!cache) return;
+
+                const { pages, currentPage } = cache;
+
+                if (currentPage === 0) return;
+
+                const pageToLoad = currentPage - 1;
+
+                const previousPage = new ButtonBuilder()
+                    .setCustomId(`transaction_log_previous_page-${interaction.user.id}-${uid}`)
+                    .setLabel('이전')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(pageToLoad === 0);
+
+                const nextPage = new ButtonBuilder()
+                    .setCustomId(`transaction_log_next_page-${interaction.user.id}-${uid}`)
+                    .setLabel('다음')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(pageToLoad === pages.length - 1);
+
+                const row = new ActionRowBuilder()
+                    .addComponents(previousPage, nextPage);
+
+                await interaction.update({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle(`거래 내역 [${interaction.user.username}]`)
+                            .setDescription(`${pages[pageToLoad].join('\n')}`)
+                            .setTimestamp()
+                    ],
+                    components: [row],
+                    fetchReply: true
+                });
+
+                saveCache(uid, { pages, currentPage: pageToLoad });
+            } else if (action === 'transaction_log_next_page') {
+                const uid = customID[2];
+                if (!uid) return;
+
+                const cache = loadCache(uid);
+                if (!cache) return;
+
+                const { pages, currentPage } = cache;
+
+                if (currentPage === pages.length - 1) return;
+
+                const pageToLoad = currentPage + 1;
+
+                const previousPage = new ButtonBuilder()
+                    .setCustomId(`transaction_log_previous_page-${interaction.user.id}-${uid}`)
+                    .setLabel('이전')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(pageToLoad === 0);
+
+                const nextPage = new ButtonBuilder()
+                    .setCustomId(`transaction_log_next_page-${interaction.user.id}-${uid}`)
+                    .setLabel('다음')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(pageToLoad === pages.length - 1);
+
+                const row = new ActionRowBuilder()
+                    .addComponents(previousPage, nextPage);
+
+                await interaction.update({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle(`거래 내역 [${interaction.user.username}]`)
+                            .setDescription(`${pages[pageToLoad].join('\n')}`)
+                            .setTimestamp()
+                    ],
+                    components: [row],
+                    fetchReply: true
+                });
+
+                saveCache(uid, { pages, currentPage: pageToLoad });
             }
         }
     });
