@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, userMention } = require('discord.js');
-const { fundAddAdministrator, fundRemoveAdministrator, fundGetAdministrators, fundLogin, fundLogout, fundCreate, getFundInfo, getFundList, getUserState, investFund, sellFundInvestment, fundTransferOwnership } = require('../database');
+const { fundAddAdministrator, fundRemoveAdministrator, fundGetAdministrators, fundLogin, fundLogout, fundCreate, getFundInfo, getFundList, getUserState, investFund, sellFundInvestment, fundTransferOwnership, fundRename } = require('../database');
 const { calculateAssetValue } = require('../stock_system/credit_system');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
@@ -133,6 +133,15 @@ module.exports = {
                         .addUserOption((option) =>
                             option.setName('유저')
                                 .setDescription('소유권을 이전할 관리자 유저')
+                                .setRequired(true)
+                        )
+                )
+                .addSubcommand((subCommand) =>
+                    subCommand.setName('이름변경')
+                        .setDescription('펀드의 이름을 변경합니다. (현재 로그인된 펀드 기준, 소유자만 가능)')
+                        .addStringOption((option) =>
+                            option.setName('새이름')
+                                .setDescription('변경할 새로운 펀드 이름')
                                 .setRequired(true)
                         )
                 )
@@ -380,6 +389,47 @@ module.exports = {
                 } else if (result.state === 'success') {
                     await interaction.reply({
                         embeds: [new EmbedBuilder().setColor(0x2ecc71).setTitle(':white_check_mark:  소유권 이전 완료').setDescription(`**${fundName}** 펀드의 소유권을 ${userMention(newOwner.id)}에게 이전했습니다.`).setTimestamp()],
+                    });
+                }
+            } else if (subCommand === '이름변경') {
+                const newName = interaction.options.getString('새이름');
+
+                const stateResult = await getFundNameFromState();
+                if (stateResult.error) {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                    });
+                    return;
+                }
+                if (stateResult.notLoggedIn) {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  펀드 로그인 필요').setDescription(`펀드 관리자로 로그인된 상태에서만 사용할 수 있습니다.\n**/펀드 관리자 로그인** 명령어를 통해 로그인해주세요.`).setTimestamp()],
+                    });
+                    return;
+                }
+                const fundName = stateResult.fundName;
+
+                const result = await fundRename(interaction.user.id, fundName, newName);
+
+                if (result.state === 'error') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                    });
+                } else if (result.state === 'no_fund') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  존재하지 않는 펀드').setDescription(`**${fundName}** 펀드는 존재하지 않는 펀드입니다.`).setTimestamp()],
+                    });
+                } else if (result.state === 'not_owner') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':no_entry:  권한 없음').setDescription(`펀드 소유자만 이름을 변경할 수 있습니다.`).setTimestamp()],
+                    });
+                } else if (result.state === 'duplicate_name') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  이미 존재하는 펀드 이름').setDescription(`**${newName}** 이름의 펀드가 이미 존재합니다.`).setTimestamp()],
+                    });
+                } else if (result.state === 'success') {
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(0x2ecc71).setTitle(':white_check_mark:  펀드 이름 변경 완료').setDescription(`펀드 이름이 **${fundName}** → **${newName}** 으로 변경되었습니다.`).setTimestamp()],
                     });
                 }
             }

@@ -44,6 +44,16 @@ function setFundPrice(fundName, price) {
     fundsPricesHistory[fundsPricesHistory.length - 1][fundName] = price;
 }
 
+// 펀드 이름 변경 시 캐시 키 갱신
+function renameFundPrice(oldName, newName) {
+    if (fundsPricesHistory.length === 0) return;
+    const latest = fundsPricesHistory[fundsPricesHistory.length - 1];
+    if (latest[oldName] !== undefined) {
+        latest[newName] = latest[oldName];
+        delete latest[oldName];
+    }
+}
+
 schedule.scheduleJob('0 * * * *', () => {
     serverLog('[INFO] Update fund price');
     updateFundPrices();
@@ -58,4 +68,5 @@ async function initFundPriceSystem() {
 
 exports.getFundPrice = getFundPrice;
 exports.setFundPrice = setFundPrice;
+exports.renameFundPrice = renameFundPrice;
 exports.initFundPriceSystem = initFundPriceSystem;

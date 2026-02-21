@@ -3480,5 +3480,58 @@ module.exports = {
             serverLog(`[ERROR] Error at 'database.js:sellFundInvestment': ${err}`);
             return { state: 'error', data: null };
         }
+    },
+
+    async fundRename(id, oldName, newName) {
+        try {
+            const fund = await Fund.findOne({ name: oldName });
+            if (!fund) {
+                return { state: 'no_fund', data: null };
+            }
+
+            // Only topAdmin can rename the fund
+            const adminEntry = fund.administrators.find(a => a.userID === id);
+            if (!adminEntry || !adminEntry.isTopAdmin) {
+                return { state: 'not_owner', data: null };
+            }
+
+            // Check new name isn't already taken
+            const existing = await Fund.findOne({ name: newName });
+            if (existing) {
+                return { state: 'duplicate_name', data: null };
+            }
+
+            // Update fund document name
+            fund.name = newName;
+            await fund.save();
+
+            // Update all asset holdings with this fund name
+            await Asset.updateMany(
+                { 'funds.name': oldName },
+                { $set: { 'funds.$[elem].name': newName } },
+                { arrayFilters: [{ 'elem.name': oldName }] }
+            );
+
+            // Update State.currentAccount for any admin logged into this fund
+            await State.updateMany(
+                { currentAccount: `@fund_${oldName}` },
+                { $set: { currentAccount: `@fund_${newName}` } }
+            );
+
+            // Update Notification ticker for fund notifications
+            await Notification.updateMany(
+                { type: 'fund', ticker: oldName },
+                { $set: { ticker: newName } }
+            );
+
+            // Update price cache
+            const { renameFundPrice } = require('./stock_system/fund_price');
+            renameFundPrice(oldName, newName);
+
+            return { state: 'success', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:fundRename': ${err}`);
+            return { state: 'error', data: null };
+        }
     }
 }
