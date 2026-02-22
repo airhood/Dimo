@@ -598,7 +598,8 @@ module.exports = {
 
                 totalEarn += fund.unit * (currentFundPrice - fund.purchasePrice);
 
-                fund_format += `${fund.name} 펀드 ${investmentAmount.toLocaleString()}원
+                const currentValue = fund.unit * currentFundPrice;
+                fund_format += `${fund.name} 펀드 ${Math.round(currentValue).toLocaleString()}원
 | 평가손익: ${(fund.unit * (currentFundPrice - fund.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(earnRate * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
 | 좌수: ${fund.unit.toLocaleString()}
 | 매수날짜: ${formattedPurchaseDate}
