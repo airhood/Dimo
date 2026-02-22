@@ -1,18 +1,19 @@
+const schedule = require('node-schedule');
 const { serverLog } = require('../server/server_logger');
 
-// userId → { intervalId, timeoutId, channelId, messageId }
+// userId → { timeoutId, channelId, messageId, client, updateFn }
 const sessions = new Map();
 
 const AUTO_STOP_MS = 60 * 60 * 1000; // 1 hour
 
-async function startSession(userId, channelId, messageId, client, updateFn) {
-    stopSession(userId);
-
-    const intervalId = setInterval(async () => {
+// Single job fires every minute on the dot — all sessions update together,
+// maximising chart cache hit rate.
+schedule.scheduleJob('* * * * *', async () => {
+    for (const [userId, session] of sessions) {
         try {
-            const channel = await client.channels.fetch(channelId);
-            const message = await channel.messages.fetch(messageId);
-            const update = await updateFn();
+            const channel = await session.client.channels.fetch(session.channelId);
+            const message = await channel.messages.fetch(session.messageId);
+            const update = await session.updateFn();
             await message.edit({
                 embeds: update.embeds,
                 files: update.files || [],
@@ -22,7 +23,11 @@ async function startSession(userId, channelId, messageId, client, updateFn) {
             serverLog(`[ERROR] Realtime update error for user ${userId}: ${err}`);
             stopSession(userId);
         }
-    }, 60 * 1000);
+    }
+});
+
+function startSession(userId, channelId, messageId, client, updateFn) {
+    stopSession(userId);
 
     const timeoutId = setTimeout(async () => {
         try {
@@ -38,13 +43,12 @@ async function startSession(userId, channelId, messageId, client, updateFn) {
         stopSession(userId);
     }, AUTO_STOP_MS);
 
-    sessions.set(userId, { intervalId, timeoutId, channelId, messageId });
+    sessions.set(userId, { timeoutId, channelId, messageId, client, updateFn });
 }
 
 function stopSession(userId) {
     const session = sessions.get(userId);
     if (!session) return;
-    clearInterval(session.intervalId);
     clearTimeout(session.timeoutId);
     sessions.delete(userId);
 }

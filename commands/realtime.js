@@ -325,7 +325,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            await startSession(userId, msg.channelId, msg.id, interaction.client, () => buildAssetEmbed(userId));
+            startSession(userId, msg.channelId, msg.id, interaction.client, () => buildAssetEmbed(userId));
 
         // ── 주식목록 ──────────────────────────────────────────────────────────
         } else if (subCommand === '주식목록') {
@@ -334,7 +334,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            await startSession(userId, msg.channelId, msg.id, interaction.client, () => buildStockListEmbed(sort));
+            startSession(userId, msg.channelId, msg.id, interaction.client, () => buildStockListEmbed(sort));
 
         // ── 선물목록 ──────────────────────────────────────────────────────────
         } else if (subCommand === '선물목록') {
@@ -343,7 +343,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            await startSession(userId, msg.channelId, msg.id, interaction.client, () => buildFutureListEmbed(sort));
+            startSession(userId, msg.channelId, msg.id, interaction.client, () => buildFutureListEmbed(sort));
 
         // ── 옵션가격 ──────────────────────────────────────────────────────────
         } else if (subCommand === '옵션가격') {
@@ -363,7 +363,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            await startSession(userId, msg.channelId, msg.id, interaction.client, () => buildOptionPriceEmbed(ticker));
+            startSession(userId, msg.channelId, msg.id, interaction.client, () => buildOptionPriceEmbed(ticker));
 
         // ── 지수 ──────────────────────────────────────────────────────────────
         } else if (subCommand === '지수') {
@@ -378,7 +378,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            await startSession(userId, msg.channelId, msg.id, interaction.client, () => buildIndexEmbed(indicator));
+            startSession(userId, msg.channelId, msg.id, interaction.client, () => buildIndexEmbed(indicator));
 
         // ── 순위 ──────────────────────────────────────────────────────────────
         } else if (subCommand === '순위') {
@@ -390,7 +390,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            await startSession(userId, msg.channelId, msg.id, interaction.client, () => buildLeaderboardEmbed());
+            startSession(userId, msg.channelId, msg.id, interaction.client, () => buildLeaderboardEmbed());
 
         // ── 주식차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '주식차트') {
@@ -413,7 +413,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            await startSession(userId, msg.channelId, msg.id, interaction.client,
+            startSession(userId, msg.channelId, msg.id, interaction.client,
                 () => buildStockChartEmbed(ticker, hoursAgo, minutes));
 
         // ── 선물차트 ──────────────────────────────────────────────────────────
@@ -437,7 +437,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            await startSession(userId, msg.channelId, msg.id, interaction.client,
+            startSession(userId, msg.channelId, msg.id, interaction.client,
                 () => buildFutureChartEmbed(ticker, hoursAgo, minutes));
         }
     }
