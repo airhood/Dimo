@@ -1,7 +1,7 @@
 const schedule = require('node-schedule');
 const { serverLog } = require('../server/server_logger');
 
-// userId → { timeoutId, channelId, messageId, client, updateFn }
+// uid → { timeoutId, channelId, messageId, client, updateFn }
 const sessions = new Map();
 
 const AUTO_STOP_MS = 60 * 60 * 1000; // 1 hour
@@ -9,7 +9,7 @@ const AUTO_STOP_MS = 60 * 60 * 1000; // 1 hour
 // Single job fires every minute on the dot — all sessions update together,
 // maximising chart cache hit rate.
 schedule.scheduleJob('* * * * *', async () => {
-    for (const [userId, session] of sessions) {
+    for (const [uid, session] of sessions) {
         try {
             const channel = await session.client.channels.fetch(session.channelId);
             const message = await channel.messages.fetch(session.messageId);
@@ -20,41 +20,35 @@ schedule.scheduleJob('* * * * *', async () => {
                 components: message.components,
             });
         } catch (err) {
-            serverLog(`[ERROR] Realtime update error for user ${userId}: ${err}`);
-            stopSession(userId);
+            serverLog(`[ERROR] Realtime update error for session ${uid}: ${err}`);
+            stopSession(uid);
         }
     }
 });
 
-function startSession(userId, channelId, messageId, client, updateFn) {
-    stopSession(userId);
-
+function startSession(uid, channelId, messageId, client, updateFn) {
     const timeoutId = setTimeout(async () => {
         try {
-            const session = sessions.get(userId);
+            const session = sessions.get(uid);
             if (session) {
                 const channel = await client.channels.fetch(session.channelId);
                 const message = await channel.messages.fetch(session.messageId);
                 await message.edit({ components: [] });
             }
         } catch (err) {
-            serverLog(`[ERROR] Realtime auto-stop cleanup error for user ${userId}: ${err}`);
+            serverLog(`[ERROR] Realtime auto-stop cleanup error for session ${uid}: ${err}`);
         }
-        stopSession(userId);
+        stopSession(uid);
     }, AUTO_STOP_MS);
 
-    sessions.set(userId, { timeoutId, channelId, messageId, client, updateFn });
+    sessions.set(uid, { timeoutId, channelId, messageId, client, updateFn });
 }
 
-function stopSession(userId) {
-    const session = sessions.get(userId);
+function stopSession(uid) {
+    const session = sessions.get(uid);
     if (!session) return;
     clearTimeout(session.timeoutId);
-    sessions.delete(userId);
+    sessions.delete(uid);
 }
 
-function hasSession(userId) {
-    return sessions.has(userId);
-}
-
-module.exports = { startSession, stopSession, hasSession };
+module.exports = { startSession, stopSession };

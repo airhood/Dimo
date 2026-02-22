@@ -492,8 +492,9 @@ function addInteractionHandler(client) {
 
                 saveCache(uid, { pages, currentPage: pageToLoad, accountTitle });
             } else if (action === 'realtime_stop') {
+                const uid = customID[2];
                 const { stopSession } = require('./stock_system/realtime_manager');
-                stopSession(userID);
+                stopSession(uid);
                 await interaction.update({ components: [] });
             }
         }
