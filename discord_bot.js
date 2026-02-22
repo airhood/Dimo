@@ -133,7 +133,14 @@ module.exports = {
 				if (message.content.trim() === DIMO_PREFIX) {
 					await message.reply('나 불렀어?');
 					addToBucket(null, true);
-				}else if (userMessage) {
+				} else if (userMessage) {
+					// 유저 입력 필터링
+					if (!filterMessage(userMessage)) {
+						await message.reply("그런 말은 대답하기 싫어.");
+						addToBucket(null, true);
+						return;
+					}
+
 					if (message.reference) {
 						const referenceMessageID = message.reference.messageId;
 						if (existsInCurrentBucket(referenceMessageID) === true) {
@@ -153,7 +160,7 @@ module.exports = {
 									addToBucket(sent, false);
 									messageID = sent.id;
 								} else {
-									const sent = await message.reply(`${formattedContent}\n\n**부적절한 내용 전송으로 경고가 부여되었습니다.**`);
+									const sent = await message.reply('그 내용은 전달할 수 없어.');
 									addToBucket(sent, false);
 									messageID = sent.id;
 								}
@@ -183,7 +190,7 @@ module.exports = {
 									addToBucket(sent, false);
 									messageID = sent.id;
 								} else {
-									const sent = await message.reply(`${formattedContent}\n\n**부적절한 내용 전송으로 경고가 부여되었습니다.**`);
+									const sent = await message.reply('그 내용은 전달할 수 없어.');
 									addToBucket(sent, false);
 									messageID = sent.id;
 								}
@@ -217,7 +224,7 @@ module.exports = {
 								addToBucket(sent, false);
 								messageID = sent.id;
 							} else {
-								const sent = await message.reply(`${formattedContent}\n\n**부적절한 내용 전송으로 경고가 부여되었습니다.**`);
+								const sent = await message.reply('그 내용은 전달할 수 없어.');
 								addToBucket(sent, false);
 								messageID = sent.id;
 							}

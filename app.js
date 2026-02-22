@@ -9,6 +9,7 @@ const { initCreditSystem, updateCreditRating } = require('./stock_system/credit_
 const { initFundPriceSystem } = require('./stock_system/fund_price');
 const { initNotificationScheduler } = require('./stock_system/notification_checker');
 const { setTimezone } = require('./korean_time');
+const { loadKeywordsFromFile } = require('./chat_bot/message_filter');
 
 require('dotenv').config();
 
@@ -64,6 +65,10 @@ module.exports = {
 
         console.log('[BOOT] Notification scheduler loaded');
         
+        loadKeywordsFromFile();
+
+        console.log('[BOOT] Message filter loaded');
+
         await discord_bot.setup();
 
         console.log('[BOOT] Discord bot loaded');
