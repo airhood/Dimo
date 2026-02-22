@@ -3560,6 +3560,7 @@ module.exports = {
                         if (ownerAsset) {
                             ownerAsset.balance += feeAmount;
                             await ownerAsset.save();
+                            module.exports.addTransactionLog(ownerAdmin.userID, 'fund_fee', `${fundName} 펀드 수수료 수령 (${Math.round(feeAmount).toLocaleString()}원)`);
                         }
                     }
                 }
