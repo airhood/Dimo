@@ -2,7 +2,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { getCompanyInfo } = require('./company_info');
 const { getStockName } = require('./stock_name');
-const { llmGenerate } = require('./llm');
+const { llmGenerate } = require('../utils/llm');
 const { serverLog } = require('../server/server_logger');
 
 const NEWS_POOL_FILE = './data/news_pool.json';
