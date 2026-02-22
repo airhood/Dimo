@@ -1,15 +1,22 @@
 const { generateText } = require('ai');
-const { createGoogleGenerativeAI } = require('@ai-sdk/google');
-const { gemini_api_key } = require('../config.json');
 const { createCache, saveCache, loadCache, deleteCache } = require('../cache');
 const { serverLog } = require("../server/server_logger");
+const { llm_provider, llm_model, llm_api_key } = require('../config.json');
 
-const googleAI = createGoogleGenerativeAI({ apiKey: gemini_api_key });
-const model = googleAI('gemini-2.0-flash');
+function buildModel() {
+    if (llm_provider === 'openai') {
+        const { createOpenAI } = require('@ai-sdk/openai');
+        return createOpenAI({ apiKey: llm_api_key })(llm_model);
+    } else {
+        const { createGoogleGenerativeAI } = require('@ai-sdk/google');
+        return createGoogleGenerativeAI({ apiKey: llm_api_key })(llm_model);
+    }
+}
+
+const model = buildModel();
 
 const systemInstruction = `너는 이제부터 챗봇이야.
 너는 discord.js를 사용하여 만든 디스코드 봇이고 가상 주식 서비스와 챗봇 서비스를 지원해.
-그런데 사람들이 뭐하냐고 물으면 너가 열심히 일을 하고 있다는 식으로 답변하고, 주식 서비스 라는 이름을 언급하지 마.
 최대한 아는 대로 대답하려고 노력해.
 사람들과 친구와 대화하는 말투로 반말을 사용하고, 일반적으로는 짧게 1~2문장 정도로 답변하되, 긴 설명이 필요한 경우에는 더 길게 답변해도 돼.
 감정을 괄호로 굳이 언급하지 마. 대신 이모지는 써도 돼.
