@@ -40,6 +40,28 @@ async function buildAssetEmbed(userId) {
     };
 }
 
+const EMBED_DESC_LIMIT = 4096;
+
+// Split lines into embeds, each within Discord's description character limit.
+function buildListEmbeds(title, lines) {
+    const embeds = [];
+    let current = '';
+    for (const line of lines) {
+        const addition = (current ? '\n' : '') + line;
+        if (current.length + addition.length > EMBED_DESC_LIMIT) {
+            embeds.push(new EmbedBuilder().setColor(0xF1C40F).setTitle(embeds.length === 0 ? title : `${title} (계속)`).setDescription(current));
+            current = line;
+        } else {
+            current += addition;
+        }
+    }
+    if (current) {
+        embeds.push(new EmbedBuilder().setColor(0xF1C40F).setTitle(embeds.length === 0 ? title : `${title} (계속)`).setDescription(current));
+    }
+    if (embeds.length > 0) embeds[embeds.length - 1].setTimestamp();
+    return embeds;
+}
+
 function buildStockListEmbed(sortingOption) {
     const stockList = getStockList();
     let sorted;
@@ -48,21 +70,13 @@ function buildStockListEmbed(sortingOption) {
     else if (sortingOption === '상승순') sorted = [...stockList].sort((a, b) => b.difference - a.difference);
     else sorted = [...stockList].sort((a, b) => a.difference - b.difference);
 
-    const lines = sorted.slice(0, 10).map((stock) => {
+    const lines = sorted.map((stock) => {
         const sign = stock.difference > 0 ? '+' : stock.difference < 0 ? '-' : '=';
         const diffSign = stock.difference > 0 ? '+' : stock.difference < 0 ? '-' : '';
         return `${getStockName(stock.ticker)} [${stock.ticker}]\n\`\`\`diff\n${sign} ${fmt(stock.price)} (${diffSign}${Math.abs(stock.difference).toFixed(2)})\n\`\`\``;
     });
 
-    return {
-        embeds: [
-            new EmbedBuilder()
-                .setColor(0xF1C40F)
-                .setTitle(':chart_with_upwards_trend:  실시간 주식 목록')
-                .setDescription(lines.join('\n'))
-                .setTimestamp(),
-        ],
-    };
+    return { embeds: buildListEmbeds(':chart_with_upwards_trend:  실시간 주식 목록', lines) };
 }
 
 function buildFutureListEmbed(sortingOption) {
@@ -73,21 +87,13 @@ function buildFutureListEmbed(sortingOption) {
     else if (sortingOption === '상승순') sorted = [...futureList].sort((a, b) => b.difference - a.difference);
     else sorted = [...futureList].sort((a, b) => a.difference - b.difference);
 
-    const lines = sorted.slice(0, 10).map((future) => {
+    const lines = sorted.map((future) => {
         const sign = future.difference > 0 ? '+' : future.difference < 0 ? '-' : '=';
         const diffSign = future.difference > 0 ? '+' : future.difference < 0 ? '-' : '';
         return `${getStockName(future.ticker)} [${future.ticker}]\n\`\`\`diff\n${sign} ${fmt(future.price)} (${diffSign}${Math.abs(future.difference).toFixed(2)})\n\`\`\``;
     });
 
-    return {
-        embeds: [
-            new EmbedBuilder()
-                .setColor(0xF1C40F)
-                .setTitle(':chart_with_upwards_trend:  실시간 선물 목록')
-                .setDescription(lines.join('\n'))
-                .setTimestamp(),
-        ],
-    };
+    return { embeds: buildListEmbeds(':chart_with_upwards_trend:  실시간 선물 목록', lines) };
 }
 
 function buildOptionPriceEmbed(ticker) {
