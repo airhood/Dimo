@@ -7,7 +7,7 @@ const { getStockName } = require('../stock_system/stock_name');
 const { getDISDAQIndex, getDISDAQIndexTimeRangeData } = require('../stock_system/stock_index_system');
 const { generateStockChartImage, generateIndexChartImage } = require('../stock_system/stock_chart');
 const { calculateAssetValue } = require('../stock_system/credit_system');
-const { startSession } = require('../stock_system/realtime_manager');
+const { startSession, getSessionsByUser, stopSessionByIndex } = require('../stock_system/realtime_manager');
 const { getCachedChart } = require('../stock_system/chart_cache');
 const { serverLog } = require('../server/server_logger');
 
@@ -308,6 +308,20 @@ module.exports = {
                 .addIntegerOption((opt) => opt.setName('일').setDescription('기간 (일)').setMinValue(0).setRequired(false))
                 .addIntegerOption((opt) => opt.setName('시간').setDescription('기간 (시간)').setMinValue(0).setRequired(false))
                 .addIntegerOption((opt) => opt.setName('분').setDescription('기간 (분)').setMinValue(0).setRequired(false))
+        )
+        .addSubcommand((sub) =>
+            sub.setName('목록')
+                .setDescription('현재 활성화된 나의 실시간 세션 목록을 표시합니다.')
+        )
+        .addSubcommand((sub) =>
+            sub.setName('정지')
+                .setDescription('특정 번호의 실시간 세션을 정지합니다.')
+                .addIntegerOption((opt) =>
+                    opt.setName('번호')
+                        .setDescription('정지할 세션 번호 (/실시간 목록에서 확인)')
+                        .setMinValue(1)
+                        .setRequired(true)
+                )
         ),
 
     async execute(interaction) {
@@ -325,7 +339,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, msg.channelId, msg.id, interaction.client, () => buildAssetEmbed(userId));
+            startSession(uid, userId, '자산', msg.channelId, msg.id, interaction.client, () => buildAssetEmbed(userId));
 
         // ── 주식목록 ──────────────────────────────────────────────────────────
         } else if (subCommand === '주식목록') {
@@ -334,7 +348,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, msg.channelId, msg.id, interaction.client, () => buildStockListEmbed(sort));
+            startSession(uid, userId, `주식목록 (${sort})`, msg.channelId, msg.id, interaction.client, () => buildStockListEmbed(sort));
 
         // ── 선물목록 ──────────────────────────────────────────────────────────
         } else if (subCommand === '선물목록') {
@@ -343,7 +357,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, msg.channelId, msg.id, interaction.client, () => buildFutureListEmbed(sort));
+            startSession(uid, userId, `선물목록 (${sort})`, msg.channelId, msg.id, interaction.client, () => buildFutureListEmbed(sort));
 
         // ── 옵션가격 ──────────────────────────────────────────────────────────
         } else if (subCommand === '옵션가격') {
@@ -363,7 +377,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, msg.channelId, msg.id, interaction.client, () => buildOptionPriceEmbed(ticker));
+            startSession(uid, userId, `옵션가격 (${ticker})`, msg.channelId, msg.id, interaction.client, () => buildOptionPriceEmbed(ticker));
 
         // ── 지수 ──────────────────────────────────────────────────────────────
         } else if (subCommand === '지수') {
@@ -378,7 +392,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, msg.channelId, msg.id, interaction.client, () => buildIndexEmbed(indicator));
+            startSession(uid, userId, `지수 (${indicator})`, msg.channelId, msg.id, interaction.client, () => buildIndexEmbed(indicator));
 
         // ── 순위 ──────────────────────────────────────────────────────────────
         } else if (subCommand === '순위') {
@@ -390,7 +404,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, msg.channelId, msg.id, interaction.client, () => buildLeaderboardEmbed());
+            startSession(uid, userId, '순위', msg.channelId, msg.id, interaction.client, () => buildLeaderboardEmbed());
 
         // ── 주식차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '주식차트') {
@@ -413,7 +427,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, msg.channelId, msg.id, interaction.client,
+            startSession(uid, userId, `주식차트 (${ticker})`, msg.channelId, msg.id, interaction.client,
                 () => buildStockChartEmbed(ticker, hoursAgo, minutes));
 
         // ── 선물차트 ──────────────────────────────────────────────────────────
@@ -437,8 +451,56 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, msg.channelId, msg.id, interaction.client,
+            startSession(uid, userId, `선물차트 (${ticker})`, msg.channelId, msg.id, interaction.client,
                 () => buildFutureChartEmbed(ticker, hoursAgo, minutes));
+
+        // ── 목록 ──────────────────────────────────────────────────────────────
+        } else if (subCommand === '목록') {
+            const list = getSessionsByUser(userId);
+            if (list.length === 0) {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xF1C40F).setTitle('⏱  실시간 세션 목록').setDescription('활성화된 실시간 세션이 없습니다.').setTimestamp()],
+                    ephemeral: true,
+                });
+                return;
+            }
+            const lines = list.map((s, i) => {
+                const ts = Math.floor(s.startedAt.getTime() / 1000);
+                return `**${i + 1}.** ${s.type} — <t:${ts}:R> 시작`;
+            });
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle('⏱  실시간 세션 목록')
+                        .setDescription(lines.join('\n'))
+                        .setFooter({ text: '/실시간 정지 [번호] 로 특정 세션을 정지할 수 있습니다.' })
+                        .setTimestamp()
+                ],
+                ephemeral: true,
+            });
+
+        // ── 정지 ──────────────────────────────────────────────────────────────
+        } else if (subCommand === '정지') {
+            const index = interaction.options.getInteger('번호');
+            const session = stopSessionByIndex(userId, index);
+            if (!session) {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  정지 실패').setDescription(`${index}번 세션을 찾을 수 없습니다.`)],
+                    ephemeral: true,
+                });
+                return;
+            }
+            // Remove stop button from the session's message
+            try {
+                const channel = await interaction.client.channels.fetch(session.channelId);
+                const message = await channel.messages.fetch(session.messageId);
+                await message.edit({ components: [] });
+            } catch {}
+            await interaction.reply({
+                embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('⏹  세션 정지').setDescription(`**${index}번** 실시간 세션이 정지되었습니다.`).setTimestamp()],
+                ephemeral: true,
+            });
         }
     }
 };
