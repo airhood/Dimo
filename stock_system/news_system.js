@@ -180,6 +180,12 @@ function purchaseNews(userId, newsId) {
     return item;
 }
 
+function getBoughtNews(userId) {
+    return premiumNewsPool
+        .filter(n => n.buyers.has(userId) && n.expiresAt.getTime() > Date.now())
+        .sort((a, b) => b.tier - a.tier);
+}
+
 function getFreeNews() {
     return freeNewsPool.map(n => {
         const stockName = getStockName(n.ticker);
@@ -197,4 +203,5 @@ module.exports = {
     hasBought,
     purchaseNews,
     getFreeNews,
+    getBoughtNews,
 };

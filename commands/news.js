@@ -2,10 +2,10 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getUserAsset, addBalance, checkUserExists, addTransactionLog } = require('../database');
 const {
     getPremiumNewsList,
-    getPremiumNewsById,
     hasBought,
     purchaseNews,
     getFreeNews,
+    getBoughtNews,
 } = require('../stock_system/news_system');
 const { getStockName } = require('../stock_system/stock_name');
 
@@ -46,6 +46,10 @@ module.exports = {
                         .setRequired(true)
                         .setMinValue(1)
                 )
+        )
+        .addSubcommand(sub =>
+            sub.setName('확인')
+                .setDescription('내가 구매한 뉴스 목록을 확인합니다.')
         ),
 
     async execute(interaction) {
@@ -111,8 +115,33 @@ module.exports = {
                         .setTitle('🔐 프리미엄 뉴스')
                         .setDescription('번호로 구매하세요. 선행 정보는 다음 시간 주가 움직임을 예측합니다.')
                         .addFields(fields)
-                        .setFooter({ text: '/뉴스 구매 [번호]' })
+                        .setFooter({ text: '/뉴스 구매 [번호]  |  구매한 뉴스 재열람: /뉴스 확인' })
                 ],
+            });
+        }
+
+        // ── /뉴스 확인 ────────────────────────────────────────────────────────
+        if (sub === '확인') {
+            const userId = interaction.user.id;
+            const bought = getBoughtNews(userId);
+
+            if (bought.length === 0) {
+                return interaction.reply({
+                    ephemeral: true,
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x95A5A6)
+                            .setTitle('📂 구매한 뉴스')
+                            .setDescription('구매한 뉴스가 없습니다.')
+                    ],
+                });
+            }
+
+            const embeds = bought.map(item => buildNewsEmbed(item, false));
+
+            return interaction.reply({
+                ephemeral: true,
+                embeds,
             });
         }
 
@@ -150,9 +179,10 @@ module.exports = {
                 });
             }
 
+            // Already purchased — show content with "재열람" title
             if (hasBought(userId, item.id)) {
                 return interaction.editReply({
-                    embeds: [buildPurchasedEmbed(item)],
+                    embeds: [buildNewsEmbed(item, false)],
                 });
             }
 
@@ -202,22 +232,27 @@ module.exports = {
             purchaseNews(userId, item.id);
 
             return interaction.editReply({
-                embeds: [buildPurchasedEmbed(item)],
+                embeds: [buildNewsEmbed(item, true)],
             });
         }
     }
 };
 
-function buildPurchasedEmbed(item) {
+// isNew: true = 방금 구매, false = 재열람
+function buildNewsEmbed(item, isNew) {
     const stockName = getStockName(item.ticker);
     const dirText = directionText(item.direction);
     const typeTag = item.isForward ? '🔮 선행 정보 (다음 시간 예측)' : '📰 회고 정보 (지난 시간 기록)';
     const color = TIER_COLORS[item.tier];
     const expireTs = Math.floor(item.expiresAt.getTime() / 1000);
 
+    const title = isNew
+        ? `🔓 ${stockName} [${item.ticker}] 구매 완료`
+        : `📂 ${stockName} [${item.ticker}] 구매한 뉴스`;
+
     const embed = new EmbedBuilder()
         .setColor(color)
-        .setTitle(`🔓 ${stockName} [${item.ticker}] 뉴스 구매 완료`)
+        .setTitle(title)
         .addFields(
             { name: '등급', value: tierBadge(item.tier), inline: true },
             { name: '유형', value: typeTag, inline: true },
