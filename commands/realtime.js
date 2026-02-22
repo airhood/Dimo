@@ -316,6 +316,18 @@ module.exports = {
                 .addIntegerOption((opt) => opt.setName('분').setDescription('기간 (분)').setMinValue(0).setRequired(false))
         )
         .addSubcommand((sub) =>
+            sub.setName('지수차트')
+                .setDescription('지수 차트를 실시간으로 표시합니다.')
+                .addStringOption((opt) =>
+                    opt.setName('지수명')
+                        .setDescription('확인할 지수')
+                        .addChoices(...INDEX_CHOICES)
+                        .setRequired(true)
+                )
+                .addIntegerOption((opt) => opt.setName('일').setDescription('기간 (일)').setMinValue(0).setRequired(false))
+                .addIntegerOption((opt) => opt.setName('시간').setDescription('기간 (시간)').setMinValue(0).setRequired(false))
+        )
+        .addSubcommand((sub) =>
             sub.setName('목록')
                 .setDescription('현재 활성화된 나의 실시간 세션 목록을 표시합니다.')
         )
@@ -459,6 +471,22 @@ module.exports = {
             const msg = await interaction.fetchReply();
             startSession(uid, userId, `선물차트 (${ticker})`, msg.channelId, msg.id, interaction.client,
                 () => buildFutureChartEmbed(ticker, hoursAgo, minutes), true);
+
+        // ── 지수차트 ──────────────────────────────────────────────────────────
+        } else if (subCommand === '지수차트') {
+            const indicator = interaction.options.getString('지수명');
+            let days = interaction.options.getInteger('일') ?? 0;
+            let hours = interaction.options.getInteger('시간') ?? 0;
+            if (days === 0 && hours === 0) hours = 6;
+            const hoursAgo = (days * 24) + hours;
+
+            await interaction.deferReply();
+            const initial = await buildIndexChartEmbed(indicator, hoursAgo);
+            const stopRow = makeStopButton(userId, uid);
+            await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
+            const msg = await interaction.fetchReply();
+            startSession(uid, userId, `지수차트 (${indicator})`, msg.channelId, msg.id, interaction.client,
+                () => buildIndexChartEmbed(indicator, hoursAgo), true);
 
         // ── 목록 ──────────────────────────────────────────────────────────────
         } else if (subCommand === '목록') {
