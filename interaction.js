@@ -491,11 +491,11 @@ function addInteractionHandler(client) {
                 });
 
                 saveCache(uid, { pages, currentPage: pageToLoad, accountTitle });
+            } else if (action === 'realtime_stop') {
+                const { stopSession } = require('./stock_system/realtime_manager');
+                stopSession(userID);
+                await interaction.update({ components: [] });
             }
-        } else if (action === 'realtime_stop') {
-            const { stopSession } = require('./stock_system/realtime_manager');
-            stopSession(userID);
-            await interaction.update({ components: [] });
         }
     });
 }
