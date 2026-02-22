@@ -428,7 +428,7 @@ module.exports = {
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
             startSession(uid, userId, `주식차트 (${ticker})`, msg.channelId, msg.id, interaction.client,
-                () => buildStockChartEmbed(ticker, hoursAgo, minutes));
+                () => buildStockChartEmbed(ticker, hoursAgo, minutes), true);
 
         // ── 선물차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '선물차트') {
@@ -452,7 +452,7 @@ module.exports = {
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
             startSession(uid, userId, `선물차트 (${ticker})`, msg.channelId, msg.id, interaction.client,
-                () => buildFutureChartEmbed(ticker, hoursAgo, minutes));
+                () => buildFutureChartEmbed(ticker, hoursAgo, minutes), true);
 
         // ── 목록 ──────────────────────────────────────────────────────────────
         } else if (subCommand === '목록') {
