@@ -1,6 +1,9 @@
 {
   "dependencies": {
+    "@ai-sdk/google": "^3.0.30",
+    "@ai-sdk/openai": "^3.0.30",
     "@google/generative-ai": "^0.21.0",
+    "ai": "^6.0.97",
     "apexcharts": "^4.4.0",
     "axios": "^1.7.9",
     "commander": "^13.1.0",

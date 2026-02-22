@@ -4,6 +4,7 @@ const math = require('mathjs');
 const { serverLog } = require('../server/server_logger');
 const { getTicker, getStockName } = require('./stock_name');
 const { initBankManagerFuncDependencies, getInterestRate } = require('./bank_manager');
+const { detectAndGenerateNews } = require('./news_system');
 
 
 const sigma = 0.004;  // 변동성 (일일 변동성)
@@ -415,10 +416,11 @@ async function initStockSim() {
 }
 
 function calculateNextHourPrice() {
+    const prevHourData = stocksPricesHistory[stocksPricesHistory.length - 1];
     const newStockData = {};
     const newNewsData = {};
 
-    for (const [ticker, stock_prices] of Object.entries(stocksPricesHistory[stocksPricesHistory.length - 1])) {
+    for (const [ticker, stock_prices] of Object.entries(prevHourData)) {
         const bigNewsOccurred = Math.random() < 0.00001; // 0.001%
         const [new_stock_prices, _newNewsData] = simulateStockPrice(stock_prices[59], sigma, days, shockProbability, shockMagnitude, newsImpact, bigNewsImpact, bigNewsOccurred);
         newStockData[ticker] = new_stock_prices;
@@ -430,6 +432,8 @@ function calculateNextHourPrice() {
 
     calculateNextHourFuturePrice(newStockData);
     calculateNextHourOptionPrice(newStockData);
+
+    detectAndGenerateNews(prevHourData, newStockData);
 }
 
 function calculateNextHourFuturePrice(stockData) {
@@ -678,7 +682,6 @@ function calculateNormalizedIndex(marketCap) {
     return Math.round((marketCap / baseIndexMarketCap) * BASE_INDEX_POINT * 100) / 100;
 }
 
-// 주어진 시간대의 주식 데이터에서 매 분(60개)의 지수값을 계산해 히스토리에 저장
 function pushIndexHistory(stockHourData) {
     const tickers = Object.keys(stockHourData);
     const prices = [];
