@@ -4,7 +4,7 @@ const math = require('mathjs');
 const { serverLog } = require('../server/server_logger');
 const { getTicker, getStockName } = require('./stock_name');
 const { initBankManagerFuncDependencies, getInterestRate } = require('./bank_manager');
-const { detectAndGenerateNews } = require('./news_system');
+const { detectAndGenerateNews, loadNewsPool } = require('./news_system');
 
 
 const sigma = 0.004;  // 변동성 (일일 변동성)
@@ -409,8 +409,11 @@ async function initStockSim() {
         await loadRecentStockData();
         updateProductTimeLeft(); // futureTimeLeft / optionTimeLeft 초기화 (null 방지)
 
-        // 서버 시작 시 초기 뉴스 생성 (직전 시간 → 현재 시간 데이터 활용)
-        if (stocksPricesHistory.length >= 2) {
+        // 저장된 뉴스 풀 복원 (만료된 항목은 자동 제거됨)
+        // 파일이 없거나 전부 만료됐으면 직전 주가 데이터로 새로 생성
+        loadNewsPool();
+        const { getPremiumNewsList } = require('./news_system');
+        if (getPremiumNewsList().length === 0 && stocksPricesHistory.length >= 2) {
             detectAndGenerateNews(
                 stocksPricesHistory[stocksPricesHistory.length - 2],
                 stocksPricesHistory[stocksPricesHistory.length - 1]

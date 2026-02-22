@@ -1,8 +1,11 @@
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { getCompanyInfo } = require('./company_info');
 const { getStockName } = require('./stock_name');
 const { llmGenerate } = require('./llm');
 const { serverLog } = require('../server/server_logger');
+
+const NEWS_POOL_FILE = './data/news_pool.json';
 
 // ── In-memory stores ──────────────────────────────────────────────────────────
 
@@ -59,6 +62,7 @@ async function generateHeadlineAsync(newsItem) {
         serverLog(`[ERROR] news headline generation failed for ${newsItem.ticker}: ${err}`);
         newsItem.headline = '(헤드라인 생성 실패)';
     }
+    saveNewsPool();
 }
 
 // ── Noise helpers for free news ───────────────────────────────────────────────
@@ -153,6 +157,53 @@ async function detectAndGenerateNews(prevHourData, newHourData) {
     }
 
     serverLog(`[INFO] News generated: ${premiumNewsPool.length} premium, ${freeNewsPool.length} free`);
+    saveNewsPool();
+}
+
+// ── Persistence ───────────────────────────────────────────────────────────────
+
+function saveNewsPool() {
+    try {
+        const data = {
+            premium: premiumNewsPool.map(n => ({
+                ...n,
+                buyers:      [...n.buyers],
+                generatedAt: n.generatedAt.toISOString(),
+                expiresAt:   n.expiresAt.toISOString(),
+            })),
+            free: freeNewsPool.slice(),
+        };
+        fs.writeFileSync(NEWS_POOL_FILE, JSON.stringify(data), 'utf-8');
+    } catch (err) {
+        serverLog(`[ERROR] Failed to save news pool: ${err}`);
+    }
+}
+
+function loadNewsPool() {
+    try {
+        if (!fs.existsSync(NEWS_POOL_FILE)) return;
+        const data = JSON.parse(fs.readFileSync(NEWS_POOL_FILE, 'utf-8'));
+        const now = Date.now();
+
+        premiumNewsPool.length = 0;
+        for (const n of (data.premium ?? [])) {
+            const expiresAt = new Date(n.expiresAt);
+            if (expiresAt.getTime() <= now) continue;
+            premiumNewsPool.push({
+                ...n,
+                buyers:      new Set(n.buyers),
+                generatedAt: new Date(n.generatedAt),
+                expiresAt,
+            });
+        }
+
+        freeNewsPool.length = 0;
+        freeNewsPool.push(...(data.free ?? []));
+
+        serverLog(`[INFO] News pool loaded: ${premiumNewsPool.length} premium, ${freeNewsPool.length} free`);
+    } catch (err) {
+        serverLog(`[ERROR] Failed to load news pool: ${err}`);
+    }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -177,6 +228,7 @@ function purchaseNews(userId, newsId) {
     const item = premiumNewsPool.find(n => n.id === newsId);
     if (!item) return null;
     item.buyers.add(userId);
+    saveNewsPool();
     return item;
 }
 
@@ -198,6 +250,7 @@ function getFreeNews() {
 
 module.exports = {
     detectAndGenerateNews,
+    loadNewsPool,
     getPremiumNewsList,
     getPremiumNewsById,
     hasBought,
