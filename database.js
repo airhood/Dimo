@@ -613,6 +613,66 @@ module.exports = {
         }
     },
 
+    async transferToFund(fromUserID, fundName, amount) {
+        try {
+            if (isServersideLocked(fromUserID)) {
+                return { state: 'locked', data: null };
+            }
+
+            const user = await User.findOne({ userID: fromUserID });
+            if (!user) {
+                serverLog(`[ERROR] transferToFund: user not found. id: ${fromUserID}`);
+                return { state: 'error', data: null };
+            }
+
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                serverLog(`[INFO] transferToFund: fund not found. fundName: ${fundName}`);
+                return { state: 'no_fund', data: null };
+            }
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) {
+                serverLog(`[ERROR] transferToFund: user asset not found. id: ${fromUserID}`);
+                return { state: 'error', data: null };
+            }
+
+            if (userAsset.balance < amount) {
+                serverLog(`[INFO] transferToFund: insufficient balance. id: ${fromUserID}`);
+                return { state: 'no_balance', data: null };
+            }
+
+            userAsset.balance -= amount;
+            userAsset.balance = Math.round(userAsset.balance);
+            const saveFromResult = await userAsset.save();
+            if (!saveFromResult) {
+                serverLog(`[ERROR] transferToFund: failed to save user asset. id: ${fromUserID}`);
+                return { state: 'error', data: null };
+            }
+
+            fund.asset.balance += amount;
+            fund.asset.balance = Math.round(fund.asset.balance);
+            const saveFundResult = await fund.asset.save();
+            if (!saveFundResult) {
+                serverLog(`[ERROR] transferToFund: failed to save fund asset. Rolling back. id: ${fromUserID}`);
+                userAsset.balance += amount;
+                userAsset.balance = Math.round(userAsset.balance);
+                const rollback = await userAsset.save();
+                if (!rollback) {
+                    serverLog(`[ERROR] transferToFund: rollback failed. Locking account. id: ${fromUserID}`);
+                    serversideLockAccount(fromUserID);
+                }
+                return { state: 'error', data: null };
+            }
+
+            serverLog(`[INFO] transferToFund: ${amount}원 from ${fromUserID} to fund '${fundName}'.`);
+            return { state: 'success', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:transferToFund': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
     async addBalance(id, amount) {
         try {
             const user = await User.findOne({ userID: id });
