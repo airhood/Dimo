@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, userMention } = require('discord.js');
-const { fundAddAdministrator, fundRemoveAdministrator, fundGetAdministrators, fundLogin, fundLogout, fundCreate, getFundInfo, getFundList, getUserState, investFund, sellFundInvestment, fundTransferOwnership, fundRename } = require('../database');
+const { fundAddAdministrator, fundRemoveAdministrator, fundGetAdministrators, fundLogin, fundLogout, fundCreate, getFundInfo, getFundList, getUserState, investFund, sellFundInvestment, fundTransferOwnership, fundRename, getFundAsset } = require('../database');
+const { buildAssetFields } = require('../utils/asset_render');
 const { calculateAssetValue } = require('../stock_system/credit_system');
 const { createCache, saveCache } = require('../cache');
 const { v4: uuidv4 } = require('uuid');
@@ -87,6 +88,24 @@ module.exports = {
                         .setDescription('매도할 좌수')
                         .setMinValue(1)
                         .setRequired(true)
+                )
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('자산')
+                .setDescription('펀드의 자산 현황을 표시합니다.')
+                .addStringOption((option) =>
+                    option.setName('이름')
+                        .setDescription('자산을 확인할 펀드 이름')
+                        .setRequired(true)
+                )
+                .addStringOption((option) =>
+                    option.setName('상세정보')
+                        .setDescription('자산의 상세정보 표시 여부')
+                        .addChoices(
+                            { name: '표시', value: '표시' },
+                            { name: '숨기기', value: '숨기기' },
+                        )
+                        .setRequired(false)
                 )
         )
         .addSubcommandGroup((subCommandGroup) =>
@@ -657,6 +676,35 @@ module.exports = {
                     ],
                 });
             }
+        } else if (subCommand === '자산') {
+            const fundName = interaction.options.getString('이름');
+            const loadDetails = interaction.options.getString('상세정보') === '표시';
+
+            const result = await getFundAsset(fundName);
+            if (result.state === 'no_fund') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  존재하지 않는 펀드').setDescription(`**${fundName}** 펀드가 존재하지 않습니다.`).setTimestamp()],
+                });
+                return;
+            }
+            if (result.state === 'error') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                });
+                return;
+            }
+
+            const { fields } = buildAssetFields(result.data.asset, loadDetails);
+
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle(`:bank:  자산 [${fundName} 펀드]`)
+                        .addFields(fields)
+                        .setTimestamp()
+                ],
+            });
         } else if (subCommand === '매도') {
             const fundName = interaction.options.getString('이름');
             const units = interaction.options.getInteger('좌수');

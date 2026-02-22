@@ -432,6 +432,31 @@ module.exports = {
 
     async getUserAsset(id) {
         try {
+            const user = await User.findOne({ userID: id }).populate('state');
+            if (!user) {
+                serverLog('[ERROR] Error finding user');
+                return { state: 'error', data: null };
+            }
+
+            const currentAccount = user.state.currentAccount;
+            if (currentAccount !== '@self') {
+                const fundName = currentAccount.replace('@fund_', '');
+                const fund = await Fund.findOne({ name: fundName }).populate('asset');
+                if (!fund) return { state: 'error', data: null };
+                return { state: 'success', data: { asset: fund.asset }, isFund: true, fundName };
+            }
+
+            const userWithAsset = await User.findOne({ userID: id }).populate('asset');
+            if (!userWithAsset) return { state: 'error', data: null };
+            return { state: 'success', data: userWithAsset, isFund: false };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getUserAsset': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getUserPersonalAsset(id) {
+        try {
             const result = await User.findOne({ userID: id }).populate('asset');
             if (!result) {
                 serverLog('[ERROR] Error finding user asset');
@@ -439,7 +464,7 @@ module.exports = {
             }
             return { state: 'success', data: result, isFund: false };
         } catch (err) {
-            serverLog(`[ERROR] Error at 'database.js:getUserAsset': ${err}`);
+            serverLog(`[ERROR] Error at 'database.js:getUserPersonalAsset': ${err}`);
             return { state: 'error', data: null };
         }
     },
