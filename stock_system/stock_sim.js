@@ -408,6 +408,15 @@ async function initStockSim() {
     try {
         await loadRecentStockData();
         updateProductTimeLeft(); // futureTimeLeft / optionTimeLeft 초기화 (null 방지)
+
+        // 서버 시작 시 초기 뉴스 생성 (직전 시간 → 현재 시간 데이터 활용)
+        if (stocksPricesHistory.length >= 2) {
+            detectAndGenerateNews(
+                stocksPricesHistory[stocksPricesHistory.length - 2],
+                stocksPricesHistory[stocksPricesHistory.length - 1]
+            );
+        }
+
         return true;
     } catch (err) {
         serverLog(`[ERROR] Error loading recent stock data: ${err}`);
