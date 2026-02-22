@@ -64,7 +64,7 @@ module.exports = {
             embedTitle = `:bank:  자산 [${targetUser.username}]`;
         }
 
-        const { fields } = buildAssetFields(result.data.asset, loadDetails);
+        const { fields } = await buildAssetFields(result.data.asset, loadDetails);
 
         await interaction.reply({
             embeds: [

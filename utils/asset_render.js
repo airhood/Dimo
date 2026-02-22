@@ -1,11 +1,11 @@
 const moment = require('moment-timezone');
 const { getStockPrice, getFuturePrice, getOptionPrice } = require('../stock_system/stock_sim');
-const { getFundPrice } = require('../stock_system/fund_price');
+const { getRealtimeFundPrice } = require('../stock_system/fund_price');
 const { OPTION_UNIT_QUANTITY } = require('../setting');
 
 const ROUND_POS = 3;
 
-function buildAssetFields(assetData, loadDetails) {
+async function buildAssetFields(assetData, loadDetails) {
     const fields = [
         {
             name: ':dollar:  계좌 잔액',
@@ -424,7 +424,7 @@ function buildAssetFields(assetData, loadDetails) {
             const formattedPurchaseDate = moment(fund.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
             const investmentAmount = fund.unit * fund.purchasePrice;
 
-            const currentFundPrice = getFundPrice(fund.name);
+            const currentFundPrice = await getRealtimeFundPrice(fund.name);
             if (currentFundPrice === null) {
                 fund_format += `${fund.name} 펀드 ${investmentAmount.toLocaleString()}원\n| 좌수: ${fund.unit.toLocaleString()}\n| 매수날짜: ${formattedPurchaseDate}\n| (가격 정보 없음)`;
                 continue;
@@ -447,7 +447,7 @@ function buildAssetFields(assetData, loadDetails) {
         for (const fund of assetData.funds) {
             if (fund_format !== '') fund_format += '\n';
             const investmentAmount = fund.unit * fund.purchasePrice;
-            const currentFundPrice = getFundPrice(fund.name);
+            const currentFundPrice = await getRealtimeFundPrice(fund.name);
 
             if (currentFundPrice === null) {
                 fund_format += `${fund.name} 펀드 ${investmentAmount.toLocaleString()}원 (${fund.unit.toLocaleString()}좌, 가격 정보 없음)`;

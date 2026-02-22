@@ -66,7 +66,21 @@ async function initFundPriceSystem() {
     return true;
 }
 
+async function getRealtimeFundPrice(fundName) {
+    try {
+        const Fund = require('../schemas/fund');
+        const fund = await Fund.findOne({ name: fundName }).populate('asset');
+        if (!fund) return null;
+        const assetValue = calculateAssetValue(fund.asset);
+        return calculateFundPrice(assetValue, fund.total_units);
+    } catch (err) {
+        serverLog(`[ERROR] Error at 'fund_price.js:getRealtimeFundPrice': ${err}`);
+        return null;
+    }
+}
+
 exports.getFundPrice = getFundPrice;
 exports.setFundPrice = setFundPrice;
 exports.renameFundPrice = renameFundPrice;
 exports.initFundPriceSystem = initFundPriceSystem;
+exports.getRealtimeFundPrice = getRealtimeFundPrice;
