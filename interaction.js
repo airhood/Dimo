@@ -418,7 +418,7 @@ function addInteractionHandler(client) {
                 const cache = loadCache(uid);
                 if (!cache) return;
 
-                const { pages, currentPage } = cache;
+                const { pages, currentPage, accountTitle } = cache;
 
                 if (currentPage === 0) return;
 
@@ -442,7 +442,7 @@ function addInteractionHandler(client) {
                 await interaction.update({
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle(`거래 내역 [${interaction.user.username}]`)
+                            .setTitle(`거래 내역 [${accountTitle ?? interaction.user.username}]`)
                             .setDescription(`${pages[pageToLoad].join('\n')}`)
                             .setTimestamp()
                     ],
@@ -450,7 +450,7 @@ function addInteractionHandler(client) {
                     fetchReply: true
                 });
 
-                saveCache(uid, { pages, currentPage: pageToLoad });
+                saveCache(uid, { pages, currentPage: pageToLoad, accountTitle });
             } else if (action === 'transaction_log_next_page') {
                 const uid = customID[2];
                 if (!uid) return;
@@ -458,7 +458,7 @@ function addInteractionHandler(client) {
                 const cache = loadCache(uid);
                 if (!cache) return;
 
-                const { pages, currentPage } = cache;
+                const { pages, currentPage, accountTitle } = cache;
 
                 if (currentPage === pages.length - 1) return;
 
@@ -482,7 +482,7 @@ function addInteractionHandler(client) {
                 await interaction.update({
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle(`거래 내역 [${interaction.user.username}]`)
+                            .setTitle(`거래 내역 [${accountTitle ?? interaction.user.username}]`)
                             .setDescription(`${pages[pageToLoad].join('\n')}`)
                             .setTimestamp()
                     ],
@@ -490,7 +490,7 @@ function addInteractionHandler(client) {
                     fetchReply: true
                 });
 
-                saveCache(uid, { pages, currentPage: pageToLoad });
+                saveCache(uid, { pages, currentPage: pageToLoad, accountTitle });
             }
         }
     });

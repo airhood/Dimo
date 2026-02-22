@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, MessageFlags } = require('discord.js');
-const { getTransactionLog } = require('../database');
+const { getTransactionLog, getUserState } = require('../database');
 const { MAX_TRANSACTION_LOG_LOOKUP } = require('../setting');
 const { v4: uuidv4 } = require('uuid');
 const { createCache, saveCache } = require('../cache');
@@ -17,7 +17,34 @@ module.exports = {
     async execute(interaction) {
         const hide_mode = interaction.options.getBoolean('보안모드');
 
-        const result = await getTransactionLog(interaction.user.id, MAX_TRANSACTION_LOG_LOOKUP);
+        const userState = await getUserState(interaction.user.id);
+        if (userState.state === 'error') {
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xEA4144)
+                        .setTitle('서버 오류')
+                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                        .setTimestamp()
+                ],
+            });
+            return;
+        }
+
+        const currentAccount = userState.data.state.currentAccount;
+        let accountID;
+        let accountTitle;
+
+        if (currentAccount === '@self') {
+            accountID = interaction.user.id;
+            accountTitle = interaction.user.username;
+        } else {
+            const fundName = currentAccount.replace('@fund_', '');
+            accountID = `@fund_${fundName}`;
+            accountTitle = `${fundName} 펀드`;
+        }
+
+        const result = await getTransactionLog(accountID, MAX_TRANSACTION_LOG_LOOKUP);
 
         if (result.state === 'error') {
             await interaction.reply({
@@ -37,7 +64,7 @@ module.exports = {
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0xE57E22)
-                        .setTitle(`거래 내역 [${interaction.user.username}]`)
+                        .setTitle(`거래 내역 [${accountTitle}]`)
                         .setDescription('거래 내역이 없습니다.')
                         .setTimestamp()
                 ],
@@ -59,7 +86,7 @@ module.exports = {
         }
 
         const uid = uuidv4().replace(/-/g, '');
-        const cacheData = { pages: pages, currentPage: 0 };
+        const cacheData = { pages, currentPage: 0, accountTitle };
         createCache(uid, 15);
         saveCache(uid, cacheData);
 
@@ -82,7 +109,7 @@ module.exports = {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
-                        .setTitle(`거래 내역 [${interaction.user.username}]`)
+                        .setTitle(`거래 내역 [${accountTitle}]`)
                         .setDescription(`${pages[0].join('\n')}`)
                         .setTimestamp()
                 ],
@@ -95,7 +122,7 @@ module.exports = {
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
-                        .setTitle(`거래 내역 [${interaction.user.username}]`)
+                        .setTitle(`거래 내역 [${accountTitle}]`)
                         .setDescription(`${pages[0].join('\n')}`)
                         .setTimestamp()
                 ],

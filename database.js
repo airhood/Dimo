@@ -972,7 +972,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Buy ${quantity}shares of '${ticker}' stock success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'stock_buy', `${ticker} ${quantity}주 매수 (${transactionAmount.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'stock_buy', `${ticker} ${quantity}주 매수 (${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1053,7 +1053,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Sell ${quantity}shares of '${ticker}' stock success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'stock_sell', `${ticker} ${quantity}주 매도 (${transactionAmount.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'stock_sell', `${ticker} ${quantity}주 매도 (${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1143,7 +1143,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Short sell ${quantity}shares of '${ticker}' stock success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'stock_short_sell', `${ticker} ${quantity}주 공매도 (매도가 ${currentPrice.toLocaleString()}원, 증거금 ${margin.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'stock_short_sell', `${ticker} ${quantity}주 공매도 (매도가 ${currentPrice.toLocaleString()}원, 증거금 ${margin.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1228,7 +1228,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Repay ${quantity}shares of '${ticker}' stock success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'stock_short_repay', `${ticker} 공매도 상환 ${quantity}주`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'stock_short_repay', `${ticker} 공매도 상환 ${quantity}주`);
             return {
                 state: 'success',
                 data: short,
@@ -1348,7 +1348,7 @@ module.exports = {
             }
             
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' future success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'future_long', `${ticker} 선물 매수 ${quantity}계약 (레버리지 ${leverage}배, 증거금 ${margin.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'future_long', `${ticker} 선물 매수 ${quantity}계약 (레버리지 ${leverage}배, 증거금 ${margin.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1458,7 +1458,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' future success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'future_short', `${ticker} 선물 매도 ${quantity}계약 (레버리지 ${leverage}배, 증거금 ${margin.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'future_short', `${ticker} 선물 매도 ${quantity}계약 (레버리지 ${leverage}배, 증거금 ${margin.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1525,7 +1525,7 @@ module.exports = {
             }
             
             serverLog(`[INFO] Liquidated ${quantity}contracts of '${ticker}' future success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'future_liquidate', `${ticker} 선물 청산 (손익 ${(transactionAmount - margin) >= 0 ? '+' : ''}${Math.round(transactionAmount - margin).toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'future_liquidate', `${ticker} 선물 청산 (손익 ${(transactionAmount - margin) >= 0 ? '+' : ''}${Math.round(transactionAmount - margin).toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: position,
@@ -1612,7 +1612,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' call option success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'call_option_buy', `${ticker} 콜옵션 매수 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'call_option_buy', `${ticker} 콜옵션 매수 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1699,7 +1699,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' call option success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'call_option_sell', `${ticker} 콜옵션 매도 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'call_option_sell', `${ticker} 콜옵션 매도 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1786,7 +1786,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' put option success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'put_option_buy', `${ticker} 풋옵션 매수 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'put_option_buy', `${ticker} 풋옵션 매수 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1873,7 +1873,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' put option success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'put_option_sell', `${ticker} 풋옵션 매도 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'put_option_sell', `${ticker} 풋옵션 매도 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1950,7 +1950,7 @@ module.exports = {
             }
             
             serverLog(`[INFO] Liquidated ${quantity}contracts of '${ticker}' ${optionType} option success. id: ${id}`);
-            module.exports.addTransactionLog(id, 'option_liquidate', `${ticker} ${optionType === 'call' ? '콜' : '풋'}옵션 청산 (${transactionAmount.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'option_liquidate', `${ticker} ${optionType === 'call' ? '콜' : '풋'}옵션 청산 (${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: position,
@@ -2033,7 +2033,7 @@ module.exports = {
             }
             
             serverLog(`[INFO] Binary option. ticker: ${ticker}, prediction: ${prediction}, time: ${time}, amount: ${amount}. id: ${id}`);
-            module.exports.addTransactionLog(id, 'binary_option', `${ticker} 바이너리옵션 ${prediction === 'up' ? '상승' : '하락'} ${time}시간 (${amount.toLocaleString()}원)`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'binary_option', `${ticker} 바이너리옵션 ${prediction === 'up' ? '상승' : '하락'} ${time}시간 (${amount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: amount,
@@ -2134,7 +2134,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Loaned ${amount} amount of money.`);
-            module.exports.addTransactionLog(id, 'loan', `대출 ${amount.toLocaleString()}원 (${interestType})`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'loan', `대출 ${amount.toLocaleString()}원 (${interestType})`);
             return {
                 state: 'success',
                 data: getLoanInterestRatePoint(),
@@ -2216,7 +2216,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Repayed ${amount} amount of loaned money.`);
-            module.exports.addTransactionLog(id, 'loan_repay', `대출 상환 ${Math.round(transactionAmount).toLocaleString()}원`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'loan_repay', `대출 상환 ${Math.round(transactionAmount).toLocaleString()}원`);
             return {
                 state: 'success',
                 data: amount,
