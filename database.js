@@ -432,36 +432,27 @@ module.exports = {
 
     async getUserAsset(id) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
+            const result = await User.findOne({ userID: id }).populate('asset');
+            if (!result) {
                 serverLog('[ERROR] Error finding user asset');
                 return { state: 'error', data: null };
             }
-
-            const userState = await State.findById(user.state);
-            if (userState && userState.currentAccount !== '@self') {
-                const fundName = userState.currentAccount.replace('@fund_', '');
-                const fund = await Fund.findOne({ name: fundName }).populate('asset');
-                if (!fund) {
-                    serverLog(`[ERROR] Error finding fund in getUserAsset: ${fundName}`);
-                    return { state: 'error', data: null };
-                }
-                return {
-                    state: 'success',
-                    data: { asset: fund.asset },
-                    isFund: true,
-                    fundName,
-                };
-            }
-
-            const result = await User.findOne({ userID: id }).populate('asset');
-            return {
-                state: 'success',
-                data: result,
-                isFund: false,
-            };
+            return { state: 'success', data: result, isFund: false };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getUserAsset': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getFundAsset(fundName) {
+        try {
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                return { state: 'no_fund', data: null };
+            }
+            return { state: 'success', data: { asset: fund.asset }, isFund: true, fundName };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getFundAsset': ${err}`);
             return { state: 'error', data: null };
         }
     },

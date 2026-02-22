@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { checkUserExists, getUserAsset } = require('../database');
+const { checkUserExists, getUserAsset, getFundAsset } = require('../database');
 const moment = require('moment-timezone');
 const { getStockPrice, getFuturePrice, getCallOptionPrice, getPutOptionPrice, getOptionPrice, getOptionStrikePriceIndex } = require('../stock_system/stock_sim');
 const asset = require('../schemas/asset');
@@ -20,80 +20,97 @@ function mergePositions(existingQuantity, existingPurchasePrice, newQuantity, ne
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('자산')
-        .setDescription('가지고 있는 자산을 표시합니다.')
-        .addUserOption((option) =>
-            option.setName('유저')
-                .setDescription('자신을 불러올 유저')
-                .setRequired(false)
-        )
-        .addStringOption((option) =>
-            option.setName('상세정보')
-                .setDescription('자산의 상세정보 표시 여부')
-                .addChoices(
-                    { name: '표시', value: '표시' },
-                    { name: '숨기기', value: '숨기기' },
+        .setDescription('자산을 표시합니다.')
+        .addSubcommand((sub) =>
+            sub.setName('개인')
+                .setDescription('유저의 개인 계좌 자산을 표시합니다.')
+                .addUserOption((opt) =>
+                    opt.setName('유저')
+                        .setDescription('자산을 확인할 유저')
+                        .setRequired(false)
                 )
-                .setRequired(false)
+                .addStringOption((opt) =>
+                    opt.setName('상세정보')
+                        .setDescription('자산의 상세정보 표시 여부')
+                        .addChoices(
+                            { name: '표시', value: '표시' },
+                            { name: '숨기기', value: '숨기기' },
+                        )
+                        .setRequired(false)
+                )
         )
-        ,
-    
+        .addSubcommand((sub) =>
+            sub.setName('펀드')
+                .setDescription('펀드 계좌의 자산을 표시합니다.')
+                .addStringOption((opt) =>
+                    opt.setName('이름')
+                        .setDescription('조회할 펀드 이름')
+                        .setRequired(true)
+                )
+                .addStringOption((opt) =>
+                    opt.setName('상세정보')
+                        .setDescription('자산의 상세정보 표시 여부')
+                        .addChoices(
+                            { name: '표시', value: '표시' },
+                            { name: '숨기기', value: '숨기기' },
+                        )
+                        .setRequired(false)
+                )
+        ),
+
     async execute(interaction) {
-        let targetUser = interaction.options.getUser('유저');        
+        const subCommand = interaction.options.getSubcommand();
         let loadDetails = interaction.options.getString('상세정보');
-        
-        if (targetUser === null) {
-            targetUser = interaction.user;
-        }
 
-        const userExists = await checkUserExists(targetUser.id);
-        if (userExists.state === 'error') {
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xEA4144)
-                        .setTitle('서버 오류')
-                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                        .setTimestamp()
-                ],
-            });
-            return;
-        }
+        if (loadDetails === '표시') loadDetails = true;
+        else loadDetails = false;
 
-        if (userExists.data === false) {
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xEA4144)
-                        .setTitle('존재하지 않는 계정입니다')
-                        .setDescription(`<@${targetUser.id}>의 계정이 존재하지 않습니다.`)
-                ],
-            });
-            return;
-        }
+        let result;
+        let embedTitle;
 
-        if (loadDetails === '표시') {
-            loadDetails = true;
-        }
-        else if (loadDetails === '숨기기') {
-            loadDetails = false;
-        }
-        else if (loadDetails === null) {
-            loadDetails = false;
-        }
+        if (subCommand === '개인') {
+            let targetUser = interaction.options.getUser('유저') ?? interaction.user;
 
-        const result = await getUserAsset(targetUser.id);
+            const userExists = await checkUserExists(targetUser.id);
+            if (userExists.state === 'error') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                });
+                return;
+            }
+            if (userExists.data === false) {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('존재하지 않는 계정입니다').setDescription(`<@${targetUser.id}>의 계정이 존재하지 않습니다.`)],
+                });
+                return;
+            }
 
-        if (result.state === 'error') {
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xEA4144)
-                        .setTitle('서버 오류')
-                        .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                        .setTimestamp()
-                ],
-            });
-            return;
+            result = await getUserAsset(targetUser.id);
+            if (result.state === 'error') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                });
+                return;
+            }
+            embedTitle = `:bank:  자산 [${targetUser.username}]`;
+
+        } else if (subCommand === '펀드') {
+            const fundName = interaction.options.getString('이름');
+
+            result = await getFundAsset(fundName);
+            if (result.state === 'no_fund') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('펀드 없음').setDescription(`**${fundName}** 펀드가 존재하지 않습니다.`)],
+                });
+                return;
+            }
+            if (result.state === 'error') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                });
+                return;
+            }
+            embedTitle = `:bank:  자산 [${fundName} 펀드]`;
         }
 
         /*
@@ -633,10 +650,6 @@ module.exports = {
             });
         }
         
-        const embedTitle = result.isFund
-            ? `:bank:  자산 [${result.fundName} 펀드]`
-            : `:bank:  자산 [${targetUser.username}]`;
-
         await interaction.reply({
             embeds: [
                 new EmbedBuilder()
