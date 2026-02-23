@@ -8,10 +8,10 @@ const { addInteractionHandler } = require('./interaction');
 const { serverLog, setClient_server_logger, setupAdminChannel } = require('./server/server_logger');
 const { setClient_status_tracker, setupStatusChannel } = require('./server/status_tracker');
 const { dimoChat } = require('./chat_bot/chat_bot');
-const { addToBucket, existsInCurrentBucket } = require('./message_reference_tracker');
+const { addToBucket, existsInCurrentBucket } = require('./systems/message_reference_tracker');
 const { filterMessage, wrapMentions } = require('./chat_bot/message_filter');
 const { setClient_koreanbots_update, setUpdateInterval } = require('./koreanbots_update');
-const { setClientForNotifications } = require('./stock_system/notification_checker');
+const { setClientForNotifications } = require('./systems/notification_checker');
 
 const client = new Client({
 	intents: [

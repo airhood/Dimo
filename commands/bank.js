@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, CommandInteractionOptionResolver } = require('discord.js');
 const { loan, loanRepay, openFixedDeposit, openSavingsAccount, getUserCredit, checkUserExists } = require('../database');
-const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint } = require('../stock_system/bank_manager');
-const { getCreditGrade } = require('../stock_system/credit_system');
+const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint } = require('../systems/bank_manager');
+const { getCreditGrade } = require('../systems/credit_system');
 
 module.exports = {
     data: new SlashCommandBuilder()

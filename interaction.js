@@ -1,6 +1,6 @@
 const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
 const { createUser, deleteUser } = require('./database');
-const { loadCache, saveCache } = require('./cache');
+const { loadCache, saveCache } = require('./utils/cache');
 const moment = require('moment-timezone');
 
 function addInteractionHandler(client) {
@@ -493,7 +493,7 @@ function addInteractionHandler(client) {
                 saveCache(uid, { pages, currentPage: pageToLoad, accountTitle });
             } else if (action === 'realtime_stop') {
                 const uid = customID[2];
-                const { stopSession } = require('./stock_system/realtime_manager');
+                const { stopSession } = require('./systems/realtime_manager');
                 stopSession(uid);
                 await interaction.update({ components: [] });
             }

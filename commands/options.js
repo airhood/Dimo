@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { tryGetTicker, getOptionPrice, getOptionStrikePriceList, getOptionTimeRangeData, getOptionExpirationDate } = require('../stock_system/stock_sim');
+const { tryGetTicker, getOptionPrice, getOptionStrikePriceList, getOptionTimeRangeData, getOptionExpirationDate } = require('../systems/stock_sim');
 const { callOptionBuy, callOptionSell, putOptionBuy, putOptionSell, optionLiquidate } = require('../database');
-const { generateStockChartImage } = require('../stock_system/stock_chart');
+const { generateStockChartImage } = require('../systems/stock_chart');
 const { serverLog } = require('../server/server_logger');
 const fs = require('fs');
 const moment = require('moment-timezone');

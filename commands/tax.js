@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { payTax, getTaxRecord, calculateTax, TAX_FLOOR, BRACKETS } = require('../stock_system/tax_system');
+const { payTax, getTaxRecord, calculateTax, TAX_FLOOR, BRACKETS } = require('../systems/tax_system');
 
 function formatWon(n) {
     const abs = Math.abs(n);

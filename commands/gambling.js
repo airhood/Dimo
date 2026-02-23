@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { createCache, saveCache } = require('../cache');
+const { createCache, saveCache } = require('../utils/cache');
 const { v4: uuidv4 } = require('uuid');
 const { getUserAsset, addBalance } = require('../database');
 

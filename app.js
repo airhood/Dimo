@@ -1,14 +1,14 @@
 const { connectDatabase, loadServersideLockData } = require('./database');
-const { initStockSim } = require('./stock_system/stock_sim');
+const { initStockSim } = require('./systems/stock_sim');
 const { initTerminal } = require('./server/server_terminal');
-const { startBucketCycle } = require('./message_reference_tracker');
+const { startBucketCycle } = require('./systems/message_reference_tracker');
 const { initResourceMonitor, checkResource } = require('./server/resource_monitor');
-const { initScheduleManager } = require('./stock_system/transaction_schedule_manager');
+const { initScheduleManager } = require('./systems/transaction_schedule_manager');
 const discord_bot = require('./discord_bot');
-const { initCreditSystem, updateCreditRating } = require('./stock_system/credit_system');
-const { initFundPriceSystem } = require('./stock_system/fund_price');
-const { initNotificationScheduler } = require('./stock_system/notification_checker');
-const { setTimezone } = require('./korean_time');
+const { initCreditSystem, updateCreditRating } = require('./systems/credit_system');
+const { initFundPriceSystem } = require('./systems/fund_price');
+const { initNotificationScheduler } = require('./systems/notification_checker');
+const { setTimezone } = require('./utils/korean_time');
 const { loadKeywordsFromFile } = require('./chat_bot/message_filter');
 
 require('dotenv').config();

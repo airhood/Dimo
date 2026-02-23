@@ -2,7 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, Butt
 const { getTransactionLog, getUserState } = require('../database');
 const { MAX_TRANSACTION_LOG_LOOKUP } = require('../setting');
 const { v4: uuidv4 } = require('uuid');
-const { createCache, saveCache } = require('../cache');
+const { createCache, saveCache } = require('../utils/cache');
 const moment = require('moment-timezone');
 
 module.exports = {

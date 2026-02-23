@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getAllUserAsset } = require('../database');
-const { calculateAssetValue } = require('../stock_system/credit_system');
+const { calculateAssetValue } = require('../systems/credit_system');
 
 module.exports = {
     data: new SlashCommandBuilder()

@@ -1,5 +1,5 @@
 const { llmChat } = require('../utils/llm');
-const { createCache, saveCache, loadCache, deleteCache } = require('../cache');
+const { createCache, saveCache, loadCache, deleteCache } = require('../utils/cache');
 const { serverLog } = require("../server/server_logger");
 
 const systemInstruction = `너는 이제부터 챗봇이야.

@@ -6,8 +6,8 @@ const {
     purchaseNews,
     getFreeNews,
     getBoughtNews,
-} = require('../stock_system/news_system');
-const { getStockName } = require('../stock_system/stock_name');
+} = require('../systems/news_system');
+const { getStockName } = require('../systems/stock_name');
 
 const TIER_STARS = ['', '★☆☆☆', '★★☆☆', '★★★☆', '★★★★'];
 const TIER_LABELS = ['', '시장 소문', '시장 정보', '선행 정보', '내부 정보'];

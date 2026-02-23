@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
 const { v4: uuidv4 } = require('uuid');
-const { createCache, saveCache } = require('../cache');
+const { createCache, saveCache } = require('../utils/cache');
 const { getNoticeList } = require('../database');
 const moment = require('moment-timezone');
 

@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getDISDAQIndex, getDISDAQIndexTimeRangeData } = require('../stock_system/stock_index_system');
-const { generateIndexChartImage } = require('../stock_system/stock_chart');
+const { getDISDAQIndex, getDISDAQIndexTimeRangeData } = require('../systems/stock_index_system');
+const { generateIndexChartImage } = require('../systems/stock_chart');
 const { serverLog } = require('../server/server_logger');
 const fs = require('fs');
 
