@@ -1,5 +1,6 @@
 const { getTransactionScheduleData, deleteTransactionSchedule } = require("../database");
 const { setOnFutureExpireListener, setOnOptionExpireListener, getStockPrice } = require("./stock_sim");
+const { collectPendingTaxes, assessTax } = require("./tax_system");
 const { program } = require('commander');
 const { serverLog } = require("../server/server_logger");
 const schedule = require('node-schedule');
@@ -432,6 +433,11 @@ module.exports = {
         if (!result) return false;
 
         setOnFutureExpireListener(async () => {
+            // 1) 미납 세금 강제 징수
+            await collectPendingTaxes();
+            // 2) 새 세금 고지 (선물 정산 후 자산 기준)
+            // 선물 정산이 끝난 뒤 assessTax가 실행되도록 마지막에 배치
+
             console.log(`future_execute_list: ${JSON.stringify(future_execute_list)}`);
             const results = await Promise.all(Object.entries(future_execute_list).map(async ([identification_code, transaction_schedule]) => {
                 const userAsset = await Asset.findById(transaction_schedule.asset_id);
@@ -475,6 +481,9 @@ module.exports = {
                     serverLog(`[INFO] Future execute process success. asset_id: ${transaction_schedule.asset_id}}`);
                 }
             }));
+
+            // 3) 선물 정산 완료 후 세금 고지
+            await assessTax();
         });
 
         setOnOptionExpireListener(async () => {
