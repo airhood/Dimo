@@ -1,19 +1,6 @@
-const { generateText } = require('ai');
+const { llmChat } = require('../utils/llm');
 const { createCache, saveCache, loadCache, deleteCache } = require('../cache');
 const { serverLog } = require("../server/server_logger");
-const { llm_provider, llm_model, llm_api_key } = require('../config.json');
-
-function buildModel() {
-    if (llm_provider === 'openai') {
-        const { createOpenAI } = require('@ai-sdk/openai');
-        return createOpenAI({ apiKey: llm_api_key })(llm_model);
-    } else {
-        const { createGoogleGenerativeAI } = require('@ai-sdk/google');
-        return createGoogleGenerativeAI({ apiKey: llm_api_key })(llm_model);
-    }
-}
-
-const model = buildModel();
 
 const systemInstruction = `너는 이제부터 챗봇이야.
 너는 discord.js를 사용하여 만든 디스코드 봇이고 가상 주식 서비스와 챗봇 서비스를 지원해.
@@ -47,13 +34,7 @@ module.exports = {
             // Append the new user message
             messages = [...messages, { role: 'user', content: userChat }];
 
-            const { text } = await generateText({
-                model,
-                system: systemInstruction,
-                messages,
-            });
-
-            const reply = text.trim();
+            const reply = await llmChat(systemInstruction, messages);
 
             // Append the assistant response so the next turn has full history
             const updatedMessages = [...messages, { role: 'assistant', content: reply }];

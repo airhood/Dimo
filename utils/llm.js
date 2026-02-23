@@ -35,4 +35,19 @@ async function llmGenerate(system, prompt) {
     return text.trim();
 }
 
-module.exports = { llmGenerate };
+/**
+ * Generate a response in a multi-turn conversation.
+ * @param {string} system    System instruction
+ * @param {Array}  messages  [{ role: 'user'|'assistant', content: string }, ...]
+ * @returns {Promise<string>}
+ */
+async function llmChat(system, messages) {
+    const { text } = await generateText({
+        model: getModel(),
+        system,
+        messages,
+    });
+    return text.trim();
+}
+
+module.exports = { llmGenerate, llmChat };
