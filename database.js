@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { mongodb_url }  = require('./config.json');
 const { serverLog } = require('./server/server_logger');
 const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionExpirationDate, getOptionStrikePriceList } = require('./systems/stock_sim');
+const { getEtfPrice, ETF_DEFINITIONS } = require('./systems/etf_system');
 const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, getLoanInterestRatePoint, getFixedDepositInterestRatePoint } = require('./systems/bank_manager');
 const { calculateFundCreditRating, calculateAssetValue } = require('./systems/credit_system');
 require('dotenv').config();
@@ -168,6 +169,7 @@ module.exports = {
                 fixed_deposits: [],
                 savings_accounts: [],
                 loans: [],
+                etfs: [],
             });
 
             if (!newAsset) {
@@ -3719,6 +3721,119 @@ module.exports = {
             return { state: 'success', data: logs };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getTransactionLog': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async etfBuy(id, etfId, quantity) {
+        try {
+            if (!ETF_DEFINITIONS[etfId]) {
+                return { state: 'invalid_etf', data: null };
+            }
+
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
+                return { state: 'error', data: null };
+            }
+            const userAsset = activeAsset.data;
+
+            const currentPrice = getEtfPrice(etfId);
+            if (!currentPrice) {
+                return { state: 'error', data: null };
+            }
+
+            if (quantity === 0) {
+                quantity = Math.floor(userAsset.balance / currentPrice);
+                if (quantity === 0) {
+                    return { state: 'no_balance', data: null };
+                }
+            }
+
+            const transactionAmount = currentPrice * quantity;
+
+            if (userAsset.balance < transactionAmount) {
+                return { state: 'no_balance', data: null };
+            }
+
+            userAsset.balance -= transactionAmount;
+            userAsset.balance = Math.round(userAsset.balance);
+
+            const purchaseDate = new Date();
+
+            if (!userAsset.etfs) userAsset.etfs = [];
+            userAsset.etfs.push({
+                etfId,
+                quantity,
+                purchasePrice: currentPrice,
+                purchaseDate,
+            });
+
+            await userAsset.save();
+
+            serverLog(`[INFO] ETF buy success. id: ${id}, etfId: ${etfId}, quantity: ${quantity}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'etf_buy', `${ETF_DEFINITIONS[etfId].name} ${quantity}좌 매수 (${transactionAmount.toLocaleString()}원)`);
+            return { state: 'success', data: quantity };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:etfBuy': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async etfSell(id, etfId, quantity) {
+        try {
+            if (!ETF_DEFINITIONS[etfId]) {
+                return { state: 'invalid_etf', data: null };
+            }
+
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
+                return { state: 'error', data: null };
+            }
+            const userAsset = activeAsset.data;
+
+            const currentPrice = getEtfPrice(etfId);
+            if (!currentPrice) {
+                return { state: 'error', data: null };
+            }
+
+            if (!userAsset.etfs) userAsset.etfs = [];
+
+            const totalOwned = userAsset.etfs
+                .filter(e => e.etfId === etfId)
+                .reduce((sum, e) => sum + e.quantity, 0);
+
+            if (quantity === 0) {
+                quantity = totalOwned;
+            }
+
+            if (totalOwned < quantity) {
+                return { state: 'no_etf', data: null };
+            }
+
+            let quantityLeft = quantity;
+            for (let i = userAsset.etfs.length - 1; i >= 0 && quantityLeft > 0; i--) {
+                const etf = userAsset.etfs[i];
+                if (etf.etfId !== etfId) continue;
+                if (etf.quantity <= quantityLeft) {
+                    quantityLeft -= etf.quantity;
+                    userAsset.etfs.splice(i, 1);
+                } else {
+                    etf.quantity -= quantityLeft;
+                    quantityLeft = 0;
+                }
+            }
+
+            const transactionAmount = currentPrice * quantity;
+            userAsset.balance += transactionAmount;
+            userAsset.balance = Math.round(userAsset.balance);
+
+            await userAsset.save();
+
+            serverLog(`[INFO] ETF sell success. id: ${id}, etfId: ${etfId}, quantity: ${quantity}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'etf_sell', `${ETF_DEFINITIONS[etfId].name} ${quantity}좌 매도 (${transactionAmount.toLocaleString()}원)`);
+            return { state: 'success', data: quantity };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:etfSell': ${err}`);
             return { state: 'error', data: null };
         }
     },

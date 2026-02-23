@@ -1,5 +1,6 @@
 const { connectDatabase, loadServersideLockData } = require('./database');
-const { initStockSim } = require('./systems/stock_sim');
+const { initStockSim, addHourlyListener, getIndexPrice, getIndexTimeRangeData, getIndexHistoryLength } = require('./systems/stock_sim');
+const { initEtfSystem, updateEtfHour } = require('./systems/etf_system');
 const { initTerminal } = require('./server/server_terminal');
 const { startBucketCycle } = require('./systems/message_reference_tracker');
 const { initResourceMonitor, checkResource } = require('./server/resource_monitor');
@@ -39,6 +40,11 @@ module.exports = {
         if (!result3) return false;
 
         console.log('[BOOT] Stock simulation loaded');
+
+        initEtfSystem({ getIndexPrice, getIndexTimeRangeData, getIndexHistoryLength });
+        addHourlyListener(updateEtfHour);
+
+        console.log('[BOOT] ETF system loaded');
 
         const result3b = await initFundPriceSystem();
         if (!result3b) return false;

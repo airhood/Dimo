@@ -1,6 +1,7 @@
 const moment = require('moment-timezone');
 const { getStockPrice, getFuturePrice, getOptionPrice } = require('../systems/stock_sim');
 const { getRealtimeFundPrice } = require('../systems/fund_price');
+const { getEtfPrice, getEtfNavPrice, ETF_DEFINITIONS } = require('../systems/etf_system');
 const { OPTION_UNIT_QUANTITY } = require('../setting');
 
 const ROUND_POS = 3;
@@ -467,6 +468,48 @@ async function buildAssetFields(assetData, loadDetails) {
         fields.push({
             name: ':bar_chart:  펀드',
             value: `\`\`\`${fund_format}\`\`\``,
+        });
+    }
+
+
+    let etf_format = '';
+    if (assetData.etfs && assetData.etfs.length > 0) {
+        if (loadDetails) {
+            for (const etf of assetData.etfs) {
+                if (etf_format !== '') etf_format += '\n';
+                const def = ETF_DEFINITIONS[etf.etfId];
+                const currentPrice = getEtfPrice(etf.etfId) ?? etf.purchasePrice;
+                const earnRate = (currentPrice - etf.purchasePrice) / etf.purchasePrice;
+                const earnSign = earnRate > 0 ? '+' : '';
+                const formattedPurchaseDate = moment(etf.purchaseDate).tz('Asia/Seoul').format('YYYY-MM-DD HH:mm');
+
+                totalEarn += etf.quantity * (currentPrice - etf.purchasePrice);
+
+                etf_format += `${def ? def.name : etf.etfId} ${etf.quantity.toLocaleString()}좌
+| 현재가격: ${currentPrice.toLocaleString()}원
+| 매수가격: ${etf.purchasePrice.toLocaleString()}원
+| 평가손익: ${(etf.quantity * (currentPrice - etf.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ',')}원 (${earnSign}${((Math.round(earnRate * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
+| 매수날짜: ${formattedPurchaseDate}`;
+            }
+        } else {
+            for (const etf of assetData.etfs) {
+                if (etf_format !== '') etf_format += '\n';
+                const def = ETF_DEFINITIONS[etf.etfId];
+                const currentPrice = getEtfPrice(etf.etfId) ?? etf.purchasePrice;
+                const earnRate = (currentPrice - etf.purchasePrice) / etf.purchasePrice;
+                const earnSign = earnRate > 0 ? '+' : '';
+
+                totalEarn += etf.quantity * (currentPrice - etf.purchasePrice);
+
+                etf_format += `${def ? def.name : etf.etfId} ${etf.quantity.toLocaleString()}좌 (평가손익: ${(etf.quantity * (currentPrice - etf.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ',')}원 (${earnSign}${((Math.round(earnRate * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%))`;
+            }
+        }
+    }
+
+    if (etf_format !== '') {
+        fields.push({
+            name: ':chart_with_upwards_trend:  ETF',
+            value: `\`\`\`${etf_format}\`\`\``,
         });
     }
 

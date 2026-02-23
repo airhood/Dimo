@@ -250,6 +250,24 @@ const AssetSchema = new Schema({
             required: true,
         },
     }],
+    etfs: [{
+        etfId: {
+            type: String,
+            required: true,
+        },
+        quantity: {
+            type: Number,
+            required: true,
+        },
+        purchasePrice: {
+            type: Number,
+            required: true,
+        },
+        purchaseDate: {
+            type: Date,
+            required: true,
+        },
+    }],
     loanHistory: [{
         amount: {
             type: Number,

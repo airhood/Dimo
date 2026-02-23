@@ -151,6 +151,8 @@ const indexPricesHistory = [];
 const newsDataHistory = [];
 const newsTextHistory = [];
 
+const hourlyListeners = [];
+
 
 let futureTimeLeft = null;
 let optionTimeLeft = null;
@@ -640,7 +642,8 @@ function getIndexTimeRangeData(hoursAgo, minutesAgo) {
 }
 
 function updateStockData() {
-    if (stocksPricesHistory.length >= STOCK_PRICE_HISTORY_SIZE) {
+    const trimmed = stocksPricesHistory.length >= STOCK_PRICE_HISTORY_SIZE;
+    if (trimmed) {
         stocksPricesHistory.splice(0, 1);
     }
     if (indexPricesHistory.length >= STOCK_PRICE_HISTORY_SIZE) {
@@ -648,7 +651,11 @@ function updateStockData() {
     }
     updateProductTimeLeft();
     calculateNextHourPrice();
+    hourlyListeners.forEach(cb => cb(trimmed));
 }
+
+function addHourlyListener(cb) { hourlyListeners.push(cb); }
+function getIndexHistoryLength() { return indexPricesHistory.length; }
 
 schedule.scheduleJob('0 * * * *', () => {
     serverLog('[INFO] Update stock data');
@@ -1079,3 +1086,6 @@ exports.calculateNormalizedIndex = calculateNormalizedIndex;
 
 exports.getOptionStrikePriceIndex = getOptionStrikePriceIndex;
 exports.getOptionStrikePriceList = getOptionStrikePriceList;
+
+exports.addHourlyListener = addHourlyListener;
+exports.getIndexHistoryLength = getIndexHistoryLength;

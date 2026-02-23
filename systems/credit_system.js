@@ -232,6 +232,14 @@ function calculateAssetValue(userAsset, loanDueDate = new Date()) {
         value += currentPrice * option.quantity * OPTION_UNIT_QUANTITY;
     });
 
+    if (userAsset.etfs && userAsset.etfs.length > 0) {
+        const { getEtfPrice } = require('./etf_system');
+        userAsset.etfs.forEach((etf) => {
+            const currentPrice = getEtfPrice(etf.etfId);
+            value += (currentPrice ?? etf.purchasePrice) * etf.quantity;
+        });
+    }
+
     userAsset.binary_options.forEach((binary_option) => {
         value += binary_option.amount;
     });

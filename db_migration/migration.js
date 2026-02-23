@@ -142,8 +142,20 @@ const migrateAddCreditRating = async () => {
     }
 };
 
+const migrateAddEtfs = async () => {
+    try {
+        const result = await Asset.updateMany(
+            { etfs: { $exists: false } },
+            { $set: { etfs: [] } }
+        );
+        console.log(`[migrateAddEtfs] Matched ${result.matchedCount}, updated ${result.modifiedCount} documents.`);
+    } catch (err) {
+        console.error('Error during migrateAddEtfs:', err);
+    }
+};
+
 connectDatabase().then(async () => {
-    await migrateAddCreditRating();
+    await migrateAddEtfs();
 }).then(() => {
     process.exit();
 });
