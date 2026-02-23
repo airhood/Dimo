@@ -37,7 +37,6 @@ module.exports = {
         const sub = interaction.options.getSubcommand();
         const userId = interaction.user.id;
 
-        // ── /세금 조회 ───────────────────────────────────────────────────────
         if (sub === '조회') {
             const record = await getTaxRecord(userId);
 
@@ -61,7 +60,6 @@ module.exports = {
                 : `⚠️ 미납 — <t:${dueTs}:R> 까지 납부 (이후 강제 징수)`;
 
             return interaction.reply({
-                ephemeral: true,
                 embeds: [
                     new EmbedBuilder()
                         .setColor(color)
@@ -76,9 +74,8 @@ module.exports = {
             });
         }
 
-        // ── /세금 납부 ───────────────────────────────────────────────────────
         if (sub === '납부') {
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({});
 
             const result = await payTax(userId);
 

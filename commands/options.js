@@ -422,7 +422,7 @@ module.exports = {
 
                     const result = await callOptionBuy(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result.state === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strike_price') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -486,7 +486,7 @@ module.exports = {
 
                     const result = await callOptionSell(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result.state === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strike_price') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -552,7 +552,7 @@ module.exports = {
 
                     const result = await putOptionBuy(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result.state === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strike_price') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -616,7 +616,7 @@ module.exports = {
 
                     const result = await putOptionSell(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result.state === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strike_price') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()

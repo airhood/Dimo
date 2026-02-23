@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { mongodb_url }  = require('./config.json');
 const { serverLog } = require('./server/server_logger');
-const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionExpirationDate } = require('./stock_system/stock_sim');
+const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionExpirationDate, getOptionStrikePriceList } = require('./stock_system/stock_sim');
 const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, getLoanInterestRatePoint, getFixedDepositInterestRatePoint } = require('./stock_system/bank_manager');
 const { calculateFundCreditRating, calculateAssetValue } = require('./stock_system/credit_system');
 require('dotenv').config();
@@ -1549,10 +1549,17 @@ module.exports = {
                 };
             }
             const userAsset = activeAsset.data;
-            
+
+            const strikePriceList = getOptionStrikePriceList(ticker);
+            if (!strikePriceList || !strikePriceList.includes(strikePrice)) {
+                return {
+                    state: 'invalid_strike_price',
+                    data: null,
+                };
+            }
+
             const optionPrices = getOptionPrice(ticker);
-            const callOptionPrice = optionPrices.call;
-            const currentPrice = callOptionPrice[strikePrice.toString()];
+            const currentPrice = optionPrices.call[strikePrice.toString()] ?? 0;
             if (!currentPrice) {
                 return {
                     state: 'invalid_strike_price',
@@ -1637,9 +1644,16 @@ module.exports = {
             }
             const userAsset = activeAsset.data;
 
+            const strikePriceList = getOptionStrikePriceList(ticker);
+            if (!strikePriceList || !strikePriceList.includes(strikePrice)) {
+                return {
+                    state: 'invalid_strike_price',
+                    data: null,
+                };
+            }
+
             const optionPrices = getOptionPrice(ticker);
-            const callOptionPrice = optionPrices.call;
-            const currentPrice = callOptionPrice[strikePrice.toString()];
+            const currentPrice = optionPrices.call[strikePrice.toString()] ?? 0;
             if (!currentPrice) {
                 return {
                     state: 'invalid_strike_price',
@@ -1724,9 +1738,16 @@ module.exports = {
             }
             const userAsset = activeAsset.data;
 
+            const strikePriceList = getOptionStrikePriceList(ticker);
+            if (!strikePriceList || !strikePriceList.includes(strikePrice)) {
+                return {
+                    state: 'invalid_strike_price',
+                    data: null,
+                };
+            }
+
             const optionPrices = getOptionPrice(ticker);
-            const putOptionPrice = optionPrices.put;
-            const currentPrice = putOptionPrice[strikePrice.toString()];
+            const currentPrice = optionPrices.put[strikePrice.toString()] ?? 0;
             if (!currentPrice) {
                 return {
                     state: 'invalid_strike_price',
@@ -1811,9 +1832,16 @@ module.exports = {
             }
             const userAsset = activeAsset.data;
 
+            const strikePriceList = getOptionStrikePriceList(ticker);
+            if (!strikePriceList || !strikePriceList.includes(strikePrice)) {
+                return {
+                    state: 'invalid_strike_price',
+                    data: null,
+                };
+            }
+
             const optionPrices = getOptionPrice(ticker);
-            const putOptionPrice = optionPrices.put;
-            const currentPrice = putOptionPrice[strikePrice.toString()];
+            const currentPrice = optionPrices.put[strikePrice.toString()] ?? 0;
             if (!currentPrice) {
                 return {
                     state: 'invalid_strike_price',
