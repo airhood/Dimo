@@ -6,6 +6,17 @@ const { OPTION_UNIT_QUANTITY } = require('../setting');
 
 const ROUND_POS = 3;
 
+// 수익률 퍼센트 포맷: 소수 2자리가 모두 0이면 처음으로 0이 아닌 숫자가 나올 때까지 자릿수 확장
+function formatPercent(pct) {
+    if (pct === 0) return '0.00';
+    for (let digits = 2; digits <= 8; digits++) {
+        const s = pct.toFixed(digits);
+        const dec = s.split('.')[1] ?? '';
+        if (!/^0+$/.test(dec)) return s;
+    }
+    return pct.toFixed(8);
+}
+
 async function buildAssetFields(assetData, loadDetails) {
     const fields = [
         {
@@ -39,7 +50,7 @@ async function buildAssetFields(assetData, loadDetails) {
             stock_format += `${stock.ticker} ${stock.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주
 | 현재가격: ${getStockPrice(stock.ticker).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 매수가격: ${stock.purchasePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
-| 평가손익: ${(stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
+| 평가손익: ${(stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${formatPercent((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice * 100).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
 | 매수날짜: ${formattedPurchaseDate}`;
         }
 
@@ -67,7 +78,7 @@ async function buildAssetFields(assetData, loadDetails) {
             stock_format += `${short.ticker} ${-short.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주
 | 현재가격: ${getStockPrice(short.ticker).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 매도가격: ${short.sellPrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
-| 평가손익: ${(stock.quantity * (short.sellPrice - getStockPrice(short.ticker))).toFixed().toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
+| 평가손익: ${(stock.quantity * (short.sellPrice - getStockPrice(short.ticker))).toFixed().toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${formatPercent((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice * 100).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
 | 상환일: ${formattedBuyBackDate}
 | 매도날짜: ${formattedSellDate}`;
         }
@@ -87,7 +98,7 @@ async function buildAssetFields(assetData, loadDetails) {
 
             totalEarn += stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice);
 
-            stock_format += `${stock.ticker} ${stock.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 (평가손익: ${(stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
+            stock_format += `${stock.ticker} ${stock.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 (평가손익: ${(stock.quantity * (getStockPrice(stock.ticker) - stock.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${formatPercent((getStockPrice(stock.ticker) - stock.purchasePrice) / stock.purchasePrice * 100).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
         }
 
         if (assetData.stockShortSales.length > 0) {
@@ -109,7 +120,7 @@ async function buildAssetFields(assetData, loadDetails) {
 
             totalEarn += short.quantity * (short.sellPrice - getStockPrice(short.ticker));
 
-            stock_format += `${short.ticker} ${-short.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 (평가손익: ${(short.quantity * (short.sellPrice - getStockPrice(short.ticker))).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
+            stock_format += `${short.ticker} ${-short.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주 (평가손익: ${(short.quantity * (short.sellPrice - getStockPrice(short.ticker))).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${formatPercent((short.sellPrice - getStockPrice(short.ticker)) / short.sellPrice * 100).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
         }
     }
 
@@ -157,7 +168,7 @@ async function buildAssetFields(assetData, loadDetails) {
 | 현재가격: ${getFuturePrice(future.ticker).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 매수가격: ${future.purchasePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 레버리지: ${future.leverage}배
-| 평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round((((getFuturePrice(future.ticker) - future.purchasePrice) * future.leverage * earnDirection) / future.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
+| 평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${formatPercent((getFuturePrice(future.ticker) - future.purchasePrice) * future.leverage * earnDirection / future.purchasePrice * 100).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
 | 만기일: ${formattedExpirationDate}
 | 매수날짜: ${formattedPurchaseDate}`;
         }
@@ -189,7 +200,7 @@ async function buildAssetFields(assetData, loadDetails) {
 
             totalEarn += future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice);
 
-            future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 (평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round((((getFuturePrice(future.ticker) - future.purchasePrice) * future.leverage * earnDirection) / future.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
+            future_format += `${future.ticker} ${positionType} ${Math.abs(future.quantity).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 (평가손익: ${(future.quantity * future.leverage * (getFuturePrice(future.ticker) - future.purchasePrice)).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${formatPercent((getFuturePrice(future.ticker) - future.purchasePrice) * future.leverage * earnDirection / future.purchasePrice * 100).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
         }
     }
 
@@ -236,7 +247,7 @@ async function buildAssetFields(assetData, loadDetails) {
             option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약
 | 현재가격: ${currentPrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 매수가격: ${option.purchasePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
-| 평가손익: ${(option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
+| 평가손익: ${(option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${formatPercent((currentPrice - option.purchasePrice) / option.purchasePrice * 100).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%)
 | 행사가격: ${option.strikePrice.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
 | 만기일: ${formattedExpirationDate}
 | 매수날짜: ${formattedPurchaseDate}`;
@@ -271,7 +282,7 @@ async function buildAssetFields(assetData, loadDetails) {
 
             totalEarn += option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY;
 
-            option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 (평가손익: ${(option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${((Math.round(((currentPrice - option.purchasePrice) / option.purchasePrice) * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
+            option_format += `${option.ticker} ${formattedOptionType}옵션 ${option.quantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 (평가손익: ${(option.quantity * (currentPrice - option.purchasePrice) * OPTION_UNIT_QUANTITY).toFixed(2).toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${formatPercent((currentPrice - option.purchasePrice) / option.purchasePrice * 100).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}%))`;
         }
     }
 
@@ -439,7 +450,7 @@ async function buildAssetFields(assetData, loadDetails) {
 
             const currentValue = fund.unit * currentFundPrice;
             fund_format += `${fund.name} 펀드 ${Math.round(currentValue).toLocaleString()}원
-| 평가손익: ${(fund.unit * (currentFundPrice - fund.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(earnRate * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
+| 평가손익: ${(fund.unit * (currentFundPrice - fund.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${formatPercent(earnRate * 100)}%)
 | 좌수: ${fund.unit.toLocaleString()}
 | 매수날짜: ${formattedPurchaseDate}
 | 현재가격: ${Math.round(currentFundPrice).toLocaleString()}원
@@ -461,7 +472,7 @@ async function buildAssetFields(assetData, loadDetails) {
 
             totalEarn += fund.unit * (currentFundPrice - fund.purchasePrice);
 
-            fund_format += `${fund.name} 펀드 ${fund.unit.toLocaleString()}좌 (평가손익: ${(fund.unit * (currentFundPrice - fund.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${((Math.round(earnRate * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%))`;
+            fund_format += `${fund.name} 펀드 ${fund.unit.toLocaleString()}좌 (평가손익: ${(fund.unit * (currentFundPrice - fund.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원 (${earnSign}${formatPercent(earnRate * 100)}%))`;
         }
     }
 
@@ -489,7 +500,7 @@ async function buildAssetFields(assetData, loadDetails) {
                 etf_format += `${def ? def.name : etf.etfId} ${etf.quantity.toLocaleString()}좌
 | 현재가격: ${currentPrice.toLocaleString()}원
 | 매수가격: ${etf.purchasePrice.toLocaleString()}원
-| 평가손익: ${(etf.quantity * (currentPrice - etf.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ',')}원 (${earnSign}${((Math.round(earnRate * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%)
+| 평가손익: ${(etf.quantity * (currentPrice - etf.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ',')}원 (${earnSign}${formatPercent(earnRate * 100)}%)
 | 매수날짜: ${formattedPurchaseDate}`;
             }
         } else {
@@ -502,7 +513,7 @@ async function buildAssetFields(assetData, loadDetails) {
 
                 totalEarn += etf.quantity * (currentPrice - etf.purchasePrice);
 
-                etf_format += `${def ? def.name : etf.etfId} ${etf.quantity.toLocaleString()}좌 (평가손익: ${(etf.quantity * (currentPrice - etf.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ',')}원 (${earnSign}${((Math.round(earnRate * Math.pow(10, ROUND_POS)) / Math.pow(10, ROUND_POS)) * 100).toFixed(2)}%))`;
+                etf_format += `${def ? def.name : etf.etfId} ${etf.quantity.toLocaleString()}좌 (평가손익: ${(etf.quantity * (currentPrice - etf.purchasePrice)).toFixed(2).replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ',')}원 (${earnSign}${formatPercent(earnRate * 100)}%))`;
             }
         }
     }
