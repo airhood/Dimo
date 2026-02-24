@@ -271,7 +271,7 @@ function addInteractionHandler(client) {
                 
                 const formattedDate = moment(pages[pageToLoad].date).tz('Asia/Seoul').format('YYYY-MM-DD');
                 
-                await interaction.reply({
+                await interaction.update({
                     embeds: [
                         new EmbedBuilder()
                         .setColor(0xE57E22)
@@ -280,7 +280,6 @@ function addInteractionHandler(client) {
                         .setTimestamp()
                     ],
                     components: [row],
-                    fetchReply: true
                 });
 
                 const newCache = { pages: pages, currentPage: pageToLoad };
@@ -315,7 +314,7 @@ function addInteractionHandler(client) {
                 
                 const formattedDate = moment(pages[pageToLoad].date).tz('Asia/Seoul').format('YYYY-MM-DD');
 
-                await interaction.reply({
+                await interaction.update({
                     embeds: [
                         new EmbedBuilder()
                         .setColor(0xE57E22)
@@ -324,7 +323,6 @@ function addInteractionHandler(client) {
                         .setTimestamp()
                     ],
                     components: [row],
-                    fetchReply: true
                 });
 
                 const newCache = { pages: pages, currentPage: pageToLoad };

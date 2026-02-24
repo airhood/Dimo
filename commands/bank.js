@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, CommandInteractionOptionResolver } = require('discord.js');
-const { loan, loanRepay, openFixedDeposit, openSavingsAccount, getUserCredit, checkUserExists } = require('../database');
+const { loan, loanRepay, openFixedDeposit, openSavingsAccount, getUserCredit, checkUserExists, getActiveAsset } = require('../database');
 const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint } = require('../systems/bank_manager');
-const { getCreditGrade } = require('../systems/credit_system');
+const { getCreditGrade, calculateFundCreditRating } = require('../systems/credit_system');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -309,12 +309,11 @@ module.exports = {
                 ],
             });
         } else if (subCommand === '신용등급') {
-            let targetUser = interaction.options.getUser('유저');
-            if (!targetUser) {
-                targetUser = interaction.user;
-            }
+            const targetUser = interaction.options.getUser('유저');
+            const isSelf = !targetUser || targetUser.id === interaction.user.id;
+            const lookupUser = targetUser ?? interaction.user;
 
-            const userExists = await checkUserExists(targetUser.id);
+            const userExists = await checkUserExists(lookupUser.id);
             if (userExists.state === 'error') {
                 await interaction.reply({
                     embeds: [
@@ -334,35 +333,77 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle('존재하지 않는 계정입니다')
-                            .setDescription(`<@${targetUser.id}>의 계정이 존재하지 않습니다.`)
+                            .setDescription(`<@${lookupUser.id}>의 계정이 존재하지 않습니다.`)
                     ],
                 });
                 return;
             }
 
-            const userCredit = await getUserCredit(targetUser.id);
+            let creditScore;
+            let embedTitle;
 
-            if (userCredit.state === 'error') {
-                await interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xEA4144)
-                            .setTitle('서버 오류')
-                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                            .setTimestamp()
-                    ],
-                });
-                return;
-            } else if (userCredit.state === 'success') {
-                await interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xF1C40F)
-                            .setTitle('신용등급')
-                            .setDescription(`\`\`\`${userCredit.data}/1000 (${getCreditGrade(userCredit.data)})\`\`\``)
-                    ],
-                });
+            if (isSelf) {
+                // 자신: 현재 로그인된 계정(펀드 or 개인) 기준으로 표시
+                const activeAsset = await getActiveAsset(interaction.user.id);
+                if (activeAsset.state === 'error') {
+                    await interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0xEA4144)
+                                .setTitle('서버 오류')
+                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                .setTimestamp()
+                        ],
+                    });
+                    return;
+                }
+                if (activeAsset.isFund) {
+                    creditScore = calculateFundCreditRating(activeAsset.data);
+                    embedTitle = `신용등급 [${activeAsset.fundName} 펀드]`;
+                } else {
+                    const userCredit = await getUserCredit(interaction.user.id);
+                    if (userCredit.state === 'error') {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle('서버 오류')
+                                    .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                        return;
+                    }
+                    creditScore = userCredit.data;
+                    embedTitle = `신용등급 [${interaction.user.username}]`;
+                }
+            } else {
+                // 타인: 항상 개인 계좌 기준
+                const userCredit = await getUserCredit(lookupUser.id);
+                if (userCredit.state === 'error') {
+                    await interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0xEA4144)
+                                .setTitle('서버 오류')
+                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                .setTimestamp()
+                        ],
+                    });
+                    return;
+                }
+                creditScore = userCredit.data;
+                embedTitle = `신용등급 [${lookupUser.username}]`;
             }
+
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle(embedTitle)
+                        .setDescription(`\`\`\`${creditScore}/1000 (${getCreditGrade(creditScore)})\`\`\``)
+                ],
+            });
         }
     }
 }

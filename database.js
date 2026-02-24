@@ -931,9 +931,9 @@ module.exports = {
 
             const currentPrice = getStockPrice(ticker);
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
-                serverLog(`[INFO] Buy stock failed. Not enough balance. id: ${id}`);
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / currentPrice);
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1000,6 +1000,20 @@ module.exports = {
             const userAsset = activeAsset.data;
 
             const currentPrice = getStockPrice(ticker);
+
+            if (quantity > 0 && quantity < 1) {
+                let totalOwned = 0;
+                for (const stock of userAsset.stocks) {
+                    if (stock.ticker === ticker) totalOwned += stock.quantity;
+                }
+                quantity = Math.floor(totalOwned * quantity);
+                if (quantity === 0) {
+                    return {
+                        state: 'no_stock',
+                        data: null,
+                    };
+                }
+            }
 
             if (quantity === 0) {
                 for (let i = 0; i < userAsset.stocks.length; i++) {
@@ -1082,8 +1096,15 @@ module.exports = {
 
             const currentPrice = getStockPrice(ticker);
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / (currentPrice * SHORT_SELL_MARGIN_RATE));
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / (currentPrice * SHORT_SELL_MARGIN_RATE));
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
+                if (quantity === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             const transactionAmount = currentPrice * quantity;
@@ -1257,8 +1278,9 @@ module.exports = {
 
             const currentPrice = getFuturePrice(ticker);
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / currentPrice);
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1279,7 +1301,7 @@ module.exports = {
 
             const expirationDate = getFutureExpirationDate();
             const purchaseDate = new Date();
-            
+
             userAsset.futures.push({
                 ticker: ticker,
                 quantity: quantity,
@@ -1377,8 +1399,9 @@ module.exports = {
 
             const currentPrice = getStockPrice(ticker);
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / currentPrice);
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1399,7 +1422,7 @@ module.exports = {
 
             const expirationDate = getFutureExpirationDate();
             const purchaseDate = new Date();
-            
+
             userAsset.futures.push({
                 ticker: ticker,
                 quantity: -quantity,
@@ -1569,8 +1592,9 @@ module.exports = {
                 };
             }
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1663,8 +1687,9 @@ module.exports = {
                 };
             }
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1757,8 +1782,9 @@ module.exports = {
                 };
             }
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1851,8 +1877,9 @@ module.exports = {
                 };
             }
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -2005,21 +2032,21 @@ module.exports = {
             }
             const userAsset = activeAsset.data;
 
-            if (userAsset.balance < amount) {
-                return {
-                    state: 'no_balance',
-                    data: null,
-                };
-            }
-
-            if (amount === 0) {
-                amount = userAsset.balance;
+            if (amount >= 0 && amount < 1) {
+                amount = amount === 0 ? userAsset.balance : Math.floor(userAsset.balance * amount);
                 if (amount === 0) {
                     return {
                         state: 'no_balance',
                         data: null,
                     };
                 }
+            }
+
+            if (userAsset.balance < amount) {
+                return {
+                    state: 'no_balance',
+                    data: null,
+                };
             }
 
             const now  = new Date();
@@ -2611,6 +2638,16 @@ module.exports = {
                 };
             }
 
+            if (amount >= 0 && amount < 1) {
+                amount = amount === 0 ? userAsset.balance : Math.floor(userAsset.balance * amount);
+                if (amount === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
+            }
+
             if (userAsset.balance < amount) {
                 return {
                     state: 'no_balance',
@@ -2689,6 +2726,16 @@ module.exports = {
                     state: 'error',
                     data: null,
                 };
+            }
+
+            if (amount >= 0 && amount < 1) {
+                amount = amount === 0 ? userAsset.balance : Math.floor(userAsset.balance * amount);
+                if (amount === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             if (userAsset.balance < amount) {
@@ -3468,6 +3515,13 @@ module.exports = {
             const totalAssetValue = calculateAssetValue(fund.asset);
             const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
 
+            if (amount >= 0 && amount < 1) {
+                amount = amount === 0 ? userAsset.balance : Math.floor(userAsset.balance * amount);
+                if (amount === 0) {
+                    return { state: 'insufficient_balance', data: { balance: userAsset.balance } };
+                }
+            }
+
             const units = Math.floor(amount / unitPrice);
             if (units <= 0) {
                 return { state: 'insufficient_amount', data: { unitPrice } };
@@ -3528,6 +3582,14 @@ module.exports = {
             if (totalUserUnits === 0) {
                 return { state: 'no_investment', data: null };
             }
+
+            if (units > 0 && units < 1) {
+                units = Math.floor(totalUserUnits * units);
+                if (units === 0) {
+                    return { state: 'no_investment', data: null };
+                }
+            }
+
             if (totalUserUnits < units) {
                 return { state: 'insufficient_units', data: { ownedUnits: totalUserUnits } };
             }
@@ -3742,8 +3804,9 @@ module.exports = {
                 return { state: 'error', data: null };
             }
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / currentPrice);
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return { state: 'no_balance', data: null };
                 }
@@ -3801,6 +3864,13 @@ module.exports = {
             const totalOwned = userAsset.etfs
                 .filter(e => e.etfId === etfId)
                 .reduce((sum, e) => sum + e.quantity, 0);
+
+            if (quantity > 0 && quantity < 1) {
+                quantity = Math.floor(totalOwned * quantity);
+                if (quantity === 0) {
+                    return { state: 'no_etf', data: null };
+                }
+            }
 
             if (quantity === 0) {
                 quantity = totalOwned;

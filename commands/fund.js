@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, userMention } = require('discord.js');
 const { fundAddAdministrator, fundRemoveAdministrator, fundGetAdministrators, fundLogin, fundLogout, fundCreate, getFundInfo, getFundList, getUserState, investFund, sellFundInvestment, fundTransferOwnership, fundRename, getFundAsset } = require('../database');
 const { buildAssetFields } = require('../utils/asset_render');
-const { calculateAssetValue } = require('../systems/credit_system');
+const { calculateAssetValue, calculateFundCreditRating, getCreditGrade } = require('../systems/credit_system');
 const { createCache, saveCache } = require('../utils/cache');
 const { v4: uuidv4 } = require('uuid');
 
@@ -106,6 +106,15 @@ module.exports = {
                             { name: '숨기기', value: '숨기기' },
                         )
                         .setRequired(false)
+                )
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('신용등급')
+                .setDescription('펀드의 신용등급을 표시합니다.')
+                .addStringOption((option) =>
+                    option.setName('이름')
+                        .setDescription('신용등급을 확인할 펀드의 이름')
+                        .setRequired(true)
                 )
         )
         .addSubcommandGroup((subCommandGroup) =>
@@ -702,6 +711,34 @@ module.exports = {
                         .setColor(0xF1C40F)
                         .setTitle(`:bank:  자산 [${fundName} 펀드]`)
                         .addFields(fields)
+                        .setTimestamp()
+                ],
+            });
+        } else if (subCommand === '신용등급') {
+            const fundName = interaction.options.getString('이름');
+
+            const result = await getFundAsset(fundName);
+            if (result.state === 'no_fund') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  존재하지 않는 펀드').setDescription(`**${fundName}** 펀드가 존재하지 않습니다.`).setTimestamp()],
+                });
+                return;
+            }
+            if (result.state === 'error') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
+                });
+                return;
+            }
+
+            const creditScore = calculateFundCreditRating(result.data.asset);
+
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle(`신용등급 [${fundName} 펀드]`)
+                        .setDescription(`\`\`\`${creditScore}/1000 (${getCreditGrade(creditScore)})\`\`\``)
                         .setTimestamp()
                 ],
             });
