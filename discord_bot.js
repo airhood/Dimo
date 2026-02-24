@@ -109,7 +109,7 @@ module.exports = {
 		});
 		
 		
-		client.once(Events.ClientReady, (readyClient) => {
+		client.once(Events.ClientReady, async (readyClient) => {
 			serverLog(`[INFO] Bot ready! Logged in as ${readyClient.user.tag}`);
 			setClient_server_logger(client);
 			setClient_status_tracker(client);
@@ -120,9 +120,11 @@ module.exports = {
 			setupStatusChannel();
 			if (process.env.NODE_ENV === 'production') {
 				setUpdateInterval();
-				
+
 				console.log('[INFO] Koreanbots api loaded');
 			}
+			const { restorePersistedSessions } = require('./commands/realtime');
+			await restorePersistedSessions(readyClient);
 		});
 		
 		client.on(Events.MessageCreate, async (message) => {

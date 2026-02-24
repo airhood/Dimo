@@ -7,7 +7,7 @@ const { getStockName } = require('../systems/stock_name');
 const { getDISDAQIndex, getDISDAQIndexTimeRangeData } = require('../systems/stock_index_system');
 const { generateStockChartImage, generateIndexChartImage } = require('../systems/stock_chart');
 const { calculateAssetValue } = require('../systems/credit_system');
-const { startSession, getSessionsByUser, stopSessionByIndex } = require('../systems/realtime_manager');
+const { startSession, restoreSession, stopSession, getSessionsByUser, stopSessionByIndex, loadPersistedSessions } = require('../systems/realtime_manager');
 const { getCachedChart } = require('../systems/chart_cache');
 const { serverLog } = require('../server/server_logger');
 
@@ -222,6 +222,49 @@ async function buildIndexChartEmbed(indicator, hoursAgo) {
     };
 }
 
+// ─── session restore ──────────────────────────────────────────────────────────
+
+async function restorePersistedSessions(client) {
+    const saved = loadPersistedSessions();
+    if (saved.length === 0) return;
+
+    let restored = 0;
+    for (const s of saved) {
+        const { uid, userId, type, channelId, messageId, isChart, startedAt, sessionType, params } = s;
+
+        // 채널/메시지 존재 여부 및 정지 버튼 유무 확인
+        try {
+            const channel = await client.channels.fetch(channelId);
+            const message = await channel.messages.fetch(messageId);
+            if (!message.components || message.components.length === 0) continue;
+        } catch {
+            continue;
+        }
+
+        let updateFn;
+        switch (sessionType) {
+            case '자산':      updateFn = () => buildAssetEmbed(params.userId); break;
+            case '주식목록':  updateFn = () => buildStockListEmbed(params.sort); break;
+            case '선물목록':  updateFn = () => buildFutureListEmbed(params.sort); break;
+            case '옵션가격':  updateFn = () => buildOptionPriceEmbed(params.ticker); break;
+            case '지수':      updateFn = () => buildIndexEmbed(params.indicator); break;
+            case '순위':      updateFn = () => buildLeaderboardEmbed(); break;
+            case '주식차트':  updateFn = () => buildStockChartEmbed(params.ticker, params.hoursAgo, params.minutes); break;
+            case '선물차트':  updateFn = () => buildFutureChartEmbed(params.ticker, params.hoursAgo, params.minutes); break;
+            case '지수차트':  updateFn = () => buildIndexChartEmbed(params.indicator, params.hoursAgo); break;
+            default: continue;
+        }
+
+        restoreSession(uid, userId, type, channelId, messageId, client, updateFn, isChart, sessionType, params, startedAt);
+        restored++;
+    }
+
+    if (restored > 0) {
+        const { serverLog } = require('../server/server_logger');
+        serverLog(`[INFO] Restored ${restored} realtime session(s).`);
+    }
+}
+
 // ─── error embed ─────────────────────────────────────────────────────────────
 
 function errorEmbed(msg) {
@@ -231,6 +274,7 @@ function errorEmbed(msg) {
 // ─── command definition ───────────────────────────────────────────────────────
 
 module.exports = {
+    restorePersistedSessions,
     data: new SlashCommandBuilder()
         .setName('실시간')
         .setDescription('1분마다 자동으로 업데이트되는 실시간 정보를 표시합니다.')
@@ -357,7 +401,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, userId, '자산', msg.channelId, msg.id, interaction.client, () => buildAssetEmbed(userId));
+            startSession(uid, userId, '자산', msg.channelId, msg.id, interaction.client, () => buildAssetEmbed(userId), false, '자산', { userId });
 
         // ── 주식목록 ──────────────────────────────────────────────────────────
         } else if (subCommand === '주식목록') {
@@ -366,7 +410,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, userId, `주식목록 (${sort})`, msg.channelId, msg.id, interaction.client, () => buildStockListEmbed(sort));
+            startSession(uid, userId, `주식목록 (${sort})`, msg.channelId, msg.id, interaction.client, () => buildStockListEmbed(sort), false, '주식목록', { sort });
 
         // ── 선물목록 ──────────────────────────────────────────────────────────
         } else if (subCommand === '선물목록') {
@@ -375,7 +419,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, userId, `선물목록 (${sort})`, msg.channelId, msg.id, interaction.client, () => buildFutureListEmbed(sort));
+            startSession(uid, userId, `선물목록 (${sort})`, msg.channelId, msg.id, interaction.client, () => buildFutureListEmbed(sort), false, '선물목록', { sort });
 
         // ── 옵션가격 ──────────────────────────────────────────────────────────
         } else if (subCommand === '옵션가격') {
@@ -395,7 +439,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, userId, `옵션가격 (${ticker})`, msg.channelId, msg.id, interaction.client, () => buildOptionPriceEmbed(ticker));
+            startSession(uid, userId, `옵션가격 (${ticker})`, msg.channelId, msg.id, interaction.client, () => buildOptionPriceEmbed(ticker), false, '옵션가격', { ticker });
 
         // ── 지수 ──────────────────────────────────────────────────────────────
         } else if (subCommand === '지수') {
@@ -410,7 +454,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, userId, `지수 (${indicator})`, msg.channelId, msg.id, interaction.client, () => buildIndexEmbed(indicator));
+            startSession(uid, userId, `지수 (${indicator})`, msg.channelId, msg.id, interaction.client, () => buildIndexEmbed(indicator), false, '지수', { indicator });
 
         // ── 순위 ──────────────────────────────────────────────────────────────
         } else if (subCommand === '순위') {
@@ -422,7 +466,7 @@ module.exports = {
             const stopRow = makeStopButton(userId, uid);
             await interaction.reply({ embeds: initial.embeds, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, userId, '순위', msg.channelId, msg.id, interaction.client, () => buildLeaderboardEmbed());
+            startSession(uid, userId, '순위', msg.channelId, msg.id, interaction.client, () => buildLeaderboardEmbed(), false, '순위', {});
 
         // ── 주식차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '주식차트') {
@@ -446,7 +490,7 @@ module.exports = {
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
             startSession(uid, userId, `주식차트 (${ticker})`, msg.channelId, msg.id, interaction.client,
-                () => buildStockChartEmbed(ticker, hoursAgo, minutes), true);
+                () => buildStockChartEmbed(ticker, hoursAgo, minutes), true, '주식차트', { ticker, hoursAgo, minutes });
 
         // ── 선물차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '선물차트') {
@@ -470,7 +514,7 @@ module.exports = {
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
             startSession(uid, userId, `선물차트 (${ticker})`, msg.channelId, msg.id, interaction.client,
-                () => buildFutureChartEmbed(ticker, hoursAgo, minutes), true);
+                () => buildFutureChartEmbed(ticker, hoursAgo, minutes), true, '선물차트', { ticker, hoursAgo, minutes });
 
         // ── 지수차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '지수차트') {
@@ -486,7 +530,7 @@ module.exports = {
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
             startSession(uid, userId, `지수차트 (${indicator})`, msg.channelId, msg.id, interaction.client,
-                () => buildIndexChartEmbed(indicator, hoursAgo), true);
+                () => buildIndexChartEmbed(indicator, hoursAgo), true, '지수차트', { indicator, hoursAgo });
 
         // ── 목록 ──────────────────────────────────────────────────────────────
         } else if (subCommand === '목록') {

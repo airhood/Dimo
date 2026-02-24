@@ -1,8 +1,49 @@
+const fs = require('fs');
+const path = require('path');
 const schedule = require('node-schedule');
 const { serverLog } = require('../server/server_logger');
 
-// uid → { channelId, messageId, client, updateFn, userId, type, isChart, startedAt }
+// uid → { channelId, messageId, client, updateFn, userId, type, isChart, startedAt, sessionType, params }
 const sessions = new Map();
+
+const STATE_FILE = path.join(__dirname, '../data/realtime_sessions.json');
+
+// ── 상태 저장/복원 ─────────────────────────────────────────────────────────────
+
+function saveState() {
+    const toSave = [];
+    for (const [uid, session] of sessions) {
+        toSave.push({
+            uid,
+            userId: session.userId,
+            type: session.type,
+            channelId: session.channelId,
+            messageId: session.messageId,
+            isChart: session.isChart,
+            startedAt: session.startedAt,
+            sessionType: session.sessionType,
+            params: session.params,
+        });
+    }
+    try {
+        fs.writeFileSync(STATE_FILE, JSON.stringify({ sessions: toSave }));
+    } catch (err) {
+        serverLog(`[ERROR] Failed to save realtime sessions: ${err}`);
+    }
+}
+
+function loadPersistedSessions() {
+    try {
+        if (!fs.existsSync(STATE_FILE)) return [];
+        const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+        return data.sessions ?? [];
+    } catch (err) {
+        serverLog(`[ERROR] Failed to load realtime sessions: ${err}`);
+        return [];
+    }
+}
+
+// ── 스케줄러 ──────────────────────────────────────────────────────────────────
 
 // Non-chart sessions: update every minute.
 schedule.scheduleJob('* * * * *', async () => {
@@ -44,12 +85,21 @@ schedule.scheduleJob('*/5 * * * *', async () => {
     }
 });
 
-function startSession(uid, userId, type, channelId, messageId, client, updateFn, isChart = false) {
-    sessions.set(uid, { channelId, messageId, client, updateFn, userId, type, isChart, startedAt: new Date() });
+// ── 세션 관리 ─────────────────────────────────────────────────────────────────
+
+function startSession(uid, userId, type, channelId, messageId, client, updateFn, isChart = false, sessionType = '', params = {}) {
+    sessions.set(uid, { channelId, messageId, client, updateFn, userId, type, isChart, startedAt: new Date(), sessionType, params });
+    saveState();
+}
+
+// 재시작 복원용 (startedAt 유지, saveState 호출 안 함)
+function restoreSession(uid, userId, type, channelId, messageId, client, updateFn, isChart, sessionType, params, startedAt) {
+    sessions.set(uid, { channelId, messageId, client, updateFn, userId, type, isChart, startedAt: new Date(startedAt), sessionType, params });
 }
 
 function stopSession(uid) {
     sessions.delete(uid);
+    saveState();
 }
 
 // Returns the user's active sessions sorted by start time, with 1-based index.
@@ -75,4 +125,4 @@ function stopSessionByIndex(userId, index) {
     return session ?? null;
 }
 
-module.exports = { startSession, stopSession, getSessionsByUser, stopSessionByIndex };
+module.exports = { startSession, restoreSession, stopSession, getSessionsByUser, stopSessionByIndex, loadPersistedSessions };
