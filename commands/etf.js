@@ -69,9 +69,9 @@ module.exports = {
                         .addChoices(...ETF_CHOICES)
                         .setRequired(true)
                 )
-                .addIntegerOption((opt) =>
+                .addNumberOption((opt) =>
                     opt.setName('수량')
-                        .setDescription('매수할 수량 (0 입력시 올인)')
+                        .setDescription('매수할 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -85,9 +85,9 @@ module.exports = {
                         .addChoices(...ETF_CHOICES)
                         .setRequired(true)
                 )
-                .addIntegerOption((opt) =>
+                .addNumberOption((opt) =>
                     opt.setName('수량')
-                        .setDescription('매도할 수량 (0 입력시 전량)')
+                        .setDescription('매도할 수량 (0 입력시 전량, 0~1 입력시 보유량 비율)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -250,7 +250,7 @@ module.exports = {
 
         } else if (subCommand === '매수') {
             const etfId = interaction.options.getString('etf명');
-            const quantity = interaction.options.getInteger('수량');
+            const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
 
             const result = await etfBuy(interaction.user.id, etfId, quantity);
 
@@ -289,7 +289,7 @@ module.exports = {
 
         } else if (subCommand === '매도') {
             const etfId = interaction.options.getString('etf명');
-            const quantity = interaction.options.getInteger('수량');
+            const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
 
             const result = await etfSell(interaction.user.id, etfId, quantity);
 

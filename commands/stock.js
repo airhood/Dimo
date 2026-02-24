@@ -74,9 +74,9 @@ module.exports = {
                         .setDescription('매수할 주식의 종목 코드')
                         .setRequired(true)
                 )
-                .addIntegerOption((option) =>
+                .addNumberOption((option) =>
                     option.setName('수량')
-                        .setDescription('매수할 주식의 수량 (0 입력시 올인)')
+                        .setDescription('매수할 주식의 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -89,9 +89,9 @@ module.exports = {
                         .setDescription('매도할 주식의 종목 코드 또는 종목명')
                         .setRequired(true)
                 )
-                .addIntegerOption((option) =>
+                .addNumberOption((option) =>
                     option.setName('수량')
-                        .setDescription('매도할 주식의 수량 (0 입력시 올인)')
+                        .setDescription('매도할 주식의 수량 (0 입력시 전량, 0~1 입력시 보유량 비율)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -104,9 +104,9 @@ module.exports = {
                         .setDescription('공매도할 주식의 종목 코드 또는 종목명')
                         .setRequired(true)
                 )
-                .addIntegerOption((option) =>
+                .addNumberOption((option) =>
                     option.setName('수량')
-                        .setDescription('공매도할 주식의 수량 (0 입력시 올인)')
+                        .setDescription('공매도할 주식의 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -356,7 +356,7 @@ module.exports = {
                 return;
             }
 
-            const quantity = interaction.options.getInteger('수량');
+            const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
 
             const result = await stockBuy(interaction.user.id, ticker, quantity);
 
@@ -409,7 +409,7 @@ module.exports = {
                 return;
             }
 
-            const quantity = interaction.options.getInteger('수량');
+            const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
 
             const result = await stockSell(interaction.user.id, ticker, quantity);
 
@@ -462,7 +462,7 @@ module.exports = {
                 return;
             }
 
-            const quantity = interaction.options.getInteger('수량');
+            const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
 
             const result = await stockShortSell(interaction.user.id, ticker, quantity);
 

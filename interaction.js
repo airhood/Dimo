@@ -2,9 +2,84 @@ const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('
 const { createUser, deleteUser } = require('./database');
 const { loadCache, saveCache } = require('./utils/cache');
 const moment = require('moment-timezone');
+const AutoTrade = require('./schemas/auto_trade');
+const { validateScript } = require('./systems/auto_trade_interpreter');
 
 function addInteractionHandler(client) {
     client.on('interactionCreate', async (interaction) => {
+        if (interaction.isModalSubmit()) {
+            const customId = interaction.customId;
+
+            if (customId.startsWith('auto_trade_register-')) {
+                // Format: auto_trade_register-{userId}-{encodedAccountKey}
+                const parts = customId.split('-');
+                const userId = parts[1];
+                const accountKey = decodeURIComponent(parts.slice(2).join('-'));
+
+                if (interaction.user.id !== userId) return;
+
+                const script = interaction.fields.getTextInputValue('script');
+
+                // Validate script syntax
+                const validation = validateScript(script);
+                if (!validation.ok) {
+                    return interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0xEA4144)
+                                .setTitle('스크립트 오류')
+                                .setDescription(`스크립트 문법 오류가 있습니다:\n\`\`\`\n${validation.error}\n\`\`\``)
+                                .setTimestamp()
+                        ],
+                        ephemeral: true,
+                    });
+                }
+
+                try {
+                    await AutoTrade.findOneAndUpdate(
+                        { userId, accountKey },
+                        {
+                            userId,
+                            accountKey,
+                            script,
+                            isRunning: false,
+                            logs: [],
+                            lastError: null,
+                        },
+                        { upsert: true, new: true }
+                    );
+
+                    const accountLabel = accountKey === '@self'
+                        ? '개인 계정'
+                        : `펀드: ${accountKey.replace('@fund_', '')}`;
+
+                    return interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0x2ecc71)
+                                .setTitle('자동매매 스크립트 등록 완료')
+                                .setDescription(`**[${accountLabel}]** 스크립트가 등록되었습니다.\n\`/자동매매 실행\`으로 자동매매를 시작하세요.`)
+                                .setTimestamp()
+                        ],
+                        ephemeral: true,
+                    });
+                } catch (err) {
+                    return interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0xEA4144)
+                                .setTitle('서버 오류')
+                                .setDescription('스크립트 저장 중 오류가 발생했습니다.')
+                                .setTimestamp()
+                        ],
+                        ephemeral: true,
+                    });
+                }
+            }
+
+            return;
+        }
+
         if (interaction.isButton()) {
             const customID = interaction.customId.split('-');
 

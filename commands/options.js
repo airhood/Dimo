@@ -83,9 +83,9 @@ module.exports = {
                                 .setDescription('콜옵션을 매수하려는 종목 코드 또는 종목명')
                                 .setRequired(true)
                         )
-                        .addIntegerOption((option) =>
+                        .addNumberOption((option) =>
                             option.setName('수량')
-                                .setDescription('매수할 콜옵션의 수량 (0 입력시 올인)')
+                                .setDescription('매수할 콜옵션의 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                                 .setMinValue(0)
                                 .setRequired(true)
                         )
@@ -104,9 +104,9 @@ module.exports = {
                                 .setDescription('콜옵션을 매도하려는 종목 코드 또는 종목명')
                                 .setRequired(true)
                         )
-                        .addIntegerOption((option) =>
+                        .addNumberOption((option) =>
                             option.setName('수량')
-                                .setDescription('매도할 콜옵션의 수량 (0 입력시 올인)')
+                                .setDescription('매도할 콜옵션의 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                                 .setMinValue(0)
                                 .setRequired(true)
                         )
@@ -130,9 +130,9 @@ module.exports = {
                                 .setDescription('풋옵션을 매수하려는 종목 코드 또는 종목명')
                                 .setRequired(true)
                         )
-                        .addIntegerOption((option) =>
+                        .addNumberOption((option) =>
                             option.setName('수량')
-                                .setDescription('매수할 풋옵션의 수량 (0 입력시 올인)')
+                                .setDescription('매수할 풋옵션의 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                                 .setMinValue(0)
                                 .setRequired(true)
                         )
@@ -151,9 +151,9 @@ module.exports = {
                                 .setDescription('풋옵션을 매도하려는 종목 코드 또는 종목명')
                                 .setRequired(true)
                         )
-                        .addIntegerOption((option) =>
+                        .addNumberOption((option) =>
                             option.setName('수량')
-                                .setDescription('매도할 풋옵션의 수량 (0 입력시 올인)')
+                                .setDescription('매도할 풋옵션의 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                                 .setMinValue(0)
                                 .setRequired(true)
                         )
@@ -417,7 +417,7 @@ module.exports = {
                         });
                     }
 
-                    const quantity = interaction.options.getInteger('수량');
+                    const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
                     const strikePrice = interaction.options.getInteger('행사가격');
 
                     const result = await callOptionBuy(interaction.user.id, ticker, quantity, strikePrice);
@@ -481,7 +481,7 @@ module.exports = {
                         });
                     }
 
-                    const quantity = interaction.options.getInteger('수량');
+                    const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
                     const strikePrice = interaction.options.getInteger('행사가격');
 
                     const result = await callOptionSell(interaction.user.id, ticker, quantity, strikePrice);
@@ -547,7 +547,7 @@ module.exports = {
                         });
                     }
                     
-                    const quantity = interaction.options.getInteger('수량');
+                    const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
                     const strikePrice = interaction.options.getInteger('행사가격');
 
                     const result = await putOptionBuy(interaction.user.id, ticker, quantity, strikePrice);
@@ -611,7 +611,7 @@ module.exports = {
                         });
                     }
 
-                    const quantity = interaction.options.getInteger('수량');
+                    const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
                     const strikePrice = interaction.options.getInteger('행사가격');
 
                     const result = await putOptionSell(interaction.user.id, ticker, quantity, strikePrice);

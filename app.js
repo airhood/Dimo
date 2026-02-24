@@ -11,6 +11,7 @@ const { initCreditSystem, updateCreditRating } = require('./systems/credit_syste
 const { initFundPriceSystem } = require('./systems/fund_price');
 const { initNotificationScheduler } = require('./systems/notification_checker');
 const { initMarginCallChecker } = require('./systems/margin_call_checker');
+const { initAutoTradeScheduler } = require('./systems/auto_trade_scheduler');
 const { setTimezone } = require('./utils/korean_time');
 const { loadKeywordsFromFile } = require('./chat_bot/message_filter');
 
@@ -81,6 +82,11 @@ module.exports = {
         if (!result8) return false;
 
         console.log('[BOOT] Margin call checker loaded');
+
+        const result9 = initAutoTradeScheduler();
+        if (!result9) return false;
+
+        console.log('[BOOT] Auto-trade scheduler loaded');
         
         loadKeywordsFromFile();
 

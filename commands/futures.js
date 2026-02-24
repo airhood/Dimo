@@ -75,9 +75,9 @@ module.exports = {
                         .setDescription('선물의 종목 코드 또는 종목명')
                         .setRequired(true)
                 )
-                .addIntegerOption((option) =>
+                .addNumberOption((option) =>
                     option.setName('수량')
-                        .setDescription('선물의 계약수 (0 입력시 올인)')
+                        .setDescription('선물의 계약수 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -104,9 +104,9 @@ module.exports = {
                         .setDescription('선물의 종목 코드 또는 종목명')
                         .setRequired(true)
                 )
-                .addIntegerOption((option) =>
+                .addNumberOption((option) =>
                     option.setName('수량')
-                        .setDescription('선물의 계약수 (0 입력시 올인)')
+                        .setDescription('선물의 계약수 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -304,7 +304,7 @@ module.exports = {
                 return;
             }
 
-            const quantity = interaction.options.getInteger('수량');
+            const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
             const leverage = interaction.options.getInteger('레버리지');
 
             const result = await futureLong(interaction.user.id, ticker, quantity, leverage);
@@ -358,7 +358,7 @@ module.exports = {
                 return;
             }
 
-            const quantity = interaction.options.getInteger('수량');
+            const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
             const leverage = interaction.options.getInteger('레버리지');
 
             const result = await futureShort(interaction.user.id, ticker, quantity, leverage);

@@ -176,6 +176,10 @@ async function checkAllPositions() {
 // ── 스케줄러 초기화 ───────────────────────────────────────────────────────────
 
 function initMarginCallChecker() {
+    if (process.env.NODE_ENV !== 'production') {
+        serverLog('[INFO] Margin call checker skipped (non-production environment)');
+        return true;
+    }
     schedule.scheduleJob('*/5 * * * *', () => {
         checkAllPositions();
     });
