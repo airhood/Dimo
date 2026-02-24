@@ -125,4 +125,8 @@ function stopSessionByIndex(userId, index) {
     return session ?? null;
 }
 
-module.exports = { startSession, restoreSession, stopSession, getSessionsByUser, stopSessionByIndex, loadPersistedSessions };
+function getSessionCount() {
+    return sessions.size;
+}
+
+module.exports = { startSession, restoreSession, stopSession, getSessionsByUser, stopSessionByIndex, loadPersistedSessions, getSessionCount };
