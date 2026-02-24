@@ -12,10 +12,10 @@ const NotificationSchema = new Schema({
         enum: ['position', 'ticker', 'account'],
         required: true,
     },
-    // For position/ticker scope: 'stock' | 'future' | 'option' | 'binary_option' | 'fund'
+    // For position/ticker scope: 'stock' | 'future' | 'option' | 'binary_option' | 'fund' | 'etf'
     type: {
         type: String,
-        enum: ['stock', 'future', 'option', 'binary_option', 'fund'],
+        enum: ['stock', 'future', 'option', 'binary_option', 'fund', 'etf'],
     },
     // For position scope: 1-based index into the asset array
     positionNum: {

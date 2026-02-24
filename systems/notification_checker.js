@@ -2,6 +2,7 @@ const schedule = require('node-schedule');
 const { serverLog } = require('../server/server_logger');
 const { getStockPrice, getFuturePrice, getOptionPrice } = require('./stock_sim');
 const { getFundPrice } = require('./fund_price');
+const { getEtfPrice } = require('./etf_system');
 const { OPTION_UNIT_QUANTITY } = require('../setting');
 const { EmbedBuilder } = require('discord.js');
 const Notification = require('../schemas/notification');
@@ -53,6 +54,14 @@ function calculatePositionPnL(type, positionNum, userAsset) {
             ? currentPrice > pos.strikePrice
             : currentPrice < pos.strikePrice;
         return isWinning ? pos.amount : -pos.amount;
+    }
+
+    if (type === 'etf') {
+        const pos = userAsset.etfs?.[positionNum - 1];
+        if (!pos) return null;
+        const currentPrice = getEtfPrice(pos.etfId);
+        if (currentPrice === null || currentPrice === undefined) return null;
+        return (currentPrice - pos.purchasePrice) * pos.quantity;
     }
 
     return null;
@@ -111,6 +120,14 @@ function calculateTickerPnL(type, ticker, strikePrice, userAsset) {
             .reduce((sum, h) => sum + (currentUnitPrice - h.purchasePrice) * h.unit, 0);
     }
 
+    if (type === 'etf') {
+        const currentPrice = getEtfPrice(ticker);
+        if (currentPrice === null || currentPrice === undefined) return null;
+        return (userAsset.etfs ?? [])
+            .filter(e => e.etfId === ticker)
+            .reduce((sum, e) => sum + (currentPrice - e.purchasePrice) * e.quantity, 0);
+    }
+
     return null;
 }
 
@@ -140,6 +157,13 @@ function calculateAccountPnL(userAsset) {
     for (const h of userAsset.funds) {
         const currentUnitPrice = getFundPrice(h.name);
         if (currentUnitPrice !== null) total += (currentUnitPrice - h.purchasePrice) * h.unit;
+    }
+
+    for (const e of (userAsset.etfs ?? [])) {
+        const currentPrice = getEtfPrice(e.etfId);
+        if (currentPrice !== null && currentPrice !== undefined) {
+            total += (currentPrice - e.purchasePrice) * e.quantity;
+        }
     }
 
     return total;
@@ -188,6 +212,7 @@ const TYPE_NAMES = {
     option: '옵션',
     binary_option: '바이너리 옵션',
     fund: '펀드',
+    etf: 'ETF',
 };
 
 const SCOPE_NAMES = {

@@ -7,6 +7,7 @@ const TYPE_NAMES = {
     option: '옵션',
     binary_option: '바이너리 옵션',
     fund: '펀드',
+    etf: 'ETF',
 };
 
 module.exports = {
@@ -27,6 +28,7 @@ module.exports = {
                                     { name: '선물', value: 'future' },
                                     { name: '옵션', value: 'option' },
                                     { name: '바이너리 옵션', value: 'binary_option' },
+                                    { name: 'ETF', value: 'etf' },
                                 )
                                 .setRequired(true)
                         )
@@ -63,6 +65,7 @@ module.exports = {
                                     { name: '옵션', value: 'option' },
                                     { name: '바이너리 옵션', value: 'binary_option' },
                                     { name: '펀드', value: 'fund' },
+                                    { name: 'ETF', value: 'etf' },
                                 )
                                 .setRequired(true)
                         )
