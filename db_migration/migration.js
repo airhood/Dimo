@@ -154,8 +154,20 @@ const migrateAddEtfs = async () => {
     }
 };
 
+const migrateAddLoanHistory = async () => {
+    try {
+        const result = await Asset.updateMany(
+            { loanHistory: { $exists: false } },
+            { $set: { loanHistory: [] } }
+        );
+        console.log(`[migrateAddLoanHistory] Matched ${result.matchedCount}, updated ${result.modifiedCount} documents.`);
+    } catch (err) {
+        console.error('Error during migrateAddLoanHistory:', err);
+    }
+};
+
 connectDatabase().then(async () => {
-    await migrateAddEtfs();
+    await migrateAddLoanHistory();
 }).then(() => {
     process.exit();
 });
