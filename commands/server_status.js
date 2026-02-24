@@ -67,7 +67,7 @@ module.exports = {
                 },
                 {
                     name: '🌐 WebSocket 핑',
-                    value: `\`${wsLatency}ms\``,
+                    value: wsLatency === -1 ? '`대기 중`' : `\`${wsLatency}ms\``,
                     inline: true,
                 },
                 {

@@ -13,6 +13,8 @@ const { filterMessage, wrapMentions } = require('./chat_bot/message_filter');
 const { setClient_koreanbots_update, setUpdateInterval } = require('./koreanbots_update');
 const { setClientForNotifications } = require('./systems/notification_checker');
 const { setClientForMarginCall } = require('./systems/margin_call_checker');
+const { setClientForReservations } = require('./systems/reservation_checker');
+const { setClientForAutoTrade } = require('./systems/auto_trade_scheduler');
 
 const client = new Client({
 	intents: [
@@ -116,6 +118,8 @@ module.exports = {
 			setClient_koreanbots_update(client);
 			setClientForNotifications(client);
 			setClientForMarginCall(client);
+			setClientForAutoTrade(client);
+			setClientForReservations(client);
 			setupAdminChannel();
 			setupStatusChannel();
 			if (process.env.NODE_ENV === 'production') {

@@ -12,6 +12,7 @@ const { initFundPriceSystem } = require('./systems/fund_price');
 const { initNotificationScheduler } = require('./systems/notification_checker');
 const { initMarginCallChecker } = require('./systems/margin_call_checker');
 const { initAutoTradeScheduler } = require('./systems/auto_trade_scheduler');
+const { initReservationChecker } = require('./systems/reservation_checker');
 const { setTimezone } = require('./utils/korean_time');
 const { loadKeywordsFromFile } = require('./chat_bot/message_filter');
 
@@ -87,7 +88,12 @@ module.exports = {
         if (!result9) return false;
 
         console.log('[BOOT] Auto-trade scheduler loaded');
-        
+
+        const result10 = initReservationChecker();
+        if (!result10) return false;
+
+        console.log('[BOOT] Reservation checker loaded');
+
         loadKeywordsFromFile();
 
         console.log('[BOOT] Message filter loaded');
