@@ -7,17 +7,34 @@ const { getEtfPrice, ETF_DEFINITIONS } = require('../systems/etf_system');
 const { getFundPrice } = require('../systems/fund_price');
 const { OPTION_UNIT_QUANTITY } = require('../setting');
 
-function fmtPrice(n) {
-    return Math.round(n).toLocaleString() + '원';
+function n(num) {
+    return Math.round(num).toLocaleString();
 }
 
-function fmtPct(pct) {
-    const sign = pct >= 0 ? '+' : '';
-    return `${sign}${pct.toFixed(2)}%`;
+function pct(val) {
+    const sign = val >= 0 ? '+' : '';
+    return `${sign}${val.toFixed(2)}%`;
 }
 
-function pnlEmoji(pnl) {
-    return pnl > 0 ? '📈' : pnl < 0 ? '📉' : '➖';
+// Format P&L with sign and percent
+function pnlLine(pnlVal, pctVal) {
+    const sign = pnlVal >= 0 ? '+' : '';
+    return `${sign}${n(pnlVal)}원 (${pct(pctVal)})`;
+}
+
+// Wrap text in a code block, truncating if it exceeds Discord's 1024-char field limit
+function codeBlock(text) {
+    const wrapped = `\`\`\`${text}\`\`\``;
+    if (wrapped.length <= 1024) return wrapped;
+    // Trim lines until it fits
+    const lines = text.split('\n');
+    let out = '';
+    for (const line of lines) {
+        const candidate = `\`\`\`${out}${line}\n...(생략)\`\`\``;
+        if (candidate.length > 1024) break;
+        out += line + '\n';
+    }
+    return `\`\`\`${out}...(생략)\`\`\``;
 }
 
 module.exports = {
@@ -42,73 +59,80 @@ module.exports = {
 
         const fields = [];
         let totalValue = asset.balance;
+        let totalPnl = 0;
 
         // ── 주식 ────────────────────────────────────────────────────────────────
         if (asset.stocks.length > 0) {
-            let stockValue = 0;
-            let stockCost = 0;
-            const lines = [];
+            let stockValue = 0, stockCost = 0;
+            let fmt = '';
             for (const s of asset.stocks) {
                 const cur = getStockPrice(s.ticker) ?? s.purchasePrice;
                 const value = cur * s.quantity;
                 const cost = s.purchasePrice * s.quantity;
-                const pnl = value - cost;
-                const pct = cost !== 0 ? (pnl / cost) * 100 : 0;
+                const p = value - cost;
+                const pctVal = cost !== 0 ? (p / cost) * 100 : 0;
                 stockValue += value;
                 stockCost += cost;
-                lines.push(`\`${s.ticker}\` ${s.quantity}주  ${fmtPrice(cur)}  ${pnlEmoji(pnl)} ${fmtPct(pct)}`);
+                if (fmt) fmt += '\n';
+                fmt += `${s.ticker} ${n(s.quantity)}주  현재 ${n(cur)}원  매수 ${n(s.purchasePrice)}원\n| 평가손익: ${pnlLine(p, pctVal)}`;
             }
-            const totalPnl = stockValue - stockCost;
-            const totalPct = stockCost !== 0 ? (totalPnl / stockCost) * 100 : 0;
+            const sectionPnl = stockValue - stockCost;
+            const sectionPct = stockCost !== 0 ? (sectionPnl / stockCost) * 100 : 0;
             totalValue += stockValue;
+            totalPnl += sectionPnl;
             fields.push({
-                name: `🏢 주식  (평가: ${fmtPrice(stockValue)}  ${pnlEmoji(totalPnl)} ${fmtPct(totalPct)})`,
-                value: lines.slice(0, 10).join('\n') + (lines.length > 10 ? `\n_외 ${lines.length - 10}개_` : ''),
-                inline: false,
+                name: `:chart_with_upwards_trend:  주식  (평가 ${n(stockValue)}원  ${pnlLine(sectionPnl, sectionPct)})`,
+                value: codeBlock(fmt),
             });
         }
 
         // ── 공매도 ──────────────────────────────────────────────────────────────
         if (asset.stockShortSales.length > 0) {
             let shortPnl = 0;
-            const lines = [];
+            let fmt = '';
             for (const s of asset.stockShortSales) {
                 const cur = getStockPrice(s.ticker) ?? s.sellPrice;
-                const pnl = (s.sellPrice - cur) * s.quantity;
-                const pct = s.sellPrice !== 0 ? ((s.sellPrice - cur) / s.sellPrice) * 100 : 0;
-                shortPnl += pnl;
-                lines.push(`\`${s.ticker}\` ${s.quantity}주  현재가 ${fmtPrice(cur)}  ${pnlEmoji(pnl)} ${fmtPct(pct)}`);
+                const p = (s.sellPrice - cur) * s.quantity;
+                const pctVal = s.sellPrice !== 0 ? ((s.sellPrice - cur) / s.sellPrice) * 100 : 0;
+                shortPnl += p;
+                if (fmt) fmt += '\n';
+                fmt += `${s.ticker} ${n(s.quantity)}주 공매도  현재 ${n(cur)}원  매도 ${n(s.sellPrice)}원\n| 평가손익: ${pnlLine(p, pctVal)}`;
             }
+            totalPnl += shortPnl;
             fields.push({
-                name: `📤 공매도  (미실현 손익: ${pnlEmoji(shortPnl)} ${fmtPrice(Math.abs(shortPnl))})`,
-                value: lines.slice(0, 10).join('\n') + (lines.length > 10 ? `\n_외 ${lines.length - 10}개_` : ''),
-                inline: false,
+                name: `:arrow_up:  공매도  (미실현 손익: ${pnlLine(shortPnl, 0).split(' ')[0]})`,
+                value: codeBlock(fmt),
             });
         }
 
         // ── 선물 ────────────────────────────────────────────────────────────────
         if (asset.futures.length > 0) {
-            let futuresPnl = 0;
-            const lines = [];
+            let futPnl = 0;
+            let fmt = '';
             for (const f of asset.futures) {
                 const cur = getFuturePrice(f.ticker) ?? f.purchasePrice;
-                const pnl = (cur - f.purchasePrice) * f.quantity * f.leverage;
-                const pct = f.purchasePrice !== 0 ? ((cur - f.purchasePrice) / f.purchasePrice) * f.leverage * 100 : 0;
-                futuresPnl += pnl;
-                lines.push(`\`${f.ticker}\` ${f.quantity}계약 (${f.leverage}x)  ${fmtPrice(cur)}  ${pnlEmoji(pnl)} ${fmtPct(pct)}`);
+                const posType = f.quantity > 0 ? '롱' : '숏';
+                const absQty = Math.abs(f.quantity);
+                const p = (cur - f.purchasePrice) * f.quantity * f.leverage;
+                const earnDir = f.quantity > 0 ? 1 : -1;
+                const pctVal = f.purchasePrice !== 0
+                    ? ((cur - f.purchasePrice) / f.purchasePrice) * f.leverage * earnDir * 100
+                    : 0;
+                futPnl += p;
+                if (fmt) fmt += '\n';
+                fmt += `${f.ticker} ${posType} ${n(absQty)}계약 (${f.leverage}x)  현재 ${n(cur)}원  매수 ${n(f.purchasePrice)}원\n| 평가손익: ${pnlLine(p, pctVal)}`;
             }
+            totalPnl += futPnl;
             fields.push({
-                name: `📈 선물  (미실현 손익: ${pnlEmoji(futuresPnl)} ${fmtPrice(Math.abs(futuresPnl))})`,
-                value: lines.slice(0, 10).join('\n') + (lines.length > 10 ? `\n_외 ${lines.length - 10}개_` : ''),
-                inline: false,
+                name: `:receipt:  선물  (미실현 손익: ${pnlLine(futPnl, 0).split(' ')[0]})`,
+                value: codeBlock(fmt),
             });
         }
 
         // ── 옵션 ────────────────────────────────────────────────────────────────
         if (asset.options.length > 0) {
-            let optionValue = 0;
-            let optionCost = 0;
-            const lines = [];
+            let optValue = 0, optCost = 0;
+            let fmt = '';
             for (const o of asset.options) {
                 const optionPrices = getOptionPrice(o.ticker);
                 let cur = 0;
@@ -119,71 +143,73 @@ module.exports = {
                 }
                 const value = cur * o.quantity * OPTION_UNIT_QUANTITY;
                 const cost = o.purchasePrice * o.quantity * OPTION_UNIT_QUANTITY;
-                const pnl = value - cost;
-                const pct = cost !== 0 ? (pnl / cost) * 100 : 0;
-                optionValue += value;
-                optionCost += cost;
+                const p = value - cost;
+                const pctVal = cost !== 0 ? (p / cost) * 100 : 0;
+                optValue += value;
+                optCost += cost;
                 const typeLabel = o.optionType === 'call' ? '콜' : '풋';
-                lines.push(`\`${o.ticker}\` ${typeLabel} 행사가${fmtPrice(o.strikePrice)} ${o.quantity}계약  ${pnlEmoji(pnl)} ${fmtPct(pct)}`);
+                if (fmt) fmt += '\n';
+                fmt += `${o.ticker} ${typeLabel}옵션 ${n(o.quantity)}계약  행사가 ${n(o.strikePrice)}원  현재 ${cur.toFixed(2)}원\n| 평가손익: ${pnlLine(p, pctVal)}`;
             }
-            const totalPnl = optionValue - optionCost;
-            const totalPct = optionCost !== 0 ? (totalPnl / optionCost) * 100 : 0;
-            totalValue += optionValue;
+            const sectionPnl = optValue - optCost;
+            const sectionPct = optCost !== 0 ? (sectionPnl / optCost) * 100 : 0;
+            totalValue += optValue;
+            totalPnl += sectionPnl;
             fields.push({
-                name: `🎯 옵션  (평가: ${fmtPrice(optionValue)}  ${pnlEmoji(totalPnl)} ${fmtPct(totalPct)})`,
-                value: lines.slice(0, 10).join('\n') + (lines.length > 10 ? `\n_외 ${lines.length - 10}개_` : ''),
-                inline: false,
+                name: `:pencil:  옵션  (평가 ${n(optValue)}원  ${pnlLine(sectionPnl, sectionPct)})`,
+                value: codeBlock(fmt),
             });
         }
 
         // ── ETF ─────────────────────────────────────────────────────────────────
         if (asset.etfs && asset.etfs.length > 0) {
-            let etfValue = 0;
-            let etfCost = 0;
-            const lines = [];
+            let etfValue = 0, etfCost = 0;
+            let fmt = '';
             for (const e of asset.etfs) {
                 const cur = getEtfPrice(e.etfId) ?? e.purchasePrice;
                 const value = cur * e.quantity;
                 const cost = e.purchasePrice * e.quantity;
-                const pnl = value - cost;
-                const pct = cost !== 0 ? (pnl / cost) * 100 : 0;
+                const p = value - cost;
+                const pctVal = cost !== 0 ? (p / cost) * 100 : 0;
                 etfValue += value;
                 etfCost += cost;
-                const shortName = ETF_DEFINITIONS[e.etfId]?.shortName ?? e.etfId;
-                lines.push(`\`${shortName}\` ${e.quantity}좌  ${fmtPrice(cur)}  ${pnlEmoji(pnl)} ${fmtPct(pct)}`);
+                const def = ETF_DEFINITIONS[e.etfId];
+                const displayName = def ? def.name : e.etfId;
+                if (fmt) fmt += '\n';
+                fmt += `${displayName} ${n(e.quantity)}좌  현재 ${n(cur)}원  매수 ${n(e.purchasePrice)}원\n| 평가손익: ${pnlLine(p, pctVal)}`;
             }
-            const totalPnl = etfValue - etfCost;
-            const totalPct = etfCost !== 0 ? (totalPnl / etfCost) * 100 : 0;
+            const sectionPnl = etfValue - etfCost;
+            const sectionPct = etfCost !== 0 ? (sectionPnl / etfCost) * 100 : 0;
             totalValue += etfValue;
+            totalPnl += sectionPnl;
             fields.push({
-                name: `📦 ETF  (평가: ${fmtPrice(etfValue)}  ${pnlEmoji(totalPnl)} ${fmtPct(totalPct)})`,
-                value: lines.slice(0, 10).join('\n') + (lines.length > 10 ? `\n_외 ${lines.length - 10}개_` : ''),
-                inline: false,
+                name: `:bar_chart:  ETF  (평가 ${n(etfValue)}원  ${pnlLine(sectionPnl, sectionPct)})`,
+                value: codeBlock(fmt),
             });
         }
 
         // ── 펀드 ─────────────────────────────────────────────────────────────────
         if (asset.funds && asset.funds.length > 0) {
-            let fundValue = 0;
-            let fundCost = 0;
-            const lines = [];
+            let fundValue = 0, fundCost = 0;
+            let fmt = '';
             for (const f of asset.funds) {
                 const cur = getFundPrice(f.name) ?? f.purchasePrice;
                 const value = cur * f.unit;
                 const cost = f.purchasePrice * f.unit;
-                const pnl = value - cost;
-                const pct = cost !== 0 ? (pnl / cost) * 100 : 0;
+                const p = value - cost;
+                const pctVal = cost !== 0 ? (p / cost) * 100 : 0;
                 fundValue += value;
                 fundCost += cost;
-                lines.push(`\`${f.name}\` ${f.unit}좌  ${fmtPrice(cur)}  ${pnlEmoji(pnl)} ${fmtPct(pct)}`);
+                if (fmt) fmt += '\n';
+                fmt += `${f.name} 펀드 ${n(f.unit)}좌  현재 ${n(cur)}원  매수 ${n(f.purchasePrice)}원\n| 평가손익: ${pnlLine(p, pctVal)}`;
             }
-            const totalPnl = fundValue - fundCost;
-            const totalPct = fundCost !== 0 ? (totalPnl / fundCost) * 100 : 0;
+            const sectionPnl = fundValue - fundCost;
+            const sectionPct = fundCost !== 0 ? (sectionPnl / fundCost) * 100 : 0;
             totalValue += fundValue;
+            totalPnl += sectionPnl;
             fields.push({
-                name: `🏦 펀드  (평가: ${fmtPrice(fundValue)}  ${pnlEmoji(totalPnl)} ${fmtPct(totalPct)})`,
-                value: lines.slice(0, 10).join('\n') + (lines.length > 10 ? `\n_외 ${lines.length - 10}개_` : ''),
-                inline: false,
+                name: `:bank:  펀드  (평가 ${n(fundValue)}원  ${pnlLine(sectionPnl, sectionPct)})`,
+                value: codeBlock(fmt),
             });
         }
 
@@ -199,14 +225,33 @@ module.exports = {
             });
         }
 
-        // Summary fields at top
+        // Summary header
+        const totalPnlPct = (totalValue - asset.balance) !== 0
+            ? (totalPnl / (totalValue - totalPnl)) * 100
+            : 0;
+
         fields.unshift(
-            { name: '💵 계좌 잔액', value: `\`${fmtPrice(asset.balance)}\``, inline: true },
-            { name: '📊 추정 총자산', value: `\`${fmtPrice(totalValue)}\``, inline: true },
+            {
+                name: ':dollar:  계좌 잔액',
+                value: `\`\`\`${n(asset.balance)}원\`\`\``,
+                inline: true,
+            },
+            {
+                name: ':moneybag:  추정 총자산',
+                value: `\`\`\`${n(totalValue)}원\`\`\``,
+                inline: true,
+            },
+            {
+                name: ':chart_with_upwards_trend:  전체 손익',
+                value: `\`\`\`${pnlLine(totalPnl, totalPnlPct)}\`\`\``,
+                inline: true,
+            },
         );
 
+        const color = totalPnl > 0 ? 0x2ECC71 : totalPnl < 0 ? 0xEA4144 : 0x95A5A6;
+
         const embed = new EmbedBuilder()
-            .setColor(0x2ECC71)
+            .setColor(color)
             .setTitle(title)
             .addFields(fields.slice(0, 25))
             .setTimestamp();

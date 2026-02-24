@@ -234,7 +234,6 @@ module.exports = {
                                 .setTitle('📋 예약 목록')
                                 .setDescription('대기 중인 예약 주문이 없습니다.'),
                         ],
-                        ephemeral: true,
                     });
                 }
 
@@ -256,7 +255,6 @@ module.exports = {
                             .setFooter({ text: `총 ${pending.length}개` })
                             .setTimestamp(),
                     ],
-                    ephemeral: true,
                 });
             }
 
@@ -274,7 +272,6 @@ module.exports = {
                                 .setTitle('오류')
                                 .setDescription(`번호 **${num}**에 해당하는 대기 중 예약이 없습니다.`),
                         ],
-                        ephemeral: true,
                     });
                 }
 
@@ -293,7 +290,6 @@ module.exports = {
                             )
                             .setTimestamp(),
                     ],
-                    ephemeral: true,
                 });
             }
         }
@@ -303,7 +299,6 @@ module.exports = {
         if (stateResult.state === 'error') {
             return interaction.reply({
                 embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('계정 정보를 불러올 수 없습니다.')],
-                ephemeral: true,
             });
         }
         const accountKey = stateResult.data.state.currentAccount;
@@ -373,7 +368,6 @@ module.exports = {
                     )
                     .setTimestamp(),
             ],
-            ephemeral: true,
         });
     },
 };
