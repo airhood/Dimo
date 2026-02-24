@@ -10,6 +10,7 @@ const discord_bot = require('./discord_bot');
 const { initCreditSystem, updateCreditRating } = require('./systems/credit_system');
 const { initFundPriceSystem } = require('./systems/fund_price');
 const { initNotificationScheduler } = require('./systems/notification_checker');
+const { initMarginCallChecker } = require('./systems/margin_call_checker');
 const { setTimezone } = require('./utils/korean_time');
 const { loadKeywordsFromFile } = require('./chat_bot/message_filter');
 
@@ -75,6 +76,11 @@ module.exports = {
         if (!result7) return false;
 
         console.log('[BOOT] Notification scheduler loaded');
+
+        const result8 = initMarginCallChecker();
+        if (!result8) return false;
+
+        console.log('[BOOT] Margin call checker loaded');
         
         loadKeywordsFromFile();
 
