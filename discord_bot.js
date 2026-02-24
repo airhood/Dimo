@@ -244,52 +244,51 @@ module.exports = {
 						}
 					}
 				}
-			}
-		} else if (message.reference) {
-			// "디모야" 없이 디모의 메시지에 reply한 경우
-			const referenceMessageID = message.reference.messageId;
-			const bucketStatus = existsInCurrentBucket(referenceMessageID);
-			if (bucketStatus !== true && bucketStatus !== 'special') return;
+			} else if (message.reference) {
+				// "디모야" 없이 디모의 메시지에 reply한 경우
+				const referenceMessageID = message.reference.messageId;
+				const bucketStatus = existsInCurrentBucket(referenceMessageID);
+				if (bucketStatus !== true && bucketStatus !== 'special') return;
 
-			const userMessage = message.content.trim();
-			if (!userMessage) return;
+				const userMessage = message.content.trim();
+				if (!userMessage) return;
 
-			if (!filterMessage(userMessage)) {
-				await message.reply("그런 말은 대답하기 싫어.");
-				addToBucket(null, true);
-				return;
-			}
-
-			const result = await dimoChat(message.content, {
-				messageID: message.id,
-				referenceMessageID: bucketStatus === true ? referenceMessageID : null,
-			});
-
-			if (result.result === 'success') {
-				const content = result.content;
-				const formattedContent = content.replace(/<user>/g, message.author.username);
-
-				let messageID;
-				if (filterMessage(formattedContent)) {
-					const wrappedContent = wrapMentions(formattedContent);
-					const sent = await message.reply(wrappedContent);
-					addToBucket(sent, false);
-					messageID = sent.id;
-				} else {
-					const sent = await message.reply('그 내용은 전달할 수 없어.');
-					addToBucket(sent, false);
-					messageID = sent.id;
+				if (!filterMessage(userMessage)) {
+					await message.reply("그런 말은 대답하기 싫어.");
+					addToBucket(null, true);
+					return;
 				}
 
-				result.callback(messageID.trim());
-			} else if (result.result === 'reply_timeout') {
-				await message.reply('내용이 기억이 안나.');
-				addToBucket(null, true);
-			} else if (result.result === 'error') {
-				await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
-				addToBucket(null, true);
+				const result = await dimoChat(message.content, {
+					messageID: message.id,
+					referenceMessageID: bucketStatus === true ? referenceMessageID : null,
+				});
+
+				if (result.result === 'success') {
+					const content = result.content;
+					const formattedContent = content.replace(/<user>/g, message.author.username);
+
+					let messageID;
+					if (filterMessage(formattedContent)) {
+						const wrappedContent = wrapMentions(formattedContent);
+						const sent = await message.reply(wrappedContent);
+						addToBucket(sent, false);
+						messageID = sent.id;
+					} else {
+						const sent = await message.reply('그 내용은 전달할 수 없어.');
+						addToBucket(sent, false);
+						messageID = sent.id;
+					}
+
+					result.callback(messageID.trim());
+				} else if (result.result === 'reply_timeout') {
+					await message.reply('내용이 기억이 안나.');
+					addToBucket(null, true);
+				} else if (result.result === 'error') {
+					await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
+					addToBucket(null, true);
+				}
 			}
-		}
 		});
 
 		addInteractionHandler(client);
