@@ -277,7 +277,7 @@ module.exports = {
         if (sub === '보기') {
             const entry = await AutoTrade.findOne({ userId: interaction.user.id, accountKey });
             const priv = entry?.privateMode ?? false;
-            if (!entry) {
+            if (!entry || !entry.script) {
                 return interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -312,7 +312,7 @@ module.exports = {
         if (sub === '실행') {
             const entry = await AutoTrade.findOne({ userId: interaction.user.id, accountKey });
             const priv = entry?.privateMode ?? false;
-            if (!entry) {
+            if (!entry || !entry.script) {
                 return interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -351,7 +351,7 @@ module.exports = {
         if (sub === '정지') {
             const entry = await AutoTrade.findOne({ userId: interaction.user.id, accountKey });
             const priv = entry?.privateMode ?? false;
-            if (!entry) {
+            if (!entry || !entry.script) {
                 return interaction.reply({
                     embeds: [
                         new EmbedBuilder()
