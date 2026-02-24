@@ -45,6 +45,10 @@ module.exports = {
                 .setDescription('자동매매로 체결된 거래 내역을 표시합니다.')
         )
         .addSubcommand((sub) =>
+            sub.setName('삭제')
+                .setDescription('등록된 자동매매 스크립트를 삭제합니다.')
+        )
+        .addSubcommand((sub) =>
             sub.setName('보안')
                 .setDescription('자동매매 응답을 나만 볼 수 있도록 설정합니다.')
                 .addBooleanOption((opt) =>
@@ -462,22 +466,47 @@ module.exports = {
             });
         }
 
-        if (sub === '보안') {
-            const enable = interaction.options.getBoolean('활성화');
+        if (sub === '삭제') {
             const entry = await AutoTrade.findOne({ userId: interaction.user.id, accountKey });
-            if (!entry) {
+            const priv = entry?.privateMode ?? false;
+            if (!entry || !entry.script) {
                 return interaction.reply({
                     embeds: [
                         new EmbedBuilder()
-                            .setColor(0xEA4144)
+                            .setColor(0xE57E22)
                             .setTitle('스크립트 없음')
-                            .setDescription('먼저 `/자동매매 등록`으로 스크립트를 등록하세요.')
+                            .setDescription(`**[${accountLabel}]**에 등록된 스크립트가 없습니다.`)
                     ],
-                    ephemeral: true,
+                    ephemeral: priv,
                 });
             }
-            entry.privateMode = enable;
-            await entry.save();
+            await AutoTrade.updateOne(
+                { userId: interaction.user.id, accountKey },
+                {
+                    $unset: { script: '', lastRunAt: '', lastError: '' },
+                    $set: { isRunning: false, logs: [], trades: [] },
+                },
+                { runValidators: false }
+            );
+            return interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xe74c3c)
+                        .setTitle('자동매매 스크립트 삭제 완료')
+                        .setDescription(`**[${accountLabel}]** 스크립트 및 모든 기록이 삭제되었습니다.`)
+                        .setTimestamp()
+                ],
+                ephemeral: priv,
+            });
+        }
+
+        if (sub === '보안') {
+            const enable = interaction.options.getBoolean('활성화');
+            await AutoTrade.updateOne(
+                { userId: interaction.user.id, accountKey },
+                { $set: { privateMode: enable } },
+                { upsert: true, runValidators: false }
+            );
             return interaction.reply({
                 embeds: [
                     new EmbedBuilder()
