@@ -11,9 +11,19 @@ function n(num) {
     return Math.round(num).toLocaleString();
 }
 
+function formatPercent(val) {
+    if (val === 0) return '0.00';
+    for (let digits = 2; digits <= 8; digits++) {
+        const s = val.toFixed(digits);
+        const dec = s.split('.')[1] ?? '';
+        if (!/^0+$/.test(dec)) return s;
+    }
+    return val.toFixed(8);
+}
+
 function pct(val) {
     const sign = val >= 0 ? '+' : '';
-    return `${sign}${val.toFixed(2)}%`;
+    return `${sign}${formatPercent(val)}%`;
 }
 
 // Format P&L with sign and percent
