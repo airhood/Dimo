@@ -70,6 +70,7 @@ module.exports = {
         const fields = [];
         let totalValue = asset.balance;
         let totalPnl = 0;
+        let totalCost = 0;
 
         // ── 주식 ────────────────────────────────────────────────────────────────
         if (asset.stocks.length > 0) {
@@ -90,6 +91,7 @@ module.exports = {
             const sectionPct = stockCost !== 0 ? (sectionPnl / stockCost) * 100 : 0;
             totalValue += stockValue;
             totalPnl += sectionPnl;
+            totalCost += stockCost;
             fields.push({
                 name: `:chart_with_upwards_trend:  주식  (평가 ${n(stockValue)}원  ${pnlLine(sectionPnl, sectionPct)})`,
                 value: codeBlock(fmt),
@@ -98,17 +100,19 @@ module.exports = {
 
         // ── 공매도 ──────────────────────────────────────────────────────────────
         if (asset.stockShortSales.length > 0) {
-            let shortPnl = 0;
+            let shortPnl = 0, shortCost = 0;
             let fmt = '';
             for (const s of asset.stockShortSales) {
                 const cur = getStockPrice(s.ticker) ?? s.sellPrice;
                 const p = (s.sellPrice - cur) * s.quantity;
                 const pctVal = s.sellPrice !== 0 ? ((s.sellPrice - cur) / s.sellPrice) * 100 : 0;
                 shortPnl += p;
+                shortCost += s.sellPrice * s.quantity;
                 if (fmt) fmt += '\n';
                 fmt += `${s.ticker} ${n(s.quantity)}주 공매도  현재 ${n(cur)}원  매도 ${n(s.sellPrice)}원\n| 평가손익: ${pnlLine(p, pctVal)}`;
             }
             totalPnl += shortPnl;
+            totalCost += shortCost;
             fields.push({
                 name: `:arrow_up:  공매도  (미실현 손익: ${pnlLine(shortPnl, 0).split(' ')[0]})`,
                 value: codeBlock(fmt),
@@ -117,7 +121,7 @@ module.exports = {
 
         // ── 선물 ────────────────────────────────────────────────────────────────
         if (asset.futures.length > 0) {
-            let futPnl = 0;
+            let futPnl = 0, futCost = 0;
             let fmt = '';
             for (const f of asset.futures) {
                 const cur = getFuturePrice(f.ticker) ?? f.purchasePrice;
@@ -129,10 +133,12 @@ module.exports = {
                     ? ((cur - f.purchasePrice) / f.purchasePrice) * f.leverage * earnDir * 100
                     : 0;
                 futPnl += p;
+                futCost += f.purchasePrice * absQty;
                 if (fmt) fmt += '\n';
                 fmt += `${f.ticker} ${posType} ${n(absQty)}계약 (${f.leverage}x)  현재 ${n(cur)}원  매수 ${n(f.purchasePrice)}원\n| 평가손익: ${pnlLine(p, pctVal)}`;
             }
             totalPnl += futPnl;
+            totalCost += futCost;
             fields.push({
                 name: `:receipt:  선물  (미실현 손익: ${pnlLine(futPnl, 0).split(' ')[0]})`,
                 value: codeBlock(fmt),
@@ -165,6 +171,7 @@ module.exports = {
             const sectionPct = optCost !== 0 ? (sectionPnl / optCost) * 100 : 0;
             totalValue += optValue;
             totalPnl += sectionPnl;
+            totalCost += optCost;
             fields.push({
                 name: `:pencil:  옵션  (평가 ${n(optValue)}원  ${pnlLine(sectionPnl, sectionPct)})`,
                 value: codeBlock(fmt),
@@ -192,6 +199,7 @@ module.exports = {
             const sectionPct = etfCost !== 0 ? (sectionPnl / etfCost) * 100 : 0;
             totalValue += etfValue;
             totalPnl += sectionPnl;
+            totalCost += etfCost;
             fields.push({
                 name: `:bar_chart:  ETF  (평가 ${n(etfValue)}원  ${pnlLine(sectionPnl, sectionPct)})`,
                 value: codeBlock(fmt),
@@ -217,6 +225,7 @@ module.exports = {
             const sectionPct = fundCost !== 0 ? (sectionPnl / fundCost) * 100 : 0;
             totalValue += fundValue;
             totalPnl += sectionPnl;
+            totalCost += fundCost;
             fields.push({
                 name: `:bank:  펀드  (평가 ${n(fundValue)}원  ${pnlLine(sectionPnl, sectionPct)})`,
                 value: codeBlock(fmt),
@@ -236,9 +245,7 @@ module.exports = {
         }
 
         // Summary header
-        const totalPnlPct = (totalValue - asset.balance) !== 0
-            ? (totalPnl / (totalValue - totalPnl)) * 100
-            : 0;
+        const totalPnlPct = totalCost !== 0 ? (totalPnl / totalCost) * 100 : 0;
 
         fields.unshift(
             {
