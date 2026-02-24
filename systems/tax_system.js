@@ -165,12 +165,41 @@ async function getTaxRecord(userId) {
     return TaxRecord.findOne({ userID: userId });
 }
 
+// ── Boot-time init ────────────────────────────────────────────────────────────
+
+/**
+ * 서버 시작 시 호출.
+ * 1) 만료된 미납 세금 강제 징수
+ * 2) 활성 고지가 없으면 즉시 새 세금 고지
+ */
+async function initTaxSystem() {
+    try {
+        // 1) 만기 지난 미납 세금 먼저 처리
+        await collectPendingTaxes();
+
+        // 2) 현재 유효한 (미납, 아직 만기 안 된) 고지가 있는지 확인
+        const now = new Date();
+        const activeCount = await TaxRecord.countDocuments({ paid: false, dueDate: { $gt: now } });
+
+        // 3) 없으면 즉시 고지
+        if (activeCount === 0) {
+            serverLog('[INFO] No active tax assessment found on boot. Running immediate assessment.');
+            await assessTax();
+        } else {
+            serverLog(`[INFO] Tax system initialized. ${activeCount} active assessment(s) found.`);
+        }
+    } catch (err) {
+        serverLog(`[ERROR] Error at 'tax_system.js:initTaxSystem': ${err}`);
+    }
+}
+
 // ── Public exports ────────────────────────────────────────────────────────────
 
 module.exports = {
     calculateTax,
     assessTax,
     collectPendingTaxes,
+    initTaxSystem,
     payTax,
     getTaxRecord,
     TAX_FLOOR,

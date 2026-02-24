@@ -1,6 +1,7 @@
 const { connectDatabase, loadServersideLockData } = require('./database');
 const { initStockSim, addHourlyListener, getIndexPrice, getIndexTimeRangeData, getIndexHistoryLength } = require('./systems/stock_sim');
 const { initEtfSystem, updateEtfHour } = require('./systems/etf_system');
+const { initTaxSystem } = require('./systems/tax_system');
 const { initTerminal } = require('./server/server_terminal');
 const { startBucketCycle } = require('./systems/message_reference_tracker');
 const { initResourceMonitor, checkResource } = require('./server/resource_monitor');
@@ -65,6 +66,10 @@ module.exports = {
         if (!result6) return false;
 
         console.log('[BOOT] Schedule Manager loaded');
+
+        await initTaxSystem();
+
+        console.log('[BOOT] Tax system initialized');
 
         const result7 = initNotificationScheduler();
         if (!result7) return false;
