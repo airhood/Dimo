@@ -14,7 +14,14 @@ const StateSchema = new Schema({
     currentAccount: {
         type: String,
         required: true,
-    }
+    },
+    checkin_date: {
+        type: Date,
+    },
+    checkin_streak: {
+        type: Number,
+        default: 0,
+    },
 });
 
 module.exports = mongoose.model('State', StateSchema);

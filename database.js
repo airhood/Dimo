@@ -3907,4 +3907,93 @@ module.exports = {
             return { state: 'error', data: null };
         }
     },
+
+    async checkAndMarkAttendance(id) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return { state: 'error', data: null };
+            }
+
+            const userState = await State.findById(user.state);
+            if (userState === null) {
+                serverLog('[ERROR] Error finding user state');
+                return { state: 'error', data: null };
+            }
+
+            const now = new Date();
+            const today = new Date(now);
+            today.setHours(0, 0, 0, 0);
+
+            let newStreak;
+            if (userState.checkin_date == null) {
+                newStreak = 1;
+            } else {
+                const lastDay = new Date(userState.checkin_date);
+                lastDay.setHours(0, 0, 0, 0);
+                const diffDays = Math.round((today.getTime() - lastDay.getTime()) / (1000 * 60 * 60 * 24));
+
+                if (diffDays === 0) {
+                    return { state: 'success', data: { alreadyChecked: true } };
+                } else if (diffDays === 1) {
+                    newStreak = (userState.checkin_streak || 0) + 1;
+                } else {
+                    newStreak = 1;
+                }
+            }
+
+            const xpGained = 30;
+
+            userState.checkin_date = now;
+            userState.checkin_streak = newStreak;
+            await userState.save();
+
+            return { state: 'success', data: { alreadyChecked: false, streak: newStreak, xpGained } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:checkAndMarkAttendance': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async increaseLevelPointBy(id, amount) {
+        const DEFAULT_POINT_REQUIRED = 100;
+        const LEVEL_UP_POINT_GAP = 20;
+
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return { state: 'error', data: null };
+            }
+
+            const userProfile = await Profile.findById(user.profile);
+            if (userProfile === null) {
+                serverLog('[ERROR] Error finding user profile');
+                return { state: 'error', data: null };
+            }
+
+            userProfile.level.state += amount;
+            let threshold = DEFAULT_POINT_REQUIRED + LEVEL_UP_POINT_GAP * userProfile.level.level;
+            while (userProfile.level.state >= threshold) {
+                userProfile.level.state -= threshold;
+                userProfile.level.level += 1;
+                threshold = DEFAULT_POINT_REQUIRED + LEVEL_UP_POINT_GAP * userProfile.level.level;
+            }
+
+            await userProfile.save();
+
+            return {
+                state: 'success',
+                data: {
+                    level: userProfile.level.level,
+                    state: userProfile.level.state,
+                    target: threshold,
+                },
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:increaseLevelPointBy': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
 }
