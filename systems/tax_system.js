@@ -64,17 +64,27 @@ async function assessTax() {
 
         await Promise.all(users.map(async (user) => {
             if (!user.asset) return;
-            const totalAssets = calculateAssetValue(user.asset);
-            const taxAmount = calculateTax(totalAssets);
+            const currentAssets = calculateAssetValue(user.asset);
+
+            // 저번 주 스냅샷을 기준으로 증가분 계산
+            const existingRecord = await TaxRecord.findOne({ userID: user.userID });
+            const previousAssets = existingRecord ? existingRecord.totalAssets : currentAssets;
+            const taxableGain = Math.max(0, currentAssets - previousAssets);
+            const taxAmount = calculateTax(taxableGain);
+
             if (taxAmount <= 0) {
-                // 과세 대상 아니면 기존 고지 삭제
-                await TaxRecord.deleteOne({ userID: user.userID });
+                // 과세 대상 아니어도 스냅샷 보존을 위해 레코드 유지
+                await TaxRecord.findOneAndUpdate(
+                    { userID: user.userID },
+                    { totalAssets: currentAssets, taxableGain: 0, taxAmount: 0, paid: true, assessedAt, dueDate },
+                    { upsert: true, new: true }
+                );
                 return;
             }
 
             await TaxRecord.findOneAndUpdate(
                 { userID: user.userID },
-                { totalAssets, taxAmount, paid: false, assessedAt, dueDate },
+                { totalAssets: currentAssets, taxableGain, taxAmount, paid: false, assessedAt, dueDate },
                 { upsert: true, new: true }
             );
             assessed++;
@@ -109,7 +119,8 @@ async function collectPendingTaxes() {
             userAsset.balance = Math.round(userAsset.balance);
             await userAsset.save();
 
-            await TaxRecord.deleteOne({ userID: record.userID });
+            // 삭제 대신 paid 처리 — 다음 주 기준 스냅샷 보존
+            await TaxRecord.updateOne({ userID: record.userID }, { $set: { paid: true } });
 
             serverLog(`[INFO] Tax force-collected: ${record.userID}, amount: ${deduct.toLocaleString()}원 (bill: ${record.taxAmount.toLocaleString()}원)`);
         }));
@@ -162,7 +173,7 @@ async function payTax(userId) {
 // ── Query ─────────────────────────────────────────────────────────────────────
 
 async function getTaxRecord(userId) {
-    return TaxRecord.findOne({ userID: userId });
+    return TaxRecord.findOne({ userID: userId, taxAmount: { $gt: 0 }, paid: false });
 }
 
 // ── Boot-time init ────────────────────────────────────────────────────────────

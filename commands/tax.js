@@ -10,7 +10,7 @@ function formatWon(n) {
 
 function bracketSummary() {
     const lines = [
-        `100억 미만 — 면세`,
+        `주간 증가분 100억 미만 — 면세`,
         `100억 ~ 500억 — 1%`,
         `500억 ~ 1,000억 — 2%`,
         `1,000억 ~ 5,000억 — 3%`,
@@ -47,7 +47,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x2ECC71)
                             .setTitle('💰 재산세 조회')
-                            .setDescription('현재 고지된 재산세가 없습니다.\n총 자산이 **100억 미만**이거나 아직 고지 전입니다.')
+                            .setDescription('현재 고지된 재산세가 없습니다.\n저번 주 대비 **증가분이 100억 미만**이거나 아직 고지 전입니다.')
                             .addFields({ name: '과세 구간', value: bracketSummary() })
                     ],
                 });
@@ -65,7 +65,8 @@ module.exports = {
                         .setColor(color)
                         .setTitle('💰 재산세 고지서')
                         .addFields(
-                            { name: '평가 자산', value: formatWon(record.totalAssets), inline: true },
+                            { name: '현재 총자산', value: formatWon(record.totalAssets), inline: true },
+                            { name: '과세 증가분', value: formatWon(record.taxableGain), inline: true },
                             { name: '세액', value: formatWon(record.taxAmount), inline: true },
                             { name: '납부 기한', value: `<t:${dueTs}:F>`, inline: true },
                             { name: '상태', value: statusText },
