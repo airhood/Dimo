@@ -7,9 +7,10 @@ const moment = require('moment-timezone');
 
 const TYPE_LABELS = {
     stock_buy: '주식 매수', stock_sell: '주식 매도',
-    future_long: '선물 롱', future_short: '선물 숏',
+    future_long: '선물 롱', future_short: '선물 숏', future_liquidate: '선물 청산',
     option_call_buy: '콜옵션 매수', option_put_buy: '풋옵션 매수',
     option_call_sell: '콜옵션 매도', option_put_sell: '풋옵션 매도',
+    option_call_liquidate: '콜옵션 청산', option_put_liquidate: '풋옵션 청산',
     etf_buy: 'ETF 매수', etf_sell: 'ETF 매도',
 };
 
@@ -39,6 +40,11 @@ function addConditionOptions(sub) {
                     { name: '이하 (가격 <= 조건가격)', value: 'below' },
                 )
                 .setRequired(true)
+        )
+        .addStringOption((opt) =>
+            opt.setName('펀드')
+                .setDescription('펀드 이름 (생략 시 현재 활성 계정)')
+                .setRequired(false)
         );
 }
 
@@ -111,6 +117,15 @@ module.exports = {
                             )
                     )
                 )
+                .addSubcommand((sub) =>
+                    addConditionOptions(
+                        sub.setName('청산')
+                            .setDescription('선물 가격 조건 충족 시 보유 포지션 청산')
+                            .addStringOption((opt) =>
+                                opt.setName('종목').setDescription('청산할 종목 코드').setRequired(true)
+                            )
+                    )
+                )
         )
 
         // ── 옵션 ──────────────────────────────────────────────────────────────
@@ -160,6 +175,26 @@ module.exports = {
                             )
                             .addIntegerOption((opt) =>
                                 opt.setName('행사가').setDescription('행사 가격 (원)').setMinValue(1).setRequired(true)
+                            )
+                    )
+                )
+                .addSubcommand((sub) =>
+                    addConditionOptions(
+                        sub.setName('청산')
+                            .setDescription('옵션 가격 조건 충족 시 보유 포지션 청산')
+                            .addStringOption((opt) =>
+                                opt.setName('타입').setDescription('콜 또는 풋')
+                                    .setChoices(
+                                        { name: '콜옵션', value: 'call' },
+                                        { name: '풋옵션', value: 'put' },
+                                    )
+                                    .setRequired(true)
+                            )
+                            .addStringOption((opt) =>
+                                opt.setName('종목').setDescription('종목 코드').setRequired(true)
+                            )
+                            .addIntegerOption((opt) =>
+                                opt.setName('행사가').setDescription('청산할 포지션의 행사 가격 (원)').setMinValue(1).setRequired(true)
                             )
                     )
                 )
@@ -301,7 +336,8 @@ module.exports = {
                 embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('계정 정보를 불러올 수 없습니다.')],
             });
         }
-        const accountKey = stateResult.data.state.currentAccount;
+        const fundName = interaction.options.getString('펀드');
+        const accountKey = fundName ? `@fund_${fundName}` : stateResult.data.state.currentAccount;
 
         const conditionPrice = interaction.options.getInteger('조건가격');
         const conditionType = interaction.options.getString('조건');
@@ -313,18 +349,26 @@ module.exports = {
             type = sub === '매수' ? 'stock_buy' : 'stock_sell';
         } else if (group === '선물') {
             ticker = interaction.options.getString('종목').toUpperCase();
-            quantity = interaction.options.getInteger('수량');
-            leverage = interaction.options.getInteger('레버리지');
-            type = sub === '롱' ? 'future_long' : 'future_short';
+            if (sub === '청산') {
+                type = 'future_liquidate';
+            } else {
+                quantity = interaction.options.getInteger('수량');
+                leverage = interaction.options.getInteger('레버리지');
+                type = sub === '롱' ? 'future_long' : 'future_short';
+            }
         } else if (group === '옵션') {
             const optType = interaction.options.getString('타입');
             ticker = interaction.options.getString('종목').toUpperCase();
-            quantity = interaction.options.getInteger('수량');
             strikePrice = interaction.options.getInteger('행사가');
-            if (sub === '매수') {
-                type = optType === 'call' ? 'option_call_buy' : 'option_put_buy';
+            if (sub === '청산') {
+                type = optType === 'call' ? 'option_call_liquidate' : 'option_put_liquidate';
             } else {
-                type = optType === 'call' ? 'option_call_sell' : 'option_put_sell';
+                quantity = interaction.options.getInteger('수량');
+                if (sub === '매수') {
+                    type = optType === 'call' ? 'option_call_buy' : 'option_put_buy';
+                } else {
+                    type = optType === 'call' ? 'option_call_sell' : 'option_put_sell';
+                }
             }
         } else if (group === 'etf') {
             ticker = interaction.options.getString('etf').toUpperCase();

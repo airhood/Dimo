@@ -8,9 +8,10 @@ const ReservationSchema = new Schema({
         type: String,
         enum: [
             'stock_buy', 'stock_sell',
-            'future_long', 'future_short',
+            'future_long', 'future_short', 'future_liquidate',
             'option_call_buy', 'option_put_buy',
             'option_call_sell', 'option_put_sell',
+            'option_call_liquidate', 'option_put_liquidate',
             'etf_buy', 'etf_sell',
         ],
         required: true,

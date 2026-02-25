@@ -1,7 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { createCache, saveCache } = require('../utils/cache');
+const { createCache, saveCache, loadCache, deleteCache } = require('../utils/cache');
 const { v4: uuidv4 } = require('uuid');
 const { getUserAsset, addBalance } = require('../database');
+const { drawCard, isBlackjack, buildActionRow, buildInProgressEmbed, buildInsuranceEmbed, buildInsuranceRow, resolveBlackjack } = require('../systems/blackjack_system');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -31,6 +32,16 @@ module.exports = {
                         .setDescription('배팅할 숫자 (1 ~ 16)')
                         .setMinValue(1)
                         .setMaxValue(16)
+                        .setRequired(true)
+                )
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('블랙잭')
+                .setDescription('블랙잭을 플레이합니다. Hit / Stand / Double Down / Split으로 진행하세요.')
+                .addIntegerOption((option) =>
+                    option.setName('금액')
+                        .setDescription('배팅할 금액 (최소 만원)')
+                        .setMinValue(10000)
                         .setRequired(true)
                 )
         )
@@ -241,6 +252,78 @@ module.exports = {
                         )
                 ],
             });
+        } else if (subCommand === '블랙잭') {
+            const betAmount = interaction.options.getInteger('금액');
+            const userId = interaction.user.id;
+
+            const userAsset = await getUserAsset(userId);
+            if (userAsset.state === 'error') {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription('오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.').setTimestamp()],
+                });
+                return;
+            }
+            if (userAsset.data.asset.balance < betAmount) {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x: 잔액 부족').setDescription('잔액이 부족해서 블랙잭을 플레이할 수 없습니다.')],
+                });
+                return;
+            }
+            if (loadCache(`bj_${userId}`)) {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x: 진행 중인 게임').setDescription('이미 블랙잭 게임이 진행 중입니다.\n버튼을 눌러 게임을 계속 진행해주세요.')],
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            const playerCards = [drawCard(), drawCard()];
+            const dealerCards = [drawCard(), drawCard()];
+
+            const gameState = {
+                hands: [{ cards: playerCards, isFirstTurn: true, done: false, isDoubled: false }],
+                activeHand: 0,
+                dealerCards,
+                betAmount,
+                isSplit: false,
+                resolved: false,
+                insuranceLost: 0,
+            };
+
+            // 5분 타임아웃 — 미응답 시 자동 패배 처리
+            const startGame = () => {
+                createCache(`bj_${userId}`, 5);
+                saveCache(`bj_${userId}`, gameState);
+                setTimeout(async () => {
+                    const game = loadCache(`bj_${userId}`);
+                    if (game && !game.resolved) {
+                        deleteCache(`bj_${userId}`);
+                        const totalLoss = game.hands.reduce(
+                            (sum, h) => sum + (h.isDoubled ? game.betAmount * 2 : game.betAmount), 0
+                        );
+                        await addBalance(userId, -totalLoss);
+                    }
+                }, 5 * 60 * 1000);
+            };
+
+            if (dealerCards[0].value === 'A') {
+                // 딜러 첫 패가 A → 인슈어런스 먼저 제공 (딜러 블랙잭 여부 무관)
+                startGame();
+                const embed = buildInsuranceEmbed(playerCards, dealerCards, betAmount);
+                const row = buildInsuranceRow(userId);
+                await interaction.reply({ embeds: [embed], components: [row] });
+            } else {
+                // 딜러 첫 패가 A가 아님 → 블랙잭 체크 후 바로 시작
+                if (isBlackjack(playerCards) || isBlackjack(dealerCards)) {
+                    await resolveBlackjack(userId, playerCards, dealerCards, betAmount, interaction);
+                    return;
+                }
+                startGame();
+                const embed = buildInProgressEmbed(gameState);
+                const row = buildActionRow(userId, gameState);
+                await interaction.reply({ embeds: [embed], components: [row] });
+            }
+
         } else if (subCommand === '바카라') {
             const betAmount = interaction.options.getInteger('금액');
             const betChoice = interaction.options.getString('베팅');

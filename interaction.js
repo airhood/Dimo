@@ -1,6 +1,7 @@
 const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { createUser, deleteUser } = require('./database');
-const { loadCache, saveCache } = require('./utils/cache');
+const { createUser, deleteUser, getUserAsset } = require('./database');
+const { loadCache, saveCache, deleteCache } = require('./utils/cache');
+const { drawCard, handTotal, buildActionRow, buildInProgressEmbed, handleHandEnd, canSplitHand, resolveGame, resolveInsurance } = require('./systems/blackjack_system');
 const moment = require('moment-timezone');
 const AutoTrade = require('./schemas/auto_trade');
 const { validateScript } = require('./systems/auto_trade_interpreter');
@@ -564,6 +565,109 @@ function addInteractionHandler(client) {
                 });
 
                 saveCache(uid, { pages, currentPage: pageToLoad, accountTitle });
+            } else if (action === 'bj_insure') {
+                const game = loadCache(`bj_${userID}`);
+                if (!game || game.resolved) {
+                    return interaction.reply({ content: '게임이 만료되었습니다.', ephemeral: true });
+                }
+                const insuranceBet = Math.floor(game.betAmount / 2);
+                const userAsset = await getUserAsset(userID);
+                if (userAsset.state === 'error' || userAsset.data.asset.balance < insuranceBet) {
+                    return interaction.reply({ content: '보험 베팅에 필요한 잔액이 부족합니다.', ephemeral: true });
+                }
+                await resolveInsurance(userID, true, interaction);
+
+            } else if (action === 'bj_insure_pass') {
+                await resolveInsurance(userID, false, interaction);
+
+            } else if (action === 'bj_hit') {
+                const game = loadCache(`bj_${userID}`);
+                if (!game || game.resolved) {
+                    return interaction.reply({ content: '게임이 만료되었습니다.', ephemeral: true });
+                }
+
+                const hand = game.hands[game.activeHand];
+                hand.cards.push(drawCard());
+                hand.isFirstTurn = false;
+                saveCache(`bj_${userID}`, game);
+
+                const playerTotal = handTotal(hand.cards);
+                if (playerTotal >= 21) {
+                    await handleHandEnd(userID, game, interaction);
+                } else {
+                    const embed = buildInProgressEmbed(game);
+                    const row = buildActionRow(userID, game);
+                    await interaction.update({ embeds: [embed], components: [row] });
+                }
+            } else if (action === 'bj_stand') {
+                const game = loadCache(`bj_${userID}`);
+                if (!game || game.resolved) {
+                    return interaction.reply({ content: '게임이 만료되었습니다.', ephemeral: true });
+                }
+                await handleHandEnd(userID, game, interaction);
+
+            } else if (action === 'bj_double') {
+                const game = loadCache(`bj_${userID}`);
+                if (!game || game.resolved) {
+                    return interaction.reply({ content: '더블다운은 첫 턴에만 가능합니다.', ephemeral: true });
+                }
+
+                const hand = game.hands[game.activeHand];
+                if (!hand.isFirstTurn) {
+                    return interaction.reply({ content: '더블다운은 첫 턴에만 가능합니다.', ephemeral: true });
+                }
+
+                const userAsset = await getUserAsset(userID);
+                if (userAsset.state === 'error' || userAsset.data.asset.balance < game.betAmount * 2) {
+                    return interaction.reply({ content: '더블다운에 필요한 잔액이 부족합니다.', ephemeral: true });
+                }
+
+                hand.cards.push(drawCard());
+                hand.isFirstTurn = false;
+                hand.isDoubled = true;
+                saveCache(`bj_${userID}`, game);
+
+                // 카드 1장 후 강제 Stand
+                await handleHandEnd(userID, game, interaction);
+
+            } else if (action === 'bj_split') {
+                const game = loadCache(`bj_${userID}`);
+                if (!game || game.resolved) {
+                    return interaction.reply({ content: '게임이 만료되었습니다.', ephemeral: true });
+                }
+
+                const hand = game.hands[game.activeHand];
+                if (!canSplitHand(hand, game.isSplit)) {
+                    return interaction.reply({ content: '스플릿 조건이 충족되지 않았습니다.', ephemeral: true });
+                }
+
+                const splitAsset = await getUserAsset(userID);
+                if (splitAsset.state === 'error' || splitAsset.data.asset.balance < game.betAmount * 2) {
+                    return interaction.reply({ content: `스플릿을 하려면 추가 배팅금 **${game.betAmount.toLocaleString()}원** 이상이 있어야 합니다.`, ephemeral: true });
+                }
+
+                const [card1, card2] = hand.cards;
+                const isAceSplit = card1.value === 'A';
+
+                // 각 핸드에 카드 1장씩 추가
+                const hand1 = { cards: [card1, drawCard()], isFirstTurn: !isAceSplit, done: isAceSplit, isDoubled: false };
+                const hand2 = { cards: [card2, drawCard()], isFirstTurn: !isAceSplit, done: isAceSplit, isDoubled: false };
+
+                game.hands[game.activeHand] = hand1;
+                game.hands.push(hand2);
+                game.activeHand = 0;
+                game.isSplit = true;
+                saveCache(`bj_${userID}`, game);
+
+                if (isAceSplit) {
+                    // 에이스 스플릿: 양 핸드 즉시 종료 → 바로 딜러 대결
+                    await resolveGame(userID, game, interaction);
+                } else {
+                    const embed = buildInProgressEmbed(game);
+                    const row = buildActionRow(userID, game);
+                    await interaction.update({ embeds: [embed], components: [row] });
+                }
+
             } else if (action === 'realtime_stop') {
                 const uid = customID[2];
                 const { stopSession } = require('./systems/realtime_manager');

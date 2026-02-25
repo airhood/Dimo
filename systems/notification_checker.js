@@ -308,6 +308,10 @@ async function checkNotifications() {
 }
 
 function initNotificationScheduler() {
+    if (process.env.NODE_ENV !== 'production') {
+        serverLog('[INFO] Notification scheduler skipped (non-production environment)');
+        return true;
+    }
     serverLog('[INFO] Initializing notification scheduler...');
     schedule.scheduleJob('* * * * *', () => {
         checkNotifications();
