@@ -1,4 +1,4 @@
-const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { createUser, deleteUser, getUserAsset } = require('./database');
 const { loadCache, saveCache, deleteCache } = require('./utils/cache');
 const { drawCard, handTotal, buildActionRow, buildInProgressEmbed, handleHandEnd, canSplitHand, resolveGame, resolveInsurance } = require('./systems/blackjack_system');
@@ -74,6 +74,39 @@ function addInteractionHandler(client) {
                                 .setTimestamp()
                         ],
                         ephemeral: true,
+                    });
+                }
+            }
+
+            if (customId.startsWith('quiz_submit-')) {
+                const uid = customId.split('-')[1];
+                const cache = loadCache(uid);
+                if (!cache) {
+                    return interaction.reply({ content: '퀴즈가 만료되었습니다.', ephemeral: true });
+                }
+
+                const userAnswer = interaction.fields.getTextInputValue('quiz_answer_input').trim();
+                if (userAnswer === cache.answer) {
+                    const { addBalance } = require('./database');
+                    deleteCache(uid);
+                    await addBalance(interaction.user.id, cache.prize);
+                    return interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0x2ECC71)
+                                .setTitle('✅ 정답!')
+                                .setDescription(`정답은 **${cache.answer}** 입니다.\n**${cache.prize.toLocaleString()}원**이 지급되었습니다.`)
+                        ],
+                    });
+                } else {
+                    deleteCache(uid);
+                    return interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0xEA4144)
+                                .setTitle('❌ 오답')
+                                .setDescription(`정답은 **${cache.answer}** 입니다.`)
+                        ],
                     });
                 }
             }
@@ -667,6 +700,29 @@ function addInteractionHandler(client) {
                     const row = buildActionRow(userID, game);
                     await interaction.update({ embeds: [embed], components: [row] });
                 }
+
+            } else if (action === 'quiz_answer') {
+                const uid = customID[2];
+                if (interaction.user.id !== userID) {
+                    return interaction.reply({ content: '본인의 퀴즈에만 답변할 수 있습니다.', ephemeral: true });
+                }
+                const cache = loadCache(uid);
+                if (!cache) {
+                    return interaction.reply({ content: '퀴즈가 만료되었습니다.', ephemeral: true });
+                }
+                const modal = new ModalBuilder()
+                    .setCustomId(`quiz_submit-${uid}`)
+                    .setTitle('정답 제출')
+                    .addComponents(
+                        new ActionRowBuilder().addComponents(
+                            new TextInputBuilder()
+                                .setCustomId('quiz_answer_input')
+                                .setLabel('정답을 입력하세요')
+                                .setStyle(TextInputStyle.Short)
+                                .setRequired(true)
+                        )
+                    );
+                await interaction.showModal(modal);
 
             } else if (action === 'realtime_stop') {
                 const uid = customID[2];
