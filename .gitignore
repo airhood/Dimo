@@ -91,6 +91,10 @@ config.json
 stock_prices.txt
 recent-stock_prices.txt
 
+data/news_pool.json
+data/etf_state.json
+data/message_buckets.json
+
 tempCodeRunnerFile.js
 
 .idea/
