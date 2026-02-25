@@ -5,6 +5,7 @@ const { getSessionCount } = require('../systems/realtime_manager');
 const { memoryUsage } = require('../server/resource_monitor');
 const AutoTrade = require('../schemas/auto_trade');
 const Notification = require('../schemas/notification');
+const Reservation = require('../schemas/reservation');
 
 const MEMORY_THRESHOLD_MB = 250;
 
@@ -29,9 +30,10 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply();
 
-        const [autoTradeCount, notificationCount] = await Promise.all([
+        const [autoTradeCount, notificationCount, reservationCount] = await Promise.all([
             AutoTrade.countDocuments({ isRunning: true }),
             Notification.countDocuments(),
+            Reservation.countDocuments({ status: 'pending' }),
         ]);
 
         const realtimeCount = getSessionCount();
@@ -58,6 +60,11 @@ module.exports = {
                 {
                     name: '🔔 등록된 알림',
                     value: `\`${notificationCount}\`개`,
+                    inline: true,
+                },
+                {
+                    name: '📋 대기 중인 예약',
+                    value: `\`${reservationCount}\`개`,
                     inline: true,
                 },
                 {
