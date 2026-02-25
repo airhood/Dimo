@@ -295,13 +295,22 @@ module.exports = {
                 createCache(`bj_${userId}`, 5);
                 saveCache(`bj_${userId}`, gameState);
                 setTimeout(async () => {
-                    const game = loadCache(`bj_${userId}`);
-                    if (game && !game.resolved) {
+                    // loadCache 대신 gameState 참조 직접 사용 (캐시 만료 경쟁 조건 방지)
+                    if (!gameState.resolved) {
+                        gameState.resolved = true;
                         deleteCache(`bj_${userId}`);
-                        const totalLoss = game.hands.reduce(
-                            (sum, h) => sum + (h.isDoubled ? game.betAmount * 2 : game.betAmount), 0
+                        const totalLoss = gameState.hands.reduce(
+                            (sum, h) => sum + (h.isDoubled ? gameState.betAmount * 2 : gameState.betAmount), 0
                         );
                         await addBalance(userId, -totalLoss);
+                        await interaction.followUp({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle('🃏  블랙잭 — 시간 초과')
+                                    .setDescription(`5분 내에 응답하지 않아 게임이 자동 종료되었습니다.\n배팅금 **${totalLoss.toLocaleString()}원**이 차감되었습니다.`)
+                            ],
+                        });
                     }
                 }, 5 * 60 * 1000);
             };
