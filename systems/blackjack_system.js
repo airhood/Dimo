@@ -217,8 +217,10 @@ async function resolveGame(userId, game, interaction) {
         await addBalance(userId, totalTransaction);
     }
 
-    const profitStr = (totalTransaction >= 0 ? '+' : '-') + fmt(totalTransaction) + '원';
-    const color = totalTransaction > 0 ? 0x2ECC71 : totalTransaction < 0 ? 0xEA4144 : 0xF1C40F;
+    // insuranceLost는 이미 별도 차감됐으므로 순 변동액에 포함
+    const netChange = totalTransaction - insuranceLost;
+    const profitStr = (netChange >= 0 ? '+' : '-') + fmt(netChange) + '원';
+    const color = netChange > 0 ? 0x2ECC71 : netChange < 0 ? 0xEA4144 : 0xF1C40F;
 
     const embed = new EmbedBuilder()
         .setColor(color)
@@ -295,8 +297,10 @@ async function resolveInsurance(userId, tookInsurance, interaction) {
             const bjWin = Math.floor(betAmount * 1.5);
             await addBalance(userId, bjWin);
 
+            // insuranceLost는 이미 별도 차감됐으므로 순 수익에서 차감 표시
+            const net = bjWin - insuranceLost;
             const insNote = insuranceLost > 0 ? `\n🛡️ 보험 실패 (-${fmt(insuranceLost)}원)` : '';
-            const embed = buildResultEmbed(playerCards, dealerCards, betAmount, bjWin, `🎉 블랙잭! 승리 (+1.5배)${insNote}`, false);
+            const embed = buildResultEmbed(playerCards, dealerCards, betAmount, net, `🎉 블랙잭! 승리 (+1.5배)${insNote}`, false);
             await interaction.update({ embeds: [embed], components: [] });
         } else {
             game.insuranceLost = insuranceLost;
