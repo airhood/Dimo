@@ -2,7 +2,7 @@
 
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const Reservation = require('../schemas/reservation');
-const { getUserState } = require('../database');
+const { getUserState, getAssetByAccountKey } = require('../database');
 const moment = require('moment-timezone');
 
 const TYPE_LABELS = {
@@ -121,8 +121,8 @@ module.exports = {
                     addConditionOptions(
                         sub.setName('청산')
                             .setDescription('선물 가격 조건 충족 시 보유 포지션 청산')
-                            .addStringOption((opt) =>
-                                opt.setName('종목').setDescription('청산할 종목 코드').setRequired(true)
+                            .addIntegerOption((opt) =>
+                                opt.setName('포지션번호').setDescription('청산할 포지션 번호 (/자산으로 확인)').setMinValue(1).setRequired(true)
                             )
                     )
                 )
@@ -182,19 +182,8 @@ module.exports = {
                     addConditionOptions(
                         sub.setName('청산')
                             .setDescription('옵션 가격 조건 충족 시 보유 포지션 청산')
-                            .addStringOption((opt) =>
-                                opt.setName('타입').setDescription('콜 또는 풋')
-                                    .setChoices(
-                                        { name: '콜옵션', value: 'call' },
-                                        { name: '풋옵션', value: 'put' },
-                                    )
-                                    .setRequired(true)
-                            )
-                            .addStringOption((opt) =>
-                                opt.setName('종목').setDescription('종목 코드').setRequired(true)
-                            )
                             .addIntegerOption((opt) =>
-                                opt.setName('행사가').setDescription('청산할 포지션의 행사 가격 (원)').setMinValue(1).setRequired(true)
+                                opt.setName('포지션번호').setDescription('청산할 포지션 번호 (/자산으로 확인)').setMinValue(1).setRequired(true)
                             )
                     )
                 )
@@ -278,7 +267,10 @@ module.exports = {
                     const qtyStr = r.quantity != null ? ` ${r.quantity}${getUnit(r.type)}` : '';
                     const levStr = r.leverage != null ? ` (${r.leverage}x)` : '';
                     const strikeStr = r.strikePrice != null ? ` 행사가${r.strikePrice.toLocaleString()}원` : '';
-                    return `**${i + 1}.** \`${TYPE_LABELS[r.type]}\` **${r.ticker}**${qtyStr}${levStr}${strikeStr}  조건: ${r.conditionPrice.toLocaleString()}원 ${condLabel}  [${accountLabel}]`;
+                    const targetStr = r.positionNumber != null
+                        ? `포지션 #${r.positionNumber} (${r.ticker})`
+                        : `**${r.ticker}**`;
+                    return `**${i + 1}.** \`${TYPE_LABELS[r.type]}\` ${targetStr}${qtyStr}${levStr}${strikeStr}  조건: ${r.conditionPrice.toLocaleString()}원 ${condLabel}  [${accountLabel}]`;
                 });
 
                 return interaction.reply({
@@ -341,29 +333,49 @@ module.exports = {
 
         const conditionPrice = interaction.options.getInteger('조건가격');
         const conditionType = interaction.options.getString('조건');
-        let type, ticker, quantity, leverage, strikePrice;
+        let type, ticker, quantity, leverage, strikePrice, positionNumber;
 
         if (group === '주식') {
             ticker = interaction.options.getString('종목').toUpperCase();
             quantity = interaction.options.getInteger('수량');
             type = sub === '매수' ? 'stock_buy' : 'stock_sell';
         } else if (group === '선물') {
-            ticker = interaction.options.getString('종목').toUpperCase();
             if (sub === '청산') {
+                positionNumber = interaction.options.getInteger('포지션번호');
+                const assetResult = await getAssetByAccountKey(userId, accountKey);
+                if (assetResult.state !== 'success') {
+                    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('자산 정보를 불러올 수 없습니다.')] });
+                }
+                const pos = assetResult.data.futures[positionNumber - 1];
+                if (!pos) {
+                    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription(`선물 포지션 **#${positionNumber}**이 존재하지 않습니다.`)] });
+                }
+                ticker = pos.ticker;
                 type = 'future_liquidate';
             } else {
+                ticker = interaction.options.getString('종목').toUpperCase();
                 quantity = interaction.options.getInteger('수량');
                 leverage = interaction.options.getInteger('레버리지');
                 type = sub === '롱' ? 'future_long' : 'future_short';
             }
         } else if (group === '옵션') {
-            const optType = interaction.options.getString('타입');
-            ticker = interaction.options.getString('종목').toUpperCase();
-            strikePrice = interaction.options.getInteger('행사가');
             if (sub === '청산') {
-                type = optType === 'call' ? 'option_call_liquidate' : 'option_put_liquidate';
+                positionNumber = interaction.options.getInteger('포지션번호');
+                const assetResult = await getAssetByAccountKey(userId, accountKey);
+                if (assetResult.state !== 'success') {
+                    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('자산 정보를 불러올 수 없습니다.')] });
+                }
+                const pos = assetResult.data.options[positionNumber - 1];
+                if (!pos) {
+                    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription(`옵션 포지션 **#${positionNumber}**이 존재하지 않습니다.`)] });
+                }
+                ticker = pos.ticker;
+                type = pos.optionType === 'call' ? 'option_call_liquidate' : 'option_put_liquidate';
             } else {
+                const optType = interaction.options.getString('타입');
+                ticker = interaction.options.getString('종목').toUpperCase();
                 quantity = interaction.options.getInteger('수량');
+                strikePrice = interaction.options.getInteger('행사가');
                 if (sub === '매수') {
                     type = optType === 'call' ? 'option_call_buy' : 'option_put_buy';
                 } else {
@@ -384,6 +396,7 @@ module.exports = {
             quantity,
             leverage,
             strikePrice,
+            positionNumber,
             conditionPrice,
             conditionType,
             status: 'pending',
@@ -392,6 +405,8 @@ module.exports = {
         const condLabel = conditionType === 'above' ? '이상' : '이하';
         const accountLabel = accountKey === '@self' ? '개인 계정' : `${accountKey.replace('@fund_', '')} 펀드`;
         const qtyStr = quantity != null ? `${quantity}${getUnit(type)}` : '-';
+        const targetLabel = positionNumber != null ? '포지션' : '종목';
+        const targetValue = positionNumber != null ? `#${positionNumber} (\`${ticker}\`)` : `\`${ticker}\``;
         const extraFields = [];
         if (leverage != null) extraFields.push({ name: '레버리지', value: `${leverage}x`, inline: true });
         if (strikePrice != null) extraFields.push({ name: '행사가', value: `${strikePrice.toLocaleString()}원`, inline: true });
@@ -404,7 +419,7 @@ module.exports = {
                     .setDescription('가격 조건이 충족되면 자동으로 체결됩니다.')
                     .addFields(
                         { name: '종류', value: TYPE_LABELS[type], inline: true },
-                        { name: '종목', value: `\`${ticker}\``, inline: true },
+                        { name: targetLabel, value: targetValue, inline: true },
                         { name: '수량', value: qtyStr, inline: true },
                         { name: '조건', value: `${conditionPrice.toLocaleString()}원 ${condLabel}`, inline: true },
                         { name: '계정', value: accountLabel, inline: true },

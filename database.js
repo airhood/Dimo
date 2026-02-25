@@ -508,6 +508,31 @@ module.exports = {
         }
     },
 
+    async getAssetByAccountKey(id, accountKey) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            if (!accountKey || accountKey === '@self') {
+                const userAsset = await Asset.findById(user.asset);
+                if (!userAsset) return { state: 'error', data: null };
+                return { state: 'success', data: userAsset };
+            }
+
+            if (accountKey.startsWith('@fund_')) {
+                const fundName = accountKey.replace('@fund_', '');
+                const fund = await Fund.findOne({ name: fundName }).populate('asset');
+                if (!fund) return { state: 'error', data: null };
+                return { state: 'success', data: fund.asset };
+            }
+
+            return { state: 'error', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getAssetByAccountKey': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
     async getUserState(id) {
         try {
             const result = await User.findOne({ userID: id }).populate('state');

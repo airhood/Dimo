@@ -20,6 +20,7 @@ const ReservationSchema = new Schema({
     quantity: { type: Number },
     leverage: { type: Number },
     strikePrice: { type: Number },
+    positionNumber: { type: Number },
     conditionPrice: { type: Number, required: true },
     conditionType: { type: String, enum: ['above', 'below'], required: true },
     status: {

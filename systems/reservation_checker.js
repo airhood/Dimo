@@ -63,31 +63,13 @@ async function executeReservation(reservation) {
             case 'option_put_sell':   return db.putOptionSell(userId, ticker, quantity, strikePrice);
             case 'etf_buy':           return db.etfBuy(userId, ticker, quantity);
             case 'etf_sell':          return db.etfSell(userId, ticker, quantity);
-            case 'future_liquidate': {
-                const assetResult = await db.getActiveAsset(userId);
-                if (assetResult.state !== 'success') return { state: 'error', data: null };
-                const idx = assetResult.data.futures.findIndex(f => f.ticker === ticker);
-                if (idx === -1) return { state: 'no_position', data: null };
-                return db.futureLiquidate(userId, idx + 1);
-            }
-            case 'option_call_liquidate': {
-                const assetResult = await db.getActiveAsset(userId);
-                if (assetResult.state !== 'success') return { state: 'error', data: null };
-                const idx = assetResult.data.options.findIndex(
-                    o => o.ticker === ticker && o.optionType === 'call' && o.strikePrice === strikePrice
-                );
-                if (idx === -1) return { state: 'no_position', data: null };
-                return db.optionLiquidate(userId, idx + 1);
-            }
-            case 'option_put_liquidate': {
-                const assetResult = await db.getActiveAsset(userId);
-                if (assetResult.state !== 'success') return { state: 'error', data: null };
-                const idx = assetResult.data.options.findIndex(
-                    o => o.ticker === ticker && o.optionType === 'put' && o.strikePrice === strikePrice
-                );
-                if (idx === -1) return { state: 'no_position', data: null };
-                return db.optionLiquidate(userId, idx + 1);
-            }
+            case 'future_liquidate':
+                if (!reservation.positionNumber) return { state: 'error', data: null };
+                return db.futureLiquidate(userId, reservation.positionNumber);
+            case 'option_call_liquidate':
+            case 'option_put_liquidate':
+                if (!reservation.positionNumber) return { state: 'error', data: null };
+                return db.optionLiquidate(userId, reservation.positionNumber);
             default:                  return { state: 'error', data: null };
         }
     });
