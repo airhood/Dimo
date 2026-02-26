@@ -325,7 +325,7 @@ module.exports = {
         const stateResult = await getUserState(userId);
         if (stateResult.state === 'error') {
             return interaction.reply({
-                embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('계정 정보를 불러올 수 없습니다.')],
+                embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
             });
         }
         const fundName = interaction.options.getString('펀드');
@@ -344,7 +344,7 @@ module.exports = {
                 positionNumber = interaction.options.getInteger('포지션번호');
                 const assetResult = await getAssetByAccountKey(userId, accountKey);
                 if (assetResult.state !== 'success') {
-                    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('자산 정보를 불러올 수 없습니다.')] });
+                    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()] });
                 }
                 const pos = assetResult.data.futures[positionNumber - 1];
                 if (!pos) {
@@ -363,7 +363,7 @@ module.exports = {
                 positionNumber = interaction.options.getInteger('포지션번호');
                 const assetResult = await getAssetByAccountKey(userId, accountKey);
                 if (assetResult.state !== 'success') {
-                    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('자산 정보를 불러올 수 없습니다.')] });
+                    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()] });
                 }
                 const pos = assetResult.data.options[positionNumber - 1];
                 if (!pos) {

@@ -177,38 +177,50 @@ async function buildLeaderboardEmbed() {
 async function buildStockChartEmbed(tickerList, hoursAgo, minutesAgo, userId) {
     const tickers = Array.isArray(tickerList) ? tickerList : [tickerList];
     const settings = userId ? getUserChartSettings(userId) : {};
-    const settingsKey = `${(settings.chartType ?? 'area')}_${(settings.candleInterval ?? 5)}_${(settings.indicators ?? []).join('-')}`;
+    const settingsKey = `${(settings.chartType ?? 'area')}_${(settings.candleInterval ?? 2)}_${(settings.indicators ?? []).join('-')}`;
     const key = `stock_${tickers.join(',')}_${hoursAgo}h_${minutesAgo}m_${settingsKey}`;
-    const result = await getCachedChart(key, () =>
+    const charts = await getCachedChart(key, () =>
         generateStockChartImage(tickers, getStockTimeRangeData(tickers, hoursAgo, minutesAgo), minutesAgo, settings)
     );
+    const chartArr = Array.isArray(charts) ? charts : [charts];
+    const mainChart = chartArr[0];
+    const embeds = [
+        new EmbedBuilder()
+            .setTitle(':chart_with_upwards_trend:  실시간 주가 차트')
+            .setImage(`attachment://${mainChart.filename}`)
+            .setTimestamp(),
+    ];
+    chartArr.slice(1).forEach(panel => {
+        embeds.push(new EmbedBuilder().setTitle(panel.label).setImage(`attachment://${panel.filename}`));
+    });
     return {
-        embeds: [
-            new EmbedBuilder()
-                .setTitle(':chart_with_upwards_trend:  실시간 주가 차트')
-                .setImage(`attachment://${result.filename}`)
-                .setTimestamp(),
-        ],
-        files: [{ attachment: result.filepath, name: result.filename }],
+        embeds,
+        files: chartArr.map(c => ({ attachment: c.filepath, name: c.filename })),
     };
 }
 
 async function buildFutureChartEmbed(tickerList, hoursAgo, minutesAgo, userId) {
     const tickers = Array.isArray(tickerList) ? tickerList : [tickerList];
     const settings = userId ? getUserChartSettings(userId) : {};
-    const settingsKey = `${(settings.chartType ?? 'area')}_${(settings.candleInterval ?? 5)}_${(settings.indicators ?? []).join('-')}`;
+    const settingsKey = `${(settings.chartType ?? 'area')}_${(settings.candleInterval ?? 2)}_${(settings.indicators ?? []).join('-')}`;
     const key = `future_${tickers.join(',')}_${hoursAgo}h_${minutesAgo}m_${settingsKey}`;
-    const result = await getCachedChart(key, () =>
+    const charts = await getCachedChart(key, () =>
         generateStockChartImage(tickers, getFutureTimeRangeData(tickers, hoursAgo, minutesAgo), minutesAgo, settings)
     );
+    const chartArr = Array.isArray(charts) ? charts : [charts];
+    const mainChart = chartArr[0];
+    const embeds = [
+        new EmbedBuilder()
+            .setTitle(':chart_with_upwards_trend:  실시간 선물 차트')
+            .setImage(`attachment://${mainChart.filename}`)
+            .setTimestamp(),
+    ];
+    chartArr.slice(1).forEach(panel => {
+        embeds.push(new EmbedBuilder().setTitle(panel.label).setImage(`attachment://${panel.filename}`));
+    });
     return {
-        embeds: [
-            new EmbedBuilder()
-                .setTitle(':chart_with_upwards_trend:  실시간 선물 차트')
-                .setImage(`attachment://${result.filename}`)
-                .setTimestamp(),
-        ],
-        files: [{ attachment: result.filepath, name: result.filename }],
+        embeds,
+        files: chartArr.map(c => ({ attachment: c.filepath, name: c.filename })),
     };
 }
 
@@ -274,8 +286,8 @@ async function restorePersistedSessions(client) {
 
 // ─── error embed ─────────────────────────────────────────────────────────────
 
-function errorEmbed(msg) {
-    return new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(msg).setTimestamp();
+function errorEmbed() {
+    return new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp();
 }
 
 // ─── command definition ───────────────────────────────────────────────────────
@@ -402,7 +414,7 @@ module.exports = {
         if (subCommand === '자산') {
             const initial = await buildAssetEmbed(userId);
             if (!initial) {
-                await interaction.reply({ embeds: [errorEmbed('자산 정보를 불러오지 못했습니다.')], ephemeral: true });
+                await interaction.reply({ embeds: [errorEmbed()], ephemeral: true });
                 return;
             }
             const stopRow = makeStopButton(userId, uid);
@@ -440,7 +452,7 @@ module.exports = {
             }
             const initial = buildOptionPriceEmbed(ticker);
             if (!initial) {
-                await interaction.reply({ embeds: [errorEmbed('옵션 가격 정보를 불러오지 못했습니다.')], ephemeral: true });
+                await interaction.reply({ embeds: [errorEmbed()], ephemeral: true });
                 return;
             }
             const stopRow = makeStopButton(userId, uid);
@@ -467,7 +479,7 @@ module.exports = {
         } else if (subCommand === '순위') {
             const initial = await buildLeaderboardEmbed();
             if (!initial) {
-                await interaction.reply({ embeds: [errorEmbed('순위 정보를 불러오지 못했습니다.')], ephemeral: true });
+                await interaction.reply({ embeds: [errorEmbed()], ephemeral: true });
                 return;
             }
             const stopRow = makeStopButton(userId, uid);

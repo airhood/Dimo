@@ -153,7 +153,7 @@ module.exports = {
 
                 if (result.state === 'error') {
                     await interaction.reply({
-                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('알림 등록 중 오류가 발생했습니다.')],
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
                         flags: MessageFlags.Ephemeral,
                     });
                     return;
@@ -188,7 +188,7 @@ module.exports = {
 
                 if (result.state === 'error') {
                     await interaction.reply({
-                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('알림 등록 중 오류가 발생했습니다.')],
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
                         flags: MessageFlags.Ephemeral,
                     });
                     return;
@@ -220,7 +220,7 @@ module.exports = {
 
                 if (result.state === 'error') {
                     await interaction.reply({
-                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('알림 등록 중 오류가 발생했습니다.')],
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
                         flags: MessageFlags.Ephemeral,
                     });
                     return;
@@ -248,7 +248,7 @@ module.exports = {
             const result = await getNotifications(interaction.user.id);
             if (result.state === 'error') {
                 await interaction.reply({
-                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('알림 목록 조회 중 오류가 발생했습니다.')],
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -305,7 +305,7 @@ module.exports = {
             const result = await deleteNotification(interaction.user.id, num);
             if (result.state === 'error') {
                 await interaction.reply({
-                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('알림 삭제 중 오류가 발생했습니다.')],
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
                     flags: MessageFlags.Ephemeral,
                 });
                 return;

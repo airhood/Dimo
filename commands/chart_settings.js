@@ -1,7 +1,9 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getUserChartSettings, saveUserChartSettings, resetUserChartSettings, DEFAULT_SETTINGS } = require('../systems/chart_settings');
 
-const VALID_INDICATORS = ['RSI', 'MACD', '볼린저밴드', '이동평균선', '이치모쿠'];
+const VALID_INDICATORS = ['RSI', 'MACD', '볼린저밴드', '이동평균선', '이치모쿠', '이치모쿠구름'];
+// 동시에 활성화할 수 없는 지표 쌍
+const EXCLUSIVE_PAIRS = [['이치모쿠', '이치모쿠구름']];
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -46,7 +48,8 @@ module.exports = {
                             { name: 'MACD', value: 'MACD' },
                             { name: '볼린저밴드', value: '볼린저밴드' },
                             { name: '이동평균선 (MA5, MA20)', value: '이동평균선' },
-                            { name: '이치모쿠 구름', value: '이치모쿠' },
+                            { name: '이치모쿠 (전체 5선)', value: '이치모쿠' },
+                            { name: '이치모쿠 구름 (선행스팬A/B + 구름)', value: '이치모쿠구름' },
                         )
                         .setRequired(true)
                 )
@@ -62,7 +65,8 @@ module.exports = {
                             { name: 'MACD', value: 'MACD' },
                             { name: '볼린저밴드', value: '볼린저밴드' },
                             { name: '이동평균선 (MA5, MA20)', value: '이동평균선' },
-                            { name: '이치모쿠 구름', value: '이치모쿠' },
+                            { name: '이치모쿠 (전체 5선)', value: '이치모쿠' },
+                            { name: '이치모쿠 구름 (선행스팬A/B + 구름)', value: '이치모쿠구름' },
                         )
                         .setRequired(true)
                 )
@@ -131,6 +135,15 @@ module.exports = {
         } else if (subCommand === '지표추가') {
             const indicator = interaction.options.getString('지표');
             const s = getUserChartSettings(userId);
+            // 상호 배타 처리: 이치모쿠 ↔ 이치모쿠구름
+            for (const pair of EXCLUSIVE_PAIRS) {
+                if (pair.includes(indicator)) {
+                    pair.filter(p => p !== indicator).forEach(other => {
+                        const idx = s.indicators.indexOf(other);
+                        if (idx !== -1) s.indicators.splice(idx, 1);
+                    });
+                }
+            }
             if (!s.indicators.includes(indicator)) {
                 s.indicators.push(indicator);
                 saveUserChartSettings(userId, s);

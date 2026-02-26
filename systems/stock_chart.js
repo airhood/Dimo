@@ -74,12 +74,18 @@ function buildCandles(prices, interval, startT) {
     for (let i = 0; i < prices.length; i += interval) {
         const slice = prices.slice(i, i + interval);
         if (slice.length === 0) continue;
+        // interval=1 일 때 slice에 값이 하나뿐이라 o=h=l=c로 캔들이 납작해지는 문제 방지
+        // 이전 가격을 시가로, 현재 가격을 종가로 사용
+        const open = interval === 1
+            ? (i > 0 ? prices[i - 1] : slice[0])
+            : slice[0];
+        const close = slice[slice.length - 1];
         candles.push({
             t: startT + i,
-            o: slice[0],
-            h: Math.max(...slice),
-            l: Math.min(...slice),
-            c: slice[slice.length - 1],
+            o: open,
+            h: Math.max(open, ...slice),
+            l: Math.min(open, ...slice),
+            c: close,
         });
     }
     return candles;
@@ -153,9 +159,9 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
     const hasBB = activeIndicators.includes('볼린저밴드');
     const hasMA = activeIndicators.includes('이동평균선');
     const hasIchimoku = activeIndicators.includes('이치모쿠');
+    const hasIchimokuCloud = activeIndicators.includes('이치모쿠구름');
 
-    const hasPanel = hasRSI || hasMACD;
-    const mainHeight = hasPanel ? 280 : 350;
+    const mainHeight = 350;
 
     // ── 패널용 prices 배열 (단일 종목 종가) ──────────────────────────────────
     let closePrices = [];
@@ -221,6 +227,25 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
             ]) {
                 mainSeries.push({ name, type: 'line', data: toXY(candleT, data) });
             }
+        }
+
+        // 이치모쿠 구름 오버레이 (선행스팬A/B 라인 + 구름 채움)
+        if (hasIchimokuCloud) {
+            const candleClose = candles.map(c => c.c);
+            const candleT = candles.map(c => c.t);
+            const ich = calcIchimoku(candleClose);
+            mainSeries.push({ name: '선행스팬A', type: 'line', data: toXY(candleT, ich.spanA) });
+            mainSeries.push({ name: '선행스팬B', type: 'line', data: toXY(candleT, ich.spanB) });
+            const cloudData = candleT
+                .map((t, i) => {
+                    const a = ich.spanA[i], b = ich.spanB[i];
+                    if (a !== null && b !== null) {
+                        return { x: t, y: [Math.min(a, b), Math.max(a, b)] };
+                    }
+                    return null;
+                })
+                .filter(Boolean);
+            mainSeries.push({ name: '구름', type: 'rangeArea', data: cloudData });
         }
     } else {
         // Area 시리즈 (멀티 가능)
@@ -290,6 +315,32 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
                     });
                 }
             }
+
+            // 이치모쿠 구름 오버레이 (선행스팬A/B 라인 + 구름 채움)
+            if (hasIchimokuCloud) {
+                const ich = calcIchimoku(closePrices);
+                const tArr2 = tPoints.map(p => p.t);
+                mainSeries.push({
+                    name: '선행스팬A',
+                    type: 'line',
+                    data: tArr2.map((t, i) => ich.spanA[i] !== null ? [t, ich.spanA[i]] : null).filter(Boolean),
+                });
+                mainSeries.push({
+                    name: '선행스팬B',
+                    type: 'line',
+                    data: tArr2.map((t, i) => ich.spanB[i] !== null ? [t, ich.spanB[i]] : null).filter(Boolean),
+                });
+                const cloudData = tArr2
+                    .map((t, i) => {
+                        const a = ich.spanA[i], b = ich.spanB[i];
+                        if (a !== null && b !== null) {
+                            return { x: t, y: [Math.min(a, b), Math.max(a, b)] };
+                        }
+                        return null;
+                    })
+                    .filter(Boolean);
+                mainSeries.push({ name: '구름', type: 'rangeArea', data: cloudData });
+            }
         }
     }
 
@@ -312,27 +363,45 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
             },
         },
         series: mainSeries,
-        xaxis: { type: 'linear', title: { text: '시간 (분)' } },
-        yaxis: { title: { text: '가격' } },
+        xaxis: { type: 'linear', tickAmount: 8, title: { text: '시간 (분)' } },
+        yaxis: { title: { text: '가격' }, decimalsInFloat: 0 },
         legend: { show: hasOverlay },
     };
     // 오버레이가 있을 때 stroke width 배열 + 명시적 색상 지정
     // stroke.opacity 배열은 QuickChart ApexCharts 버전에서 렌더링 오류를 일으킴 — 사용 금지
     if (hasOverlay) {
-        // 지표별 고정 색상 (series 순서: candle → MA5 → MA20 → BB Upper/Middle/Lower → 이치모쿠 5선)
+        // 지표별 고정 색상/선폭 (series 순서에 맞게 구성)
         const overlayColors = [];
-        if (hasMA)       overlayColors.push('#FF8C00', '#1E90FF');                                    // MA5, MA20
-        if (hasBB)       overlayColors.push('#E74C3C', '#7F8C8D', '#E74C3C');                         // Upper, Middle, Lower
-        if (hasIchimoku) overlayColors.push('#E53935', '#1565C0', '#43A047', '#FB8C00', '#8E24AA');   // 전환, 기준, 선행A, 선행B, 후행
+        const overlayStrokeWidths = [];
+        if (hasMA) {
+            overlayColors.push('#FF8C00', '#1E90FF');                                    // MA5, MA20
+            overlayStrokeWidths.push(1.5, 1.5);
+        }
+        if (hasBB) {
+            overlayColors.push('#E74C3C', '#7F8C8D', '#E74C3C');                         // Upper, Middle, Lower
+            overlayStrokeWidths.push(1.5, 1.5, 1.5);
+        }
+        if (hasIchimoku) {
+            overlayColors.push('#E53935', '#1565C0', '#43A047', '#FB8C00', '#8E24AA');   // 전환, 기준, 선행A, 선행B, 후행
+            overlayStrokeWidths.push(1.5, 1.5, 1.5, 1.5, 1.5);
+        }
+        if (hasIchimokuCloud) {
+            overlayColors.push('#43A047', '#EF5350', '#78909C');                         // 선행A(초록), 선행B(빨강), 구름(회청)
+            overlayStrokeWidths.push(1.5, 1.5, 0);                                      // 구름 rangeArea는 테두리 없음
+        }
 
-        candleConfig.colors = ['#546E7A', ...overlayColors];  // #546E7A: 캔들 수염 색
-        candleConfig.stroke = {
-            width: [1, ...Array(overlayCount).fill(1.5)],
-        };
+        candleConfig.colors = ['#546E7A', ...overlayColors];
+        candleConfig.stroke = { width: [1, ...overlayStrokeWidths] };
     }
 
-    const areaStrokeOpacities = [1, ...Array(overlayCount).fill(0.55)];
-    const areaFillOpacities   = [(isMulti ? 0.1 : 0.3), ...Array(overlayCount).fill(0)];
+    const overlayStrokeOps = [];
+    const overlayFillOps   = [];
+    if (hasMA)           { overlayStrokeOps.push(0.55, 0.55);                  overlayFillOps.push(0, 0); }
+    if (hasBB)           { overlayStrokeOps.push(0.55, 0.55, 0.55);            overlayFillOps.push(0, 0, 0); }
+    if (hasIchimoku)     { overlayStrokeOps.push(0.55, 0.55, 0.55, 0.55, 0.55); overlayFillOps.push(0, 0, 0, 0, 0); }
+    if (hasIchimokuCloud){ overlayStrokeOps.push(0.55, 0.55, 0.3);             overlayFillOps.push(0, 0, 0.25); }
+    const areaStrokeOpacities = [1, ...overlayStrokeOps];
+    const areaFillOpacities   = [(isMulti ? 0.1 : 0.3), ...overlayFillOps];
 
     const mainConfig = isCandle
         ? candleConfig
@@ -343,8 +412,8 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
             stroke: { width: 2, curve: 'smooth', opacity: areaStrokeOpacities },
             fill:   { opacity: areaFillOpacities },
             series: mainSeries,
-            xaxis: { type: 'linear', title: { text: '시간 (분)' } },
-            yaxis: { title: { text: '가격' } },
+            xaxis: { type: 'linear', tickAmount: 8, title: { text: '시간 (분)' } },
+            yaxis: { title: { text: '가격' }, decimalsInFloat: 0 },
             legend: { show: isMulti || hasOverlay },
         };
 
@@ -355,21 +424,24 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
         const tArr = normalizedPts.map(p => p.t);
         const rsi = calcRSI(closePrices, 14);
         panelConfigs.push({
-            chart: { type: 'line' },
-            title: { text: 'RSI (14)' },
-            dataLabels: { enabled: false },
-            stroke: { width: 2, curve: 'smooth' },
-            series: [{
-                name: 'RSI',
-                data: tArr.map((t, i) => rsi[i] !== null ? [t, rsi[i]] : null).filter(Boolean),
-            }],
-            xaxis: { type: 'linear', title: { text: '시간 (분)' } },
-            yaxis: { min: 0, max: 100, title: { text: 'RSI' } },
-            annotations: {
-                yaxis: [
-                    { y: 70, borderColor: '#FF0000', label: { text: '과매수' } },
-                    { y: 30, borderColor: '#0000FF', label: { text: '과매도' } },
-                ],
+            label: 'RSI (14)',
+            config: {
+                chart: { type: 'line' },
+                title: { text: 'RSI (14)' },
+                dataLabels: { enabled: false },
+                stroke: { width: 2, curve: 'smooth' },
+                series: [{
+                    name: 'RSI',
+                    data: tArr.map((t, i) => rsi[i] !== null ? [t, rsi[i]] : null).filter(Boolean),
+                }],
+                xaxis: { type: 'linear', tickAmount: 8, title: { text: '시간 (분)' } },
+                yaxis: { min: 0, max: 100, title: { text: 'RSI' }, decimalsInFloat: 1 },
+                annotations: {
+                    yaxis: [
+                        { y: 70, borderColor: '#FF0000', label: { text: '과매수' } },
+                        { y: 30, borderColor: '#0000FF', label: { text: '과매도' } },
+                    ],
+                },
             },
         });
     }
@@ -378,40 +450,49 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
         const tArr = normalizedPts.map(p => p.t);
         const { macd, signal } = calcMACD(closePrices, 12, 26, 9);
         panelConfigs.push({
-            chart: { type: 'line' },
-            title: { text: 'MACD (12,26,9)' },
-            dataLabels: { enabled: false },
-            stroke: { width: 2, curve: 'smooth' },
-            series: [
-                {
-                    name: 'MACD',
-                    data: tArr.map((t, i) => macd[i] !== null ? [t, macd[i]] : null).filter(Boolean),
-                },
-                {
-                    name: 'Signal',
-                    data: tArr.map((t, i) => signal[i] !== null ? [t, signal[i]] : null).filter(Boolean),
-                },
-            ],
-            xaxis: { type: 'linear', title: { text: '시간 (분)' } },
-            yaxis: { title: { text: 'MACD' } },
-            legend: { show: true },
+            label: 'MACD (12,26,9)',
+            config: {
+                chart: { type: 'line' },
+                title: { text: 'MACD (12,26,9)' },
+                dataLabels: { enabled: false },
+                stroke: { width: 2, curve: 'smooth' },
+                series: [
+                    {
+                        name: 'MACD',
+                        data: tArr.map((t, i) => macd[i] !== null ? [t, macd[i]] : null).filter(Boolean),
+                    },
+                    {
+                        name: 'Signal',
+                        data: tArr.map((t, i) => signal[i] !== null ? [t, signal[i]] : null).filter(Boolean),
+                    },
+                ],
+                xaxis: { type: 'linear', tickAmount: 8, title: { text: '시간 (분)' } },
+                yaxis: { title: { text: 'MACD' }, decimalsInFloat: 2 },
+                legend: { show: true },
+            },
         });
     }
 
     // ── 렌더링 ────────────────────────────────────────────────────────────────
-    const buffers = [];
-    buffers.push(await renderChartBuffer(mainConfig, 700, mainHeight));
-    for (const cfg of panelConfigs) {
-        buffers.push(await renderChartBuffer(cfg, 700, 180));
+    const results = [];
+
+    const mainBuffer = await renderChartBuffer(mainConfig, 700, mainHeight);
+    const mainFilepath = `assets/charts/chart_${chartFileIndex}.png`;
+    const mainFilename = `chart_${chartFileIndex}.png`;
+    fs.writeFileSync(mainFilepath, mainBuffer);
+    chartFileIndex++;
+    results.push({ filepath: mainFilepath, filename: mainFilename, label: 'main' });
+
+    for (const { config, label } of panelConfigs) {
+        const panelBuffer = await renderChartBuffer(config, 700, 180);
+        const panelFilepath = `assets/charts/chart_${chartFileIndex}.png`;
+        const panelFilename = `chart_${chartFileIndex}.png`;
+        fs.writeFileSync(panelFilepath, panelBuffer);
+        chartFileIndex++;
+        results.push({ filepath: panelFilepath, filename: panelFilename, label });
     }
 
-    const finalBuffer = await compositeVertical(buffers);
-
-    const filepath = `assets/charts/chart_${chartFileIndex}.png`;
-    const filename = `chart_${chartFileIndex}.png`;
-    fs.writeFileSync(filepath, finalBuffer);
-    chartFileIndex++;
-    return { filepath, filename };
+    return results;
 }
 
 exports.generateStockChartImage = generateStockChartImage;
@@ -465,8 +546,8 @@ async function generateIndexChartImage(nameOrList, timeRangeData) {
         stroke: { width: 2, curve: 'smooth' },
         fill: { opacity: isMulti ? 0.1 : 0.3 },
         series: formattedSeries,
-        xaxis: { type: 'linear', title: { text: '시간 (분)' } },
-        yaxis: { title: { text: '가격' } },
+        xaxis: { type: 'linear', tickAmount: 8, title: { text: '시간 (분)' } },
+        yaxis: { title: { text: '가격' }, decimalsInFloat: 0 },
         legend: { show: isMulti },
     };
 

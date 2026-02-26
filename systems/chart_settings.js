@@ -5,7 +5,7 @@ const SETTINGS_FILE = path.join(__dirname, '../data/chart_settings.json');
 
 const DEFAULT_SETTINGS = {
     chartType: 'area',
-    candleInterval: 1,
+    candleInterval: 2,
     indicators: [],
 };
 

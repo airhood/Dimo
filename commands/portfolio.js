@@ -5,6 +5,7 @@ const { getActiveAsset } = require('../database');
 const { getStockPrice, getFuturePrice, getOptionPrice } = require('../systems/stock_sim');
 const { getEtfPrice, ETF_DEFINITIONS } = require('../systems/etf_system');
 const { getFundPrice } = require('../systems/fund_price');
+const { calcCurrentValue } = require('../systems/real_estate_system');
 const { OPTION_UNIT_QUANTITY } = require('../setting');
 
 function n(num) {
@@ -59,7 +60,7 @@ module.exports = {
         const result = await getActiveAsset(userId);
         if (result.state === 'error') {
             return interaction.editReply({
-                embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('오류').setDescription('자산 정보를 불러올 수 없습니다.')],
+                embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`).setTimestamp()],
             });
         }
 
@@ -228,6 +229,31 @@ module.exports = {
             totalCost += fundCost;
             fields.push({
                 name: `:bank:  펀드  (평가 ${n(fundValue)}원  ${pnlLine(sectionPnl, sectionPct)})`,
+                value: codeBlock(fmt),
+            });
+        }
+
+        // ── 부동산 ───────────────────────────────────────────────────────────────
+        if (asset.properties && asset.properties.length > 0) {
+            let propValue = 0, propCost = 0;
+            let fmt = '';
+            for (const prop of asset.properties) {
+                const cur = calcCurrentValue(prop);
+                const cost = prop.purchasePrice;
+                const p = cur - cost;
+                const pctVal = cost !== 0 ? (p / cost) * 100 : 0;
+                propValue += cur;
+                propCost += cost;
+                if (fmt) fmt += '\n';
+                fmt += `${prop.name} (${prop.region} ${prop.type})  현시세 ${n(cur)}원\n| 평가손익: ${pnlLine(p, pctVal)}`;
+            }
+            const sectionPnl = propValue - propCost;
+            const sectionPct = propCost !== 0 ? (sectionPnl / propCost) * 100 : 0;
+            totalValue += propValue;
+            totalPnl += sectionPnl;
+            totalCost += propCost;
+            fields.push({
+                name: `:house:  부동산  (평가 ${n(propValue)}원  ${pnlLine(sectionPnl, sectionPct)})`,
                 value: codeBlock(fmt),
             });
         }

@@ -264,6 +264,16 @@ function calculateAssetValue(userAsset, loanDueDate = new Date()) {
         value -= loan.amount * interestRate;
     });
 
+    if (userAsset.properties && userAsset.properties.length > 0) {
+        const { calcCurrentValue } = require('./real_estate_system');
+        userAsset.properties.forEach((prop) => {
+            value += calcCurrentValue(prop);
+            if (prop.mortgage) {
+                value -= prop.mortgage.amount;
+            }
+        });
+    }
+
     return value;
 }
 

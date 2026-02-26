@@ -3,6 +3,7 @@ const { getStockPrice, getFuturePrice, getOptionPrice } = require('../systems/st
 const { getRealtimeFundPrice } = require('../systems/fund_price');
 const { getEtfPrice, getEtfNavPrice, ETF_DEFINITIONS } = require('../systems/etf_system');
 const { OPTION_UNIT_QUANTITY } = require('../setting');
+const { calcCurrentValue } = require('../systems/real_estate_system');
 
 const ROUND_POS = 3;
 
@@ -522,6 +523,33 @@ async function buildAssetFields(assetData, loadDetails) {
         fields.push({
             name: ':chart_with_upwards_trend:  ETF',
             value: `\`\`\`${etf_format}\`\`\``,
+        });
+    }
+
+    let prop_format = '';
+    if (assetData.properties && assetData.properties.length > 0) {
+        for (const prop of assetData.properties) {
+            if (prop_format !== '') prop_format += '\n';
+            const currentValue = calcCurrentValue(prop);
+            const pnl = currentValue - prop.purchasePrice;
+            const pnlRate = (pnl / prop.purchasePrice) * 100;
+            const pnlSign = pnl >= 0 ? '+' : '';
+            const mortgageStr = prop.mortgage?.amount != null ? `\n| 담보대출: ${prop.mortgage.amount.toLocaleString()}원` : '';
+            if (loadDetails) {
+                prop_format += `${prop.name} (${prop.region} ${prop.type}, ${prop.size}평)
+| 현재시세: ${currentValue.toLocaleString()}원
+| 매수가격: ${prop.purchasePrice.toLocaleString()}원
+| 평가손익: ${pnlSign}${pnl.toLocaleString()}원 (${pnlSign}${formatPercent(pnlRate)}%)
+| 임대수익률: ${prop.rentalYield}%/3일${mortgageStr}`;
+            } else {
+                prop_format += `${prop.name} (${prop.region} ${prop.type}) 현시세 ${currentValue.toLocaleString()}원 (${pnlSign}${formatPercent(pnlRate)}%)`;
+            }
+        }
+    }
+    if (prop_format !== '') {
+        fields.push({
+            name: ':house:  부동산',
+            value: `\`\`\`${prop_format}\`\`\``,
         });
     }
 

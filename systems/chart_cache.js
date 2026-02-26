@@ -1,12 +1,19 @@
 const fs = require('fs');
 const { serverLog } = require('../server/server_logger');
 
-// key → { filepath, filename, timestamp } | { promise, timestamp }
+// key → { result, timestamp } | { promise, timestamp }
 const chartCache = new Map();
 
 // Keep charts alive for 30 seconds — long enough to deduplicate
 // concurrent requests within the same 1-minute update cycle.
 const CHART_TTL_MS = 30 * 1000;
+
+function deleteResultFiles(result) {
+    try {
+        const files = Array.isArray(result) ? result : [result];
+        files.forEach(f => { if (f && f.filepath) fs.unlink(f.filepath, () => {}); });
+    } catch {}
+}
 
 async function getCachedChart(key, generateFn) {
     const now = Date.now();
@@ -19,12 +26,10 @@ async function getCachedChart(key, generateFn) {
         }
         if (now - cached.timestamp < CHART_TTL_MS) {
             // Cache hit
-            return { filepath: cached.filepath, filename: cached.filename };
+            return cached.result;
         }
-        // Expired — delete old file and regenerate
-        try {
-            fs.unlink(cached.filepath, () => {});
-        } catch {}
+        // Expired — delete old files and regenerate
+        deleteResultFiles(cached.result);
         chartCache.delete(key);
     }
 
@@ -33,11 +38,7 @@ async function getCachedChart(key, generateFn) {
     const promise = (async () => {
         try {
             const result = await generateFn();
-            chartCache.set(key, {
-                filepath: result.filepath,
-                filename: result.filename,
-                timestamp: Date.now(),
-            });
+            chartCache.set(key, { result, timestamp: Date.now() });
             return result;
         } catch (err) {
             chartCache.delete(key);

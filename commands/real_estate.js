@@ -95,7 +95,6 @@ module.exports = {
                             .setTitle('서버 오류')
                             .setDescription('매물 목록을 불러오는 중 오류가 발생했습니다.')
                     ],
-                    ephemeral: true,
                 });
             }
 
@@ -166,7 +165,6 @@ module.exports = {
                             .setTitle('서버 오류')
                             .setDescription('부동산 정보를 불러오는 중 오류가 발생했습니다.')
                     ],
-                    ephemeral: true,
                 });
             }
 
@@ -213,7 +211,6 @@ module.exports = {
             if (marketResult.state === 'error') {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription('매물 정보를 불러올 수 없습니다.')],
-                    ephemeral: true,
                 });
             }
 
@@ -222,7 +219,6 @@ module.exports = {
             if (!listing) {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('매물 없음').setDescription('해당 번호의 매물이 없습니다.')],
-                    ephemeral: true,
                 });
             }
 
@@ -268,7 +264,6 @@ module.exports = {
             if (propResult.state === 'error') {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription('부동산 정보를 불러올 수 없습니다.')],
-                    ephemeral: true,
                 });
             }
 
@@ -277,14 +272,12 @@ module.exports = {
             if (!prop) {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('부동산 없음').setDescription('해당 번호의 부동산이 없습니다.')],
-                    ephemeral: true,
                 });
             }
 
             if (prop.mortgage && prop.mortgage.amount > 0) {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('매도 불가').setDescription('담보대출이 남아 있습니다. 상환 후 매도해주세요.')],
-                    ephemeral: true,
                 });
             }
 
@@ -328,7 +321,6 @@ module.exports = {
             if (propResult.state === 'error') {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription('부동산 정보를 불러올 수 없습니다.')],
-                    ephemeral: true,
                 });
             }
 
@@ -337,7 +329,6 @@ module.exports = {
             if (!prop) {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('부동산 없음').setDescription('해당 번호의 부동산이 없습니다.')],
-                    ephemeral: true,
                 });
             }
 
@@ -345,14 +336,12 @@ module.exports = {
             if (amount > maxLoan) {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('한도 초과').setDescription(`LTV 70% 기준 최대 대출 가능 금액: **${maxLoan.toLocaleString()}원**`)],
-                    ephemeral: true,
                 });
             }
 
             if (prop.mortgage && prop.mortgage.amount > 0) {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('이미 대출 중').setDescription('해당 부동산에 이미 담보대출이 있습니다.')],
-                    ephemeral: true,
                 });
             }
 
@@ -399,7 +388,6 @@ module.exports = {
             if (propResult.state === 'error') {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription('부동산 정보를 불러올 수 없습니다.')],
-                    ephemeral: true,
                 });
             }
 
@@ -408,14 +396,12 @@ module.exports = {
             if (!prop) {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('부동산 없음').setDescription('해당 번호의 부동산이 없습니다.')],
-                    ephemeral: true,
                 });
             }
 
             if (!prop.mortgage || !prop.mortgage.amount || prop.mortgage.amount <= 0) {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('대출 없음').setDescription('해당 부동산에 담보대출이 없습니다.')],
-                    ephemeral: true,
                 });
             }
 
@@ -423,13 +409,11 @@ module.exports = {
             if (result.state === 'no_balance') {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('잔액 부족').setDescription(`상환에 필요한 잔액이 부족합니다. 필요 금액: **${prop.mortgage.amount.toLocaleString()}원**`)],
-                    ephemeral: true,
                 });
             }
             if (result.state === 'error') {
                 return interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription('상환 중 오류가 발생했습니다.')],
-                    ephemeral: true,
                 });
             }
 

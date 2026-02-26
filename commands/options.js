@@ -303,30 +303,33 @@ module.exports = {
                 return;
             }
 
-            const result = await generateStockChartImage(tickerList, getOptionTimeRangeData(tickerList, (days * 24) + hours, minutes, direction, strikePrice), minutes, chartSettings);
+            const charts = await generateStockChartImage(tickerList, getOptionTimeRangeData(tickerList, (days * 24) + hours, minutes, direction, strikePrice), minutes, chartSettings);
 
             try {
-                await interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setTitle(':chart_with_upwards_trend:  옵션 차트')
-                            .setImage(`attachment://${result.filename}`)
-                    ],
-                    files: [{
-                        attachment: result.filepath,
-                        name: result.filename,
-                    }],
+                const mainChart = charts[0];
+                const embeds = [
+                    new EmbedBuilder()
+                        .setTitle(':chart_with_upwards_trend:  옵션 차트')
+                        .setImage(`attachment://${mainChart.filename}`),
+                ];
+                charts.slice(1).forEach(panel => {
+                    embeds.push(new EmbedBuilder().setTitle(panel.label).setImage(`attachment://${panel.filename}`));
                 });
 
-                try {
-                    fs.unlink(result.filepath,  (err) => {
-                        if (err) {
-                            serverLog(`[ERROR] Error deleting chart image file: ${err}`);
-                        }
-                    });
-                } catch (err) {
-                    serverLog(`[ERROR] Error deleting chart image file: ${err}`);
-                }
+                await interaction.reply({
+                    embeds,
+                    files: charts.map(c => ({ attachment: c.filepath, name: c.filename })),
+                });
+
+                charts.forEach(c => {
+                    try {
+                        fs.unlink(c.filepath, (err) => {
+                            if (err) serverLog(`[ERROR] Error deleting chart image file: ${err}`);
+                        });
+                    } catch (err) {
+                        serverLog(`[ERROR] Error deleting chart image file: ${err}`);
+                    }
+                });
             } catch (err) {
                 serverLog(`[ERROR] Error uploading chart image: ${err}`);
 
