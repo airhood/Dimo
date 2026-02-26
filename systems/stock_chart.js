@@ -316,11 +316,18 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
         yaxis: { title: { text: '가격' } },
         legend: { show: hasOverlay },
     };
-    // 오버레이가 있을 때만 stroke 배열 추가 (fill은 건드리지 않음 — 캔들 색상은 plotOptions에서 제어)
+    // 오버레이가 있을 때 stroke width 배열 + 명시적 색상 지정
+    // stroke.opacity 배열은 QuickChart ApexCharts 버전에서 렌더링 오류를 일으킴 — 사용 금지
     if (hasOverlay) {
+        // 지표별 고정 색상 (series 순서: candle → MA5 → MA20 → BB Upper/Middle/Lower → 이치모쿠 5선)
+        const overlayColors = [];
+        if (hasMA)       overlayColors.push('#FF8C00', '#1E90FF');                                    // MA5, MA20
+        if (hasBB)       overlayColors.push('#E74C3C', '#7F8C8D', '#E74C3C');                         // Upper, Middle, Lower
+        if (hasIchimoku) overlayColors.push('#E53935', '#1565C0', '#43A047', '#FB8C00', '#8E24AA');   // 전환, 기준, 선행A, 선행B, 후행
+
+        candleConfig.colors = ['#546E7A', ...overlayColors];  // #546E7A: 캔들 수염 색
         candleConfig.stroke = {
-            width:   [1, ...Array(overlayCount).fill(1.5)],
-            opacity: [1, ...Array(overlayCount).fill(0.55)],
+            width: [1, ...Array(overlayCount).fill(1.5)],
         };
     }
 

@@ -135,8 +135,8 @@ function calcIchimoku(prices) {
     const chikou = new Array(n).fill(null);
 
     const midpoint = (arr, from, to) => {
-        if (from < 0) return null;
-        const slice = arr.slice(from, to + 1);
+        const slice = arr.slice(Math.max(0, from), to + 1);
+        if (slice.length === 0) return null;
         return (Math.max(...slice) + Math.min(...slice)) / 2;
     };
 
