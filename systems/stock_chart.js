@@ -327,8 +327,8 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
         plotOptions: {
             candlestick: {
                 colors: {
-                    upward: '#FF9999',   // 상승: 파스텔 빨강
-                    downward: '#99AAFF', // 하락: 파스텔 파랑
+                    upward: '#FF6B6B',   // 상승: 파스텔 빨강
+                    downward: '#6B8CFF', // 하락: 파스텔 파랑
                 },
             },
         },
