@@ -183,22 +183,18 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
             data: candles.map(c => ({ x: c.t, y: [c.o, c.h, c.l, c.c] })),
         });
 
-        // 오버레이 — MA (캔들 닫기 기준)
+        // 캔들 오버레이: 캔들 데이터가 {x,y} 객체 형식이므로 라인도 동일하게 맞춤
+        const toXY = (tArr, vals) =>
+            tArr.map((t, i) => vals[i] !== null ? { x: t, y: vals[i] } : null).filter(Boolean);
+
+        // 오버레이 — MA (캔들 종가 기준)
         if (hasMA) {
             const candleClose = candles.map(c => c.c);
             const candleT = candles.map(c => c.t);
             const ma5 = calcMA(candleClose, 5);
             const ma20 = calcMA(candleClose, 20);
-            mainSeries.push({
-                name: 'MA5',
-                type: 'line',
-                data: candleT.map((t, i) => ma5[i] !== null ? [t, ma5[i]] : null).filter(Boolean),
-            });
-            mainSeries.push({
-                name: 'MA20',
-                type: 'line',
-                data: candleT.map((t, i) => ma20[i] !== null ? [t, ma20[i]] : null).filter(Boolean),
-            });
+            mainSeries.push({ name: 'MA5',  type: 'line', data: toXY(candleT, ma5) });
+            mainSeries.push({ name: 'MA20', type: 'line', data: toXY(candleT, ma20) });
         }
 
         // 볼린저 밴드 오버레이
@@ -206,21 +202,9 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
             const candleClose = candles.map(c => c.c);
             const candleT = candles.map(c => c.t);
             const bb = calcBB(candleClose, 20, 2);
-            mainSeries.push({
-                name: 'BB Upper',
-                type: 'line',
-                data: candleT.map((t, i) => bb.upper[i] !== null ? [t, bb.upper[i]] : null).filter(Boolean),
-            });
-            mainSeries.push({
-                name: 'BB Middle',
-                type: 'line',
-                data: candleT.map((t, i) => bb.middle[i] !== null ? [t, bb.middle[i]] : null).filter(Boolean),
-            });
-            mainSeries.push({
-                name: 'BB Lower',
-                type: 'line',
-                data: candleT.map((t, i) => bb.lower[i] !== null ? [t, bb.lower[i]] : null).filter(Boolean),
-            });
+            mainSeries.push({ name: 'BB Upper',  type: 'line', data: toXY(candleT, bb.upper) });
+            mainSeries.push({ name: 'BB Middle', type: 'line', data: toXY(candleT, bb.middle) });
+            mainSeries.push({ name: 'BB Lower',  type: 'line', data: toXY(candleT, bb.lower) });
         }
 
         // 이치모쿠 오버레이
@@ -228,19 +212,14 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
             const candleClose = candles.map(c => c.c);
             const candleT = candles.map(c => c.t);
             const ich = calcIchimoku(candleClose);
-            const ichSeries = [
-                { name: '전환선', data: ich.tenkan },
-                { name: '기준선', data: ich.kijun },
+            for (const { name, data } of [
+                { name: '전환선',    data: ich.tenkan },
+                { name: '기준선',    data: ich.kijun },
                 { name: '선행스팬A', data: ich.spanA },
                 { name: '선행스팬B', data: ich.spanB },
-                { name: '후행스팬', data: ich.chikou },
-            ];
-            for (const s of ichSeries) {
-                mainSeries.push({
-                    name: s.name,
-                    type: 'line',
-                    data: candleT.map((t, i) => s.data[i] !== null ? [t, s.data[i]] : null).filter(Boolean),
-                });
+                { name: '후행스팬',  data: ich.chikou },
+            ]) {
+                mainSeries.push({ name, type: 'line', data: toXY(candleT, data) });
             }
         }
     } else {
@@ -337,13 +316,12 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
         yaxis: { title: { text: '가격' } },
         legend: { show: hasOverlay },
     };
-    // 오버레이가 있을 때만 stroke/fill 배열 추가
+    // 오버레이가 있을 때만 stroke 배열 추가 (fill은 건드리지 않음 — 캔들 색상은 plotOptions에서 제어)
     if (hasOverlay) {
         candleConfig.stroke = {
             width:   [1, ...Array(overlayCount).fill(1.5)],
             opacity: [1, ...Array(overlayCount).fill(0.55)],
         };
-        candleConfig.fill = { opacity: [1, ...Array(overlayCount).fill(0)] };
     }
 
     const areaStrokeOpacities = [1, ...Array(overlayCount).fill(0.55)];
