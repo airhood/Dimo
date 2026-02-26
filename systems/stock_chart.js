@@ -317,36 +317,46 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
     // ── 메인 차트 config ──────────────────────────────────────────────────────
     const hasOverlay = mainSeries.length > 1;
     const overlayCount = mainSeries.length - 1;
-    // 오버레이 지표는 stroke/fill 모두 반투명 처리
-    const strokeOpacities = [1, ...Array(overlayCount).fill(0.55)];
-    const fillOpacities   = [(isMulti ? 0.1 : 0.3), ...Array(overlayCount).fill(0)];
 
-    const mainConfig = isCandle
-        ? {
-            chart: { type: 'candlestick' },
-            title: { text: title },
-            dataLabels: { enabled: false },
-            plotOptions: {
-                candlestick: {
-                    colors: {
-                        upward: '#FF9999',    // 상승: 파스텔 빨강
-                        downward: '#99AAFF',  // 하락: 파스텔 파랑
-                    },
+    // 오버레이가 있을 때만 per-series opacity 배열 적용
+    // 캔들차트에 stroke/fill 배열을 무조건 주면 몸통이 투명해지거나 수염이 사라짐
+    const candleConfig = {
+        chart: { type: 'candlestick' },
+        title: { text: title },
+        dataLabels: { enabled: false },
+        plotOptions: {
+            candlestick: {
+                colors: {
+                    upward: '#FF9999',   // 상승: 파스텔 빨강
+                    downward: '#99AAFF', // 하락: 파스텔 파랑
                 },
             },
-            stroke: { width: [0, ...Array(overlayCount).fill(1.5)], opacity: strokeOpacities },
-            fill:   { opacity: fillOpacities },
-            series: mainSeries,
-            xaxis: { type: 'linear', title: { text: '시간 (분)' } },
-            yaxis: { title: { text: '가격' } },
-            legend: { show: hasOverlay },
-        }
+        },
+        series: mainSeries,
+        xaxis: { type: 'linear', title: { text: '시간 (분)' } },
+        yaxis: { title: { text: '가격' } },
+        legend: { show: hasOverlay },
+    };
+    // 오버레이가 있을 때만 stroke/fill 배열 추가
+    if (hasOverlay) {
+        candleConfig.stroke = {
+            width:   [1, ...Array(overlayCount).fill(1.5)],
+            opacity: [1, ...Array(overlayCount).fill(0.55)],
+        };
+        candleConfig.fill = { opacity: [1, ...Array(overlayCount).fill(0)] };
+    }
+
+    const areaStrokeOpacities = [1, ...Array(overlayCount).fill(0.55)];
+    const areaFillOpacities   = [(isMulti ? 0.1 : 0.3), ...Array(overlayCount).fill(0)];
+
+    const mainConfig = isCandle
+        ? candleConfig
         : {
             chart: { type: 'area' },
             title: { text: title },
             dataLabels: { enabled: false },
-            stroke: { width: 2, curve: 'smooth', opacity: strokeOpacities },
-            fill:   { opacity: fillOpacities },
+            stroke: { width: 2, curve: 'smooth', opacity: areaStrokeOpacities },
+            fill:   { opacity: areaFillOpacities },
             series: mainSeries,
             xaxis: { type: 'linear', title: { text: '시간 (분)' } },
             yaxis: { title: { text: '가격' } },
