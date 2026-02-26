@@ -39,10 +39,10 @@ module.exports = {
         )
         .addSubcommand((subCommand) =>
             subCommand.setName('차트')
-                .setDescription('선물 차트를 표시합니다.')
+                .setDescription('선물 차트를 표시합니다. 여러 종목을 쉼표로 구분해 동시에 볼 수 있습니다.')
                 .addStringOption((option) =>
                     option.setName('종목')
-                        .setDescription('차트에 표시할 종목 코드 또는 종목명의 목록. ex) AAPL, TSLA, GME ...')
+                        .setDescription('종목 코드 또는 종목명 (쉼표로 여러 개 입력 가능. ex) HPMB,NERI)')
                         .setRequired(true)
                 )
                 .addIntegerOption((option) =>
@@ -219,16 +219,16 @@ module.exports = {
                 fetchReply: true
             });
         } else if (subCommand === '차트') {
-            let ticker = interaction.options.getString('종목');
-            ticker = tryGetTicker(ticker.trim());
-            
-            if (ticker === null) {
+            const tickerInput = interaction.options.getString('종목');
+            const tickerList = tickerInput.split(',').map(t => tryGetTicker(t.trim())).filter(Boolean);
+
+            if (tickerList.length === 0) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle(':x:  차트 불러오기 실패')
-                            .setDescription(`존재하지 않는 종목입니다.`)
+                            .setDescription('존재하지 않는 종목입니다.')
                             .setTimestamp()
                     ],
                 });
@@ -249,7 +249,7 @@ module.exports = {
                 if (minutes === null) minutes = 0;
             }
 
-            const result = await generateStockChartImage(ticker, getFutureTimeRangeData([ticker], (days * 24) + hours, minutes), minutes);
+            const result = await generateStockChartImage(tickerList, getFutureTimeRangeData(tickerList, (days * 24) + hours, minutes), minutes);
 
             try {
                 await interaction.reply({

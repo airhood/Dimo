@@ -34,11 +34,10 @@ module.exports = {
         )
         .addSubcommand((sub) =>
             sub.setName('차트')
-                .setDescription('ETF 차트를 확인합니다.')
+                .setDescription('ETF 차트를 확인합니다. 여러 ETF는 쉼표로 구분합니다.')
                 .addStringOption((opt) =>
                     opt.setName('etf명')
-                        .setDescription('확인할 ETF')
-                        .addChoices(...ETF_CHOICES)
+                        .setDescription('확인할 ETF ID. 여러 개는 쉼표로 구분 (/etf 목록에서 ID 확인)')
                         .setRequired(true)
                 )
                 .addIntegerOption((opt) =>
@@ -173,7 +172,20 @@ module.exports = {
             });
 
         } else if (subCommand === '차트') {
-            const etfId = interaction.options.getString('etf명');
+            const etfInput = interaction.options.getString('etf명');
+            const etfIdList = etfInput.split(',').map(s => s.trim()).filter(s => getEtfInfo(s));
+
+            if (etfIdList.length === 0) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('ETF 불러오기 실패')
+                            .setDescription('존재하지 않는 ETF입니다. `/etf 목록`에서 ETF ID를 확인해주세요.')
+                    ],
+                });
+                return;
+            }
 
             let days = interaction.options.getInteger('일');
             let hours = interaction.options.getInteger('시간');
@@ -187,21 +199,12 @@ module.exports = {
                 if (minutes === null) minutes = 0;
             }
 
-            const info = getEtfInfo(etfId);
-            if (!info) {
-                await interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xEA4144)
-                            .setTitle('ETF 불러오기 실패')
-                            .setDescription('존재하지 않는 ETF입니다.')
-                    ],
-                });
-                return;
-            }
+            const multiSeries = etfIdList.map(id => ({
+                name: getEtfInfo(id).shortName,
+                timeRangeData: getEtfTimeRangeData(id, (days * 24) + hours, minutes),
+            })).filter(s => s.timeRangeData && s.timeRangeData.length > 0);
 
-            const timeRangeData = getEtfTimeRangeData(etfId, (days * 24) + hours, minutes);
-            if (!timeRangeData || timeRangeData.length === 0) {
+            if (multiSeries.length === 0) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -214,12 +217,13 @@ module.exports = {
             }
 
             try {
-                const result = await generateIndexChartImage(info.shortName, timeRangeData);
+                const result = await generateIndexChartImage(multiSeries);
+                const chartTitle = multiSeries.map(s => s.name).join(' / ');
 
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle(`:chart_with_upwards_trend:  ${info.shortName} 차트`)
+                            .setTitle(`:chart_with_upwards_trend:  ${chartTitle} 차트`)
                             .setImage(`attachment://${result.filename}`)
                     ],
                     files: [{

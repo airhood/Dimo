@@ -15,6 +15,8 @@ const { setClientForNotifications } = require('./systems/notification_checker');
 const { setClientForMarginCall } = require('./systems/margin_call_checker');
 const { setClientForReservations } = require('./systems/reservation_checker');
 const { setClientForAutoTrade } = require('./systems/auto_trade_scheduler');
+const { setClientForDividends } = require('./systems/dividend_system');
+const { setClientForRealEstate } = require('./systems/real_estate_system');
 
 const client = new Client({
 	intents: [
@@ -120,6 +122,8 @@ module.exports = {
 			setClientForMarginCall(client);
 			setClientForAutoTrade(client);
 			setClientForReservations(client);
+			setClientForDividends(client);
+			setClientForRealEstate(client);
 			setupAdminChannel();
 			setupStatusChannel();
 			if (process.env.NODE_ENV === 'production') {

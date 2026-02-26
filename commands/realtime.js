@@ -173,10 +173,11 @@ async function buildLeaderboardEmbed() {
     };
 }
 
-async function buildStockChartEmbed(ticker, hoursAgo, minutesAgo) {
-    const key = `stock_${ticker}_${hoursAgo}h_${minutesAgo}m`;
+async function buildStockChartEmbed(tickerList, hoursAgo, minutesAgo) {
+    const tickers = Array.isArray(tickerList) ? tickerList : [tickerList];
+    const key = `stock_${tickers.join(',')}_${hoursAgo}h_${minutesAgo}m`;
     const result = await getCachedChart(key, () =>
-        generateStockChartImage(ticker, getStockTimeRangeData([ticker], hoursAgo, minutesAgo), minutesAgo)
+        generateStockChartImage(tickers, getStockTimeRangeData(tickers, hoursAgo, minutesAgo), minutesAgo)
     );
     return {
         embeds: [
@@ -189,10 +190,11 @@ async function buildStockChartEmbed(ticker, hoursAgo, minutesAgo) {
     };
 }
 
-async function buildFutureChartEmbed(ticker, hoursAgo, minutesAgo) {
-    const key = `future_${ticker}_${hoursAgo}h_${minutesAgo}m`;
+async function buildFutureChartEmbed(tickerList, hoursAgo, minutesAgo) {
+    const tickers = Array.isArray(tickerList) ? tickerList : [tickerList];
+    const key = `future_${tickers.join(',')}_${hoursAgo}h_${minutesAgo}m`;
     const result = await getCachedChart(key, () =>
-        generateStockChartImage(ticker, getFutureTimeRangeData([ticker], hoursAgo, minutesAgo), minutesAgo)
+        generateStockChartImage(tickers, getFutureTimeRangeData(tickers, hoursAgo, minutesAgo), minutesAgo)
     );
     return {
         embeds: [
@@ -249,8 +251,8 @@ async function restorePersistedSessions(client) {
             case '옵션가격':  updateFn = () => buildOptionPriceEmbed(params.ticker); break;
             case '지수':      updateFn = () => buildIndexEmbed(params.indicator); break;
             case '순위':      updateFn = () => buildLeaderboardEmbed(); break;
-            case '주식차트':  updateFn = () => buildStockChartEmbed(params.ticker, params.hoursAgo, params.minutes); break;
-            case '선물차트':  updateFn = () => buildFutureChartEmbed(params.ticker, params.hoursAgo, params.minutes); break;
+            case '주식차트':  updateFn = () => buildStockChartEmbed(params.tickerList ?? params.ticker, params.hoursAgo, params.minutes); break;
+            case '선물차트':  updateFn = () => buildFutureChartEmbed(params.tickerList ?? params.ticker, params.hoursAgo, params.minutes); break;
             case '지수차트':  updateFn = () => buildIndexChartEmbed(params.indicator, params.hoursAgo); break;
             default: continue;
         }
@@ -340,7 +342,7 @@ module.exports = {
                 .setDescription('주식 차트를 실시간으로 표시합니다.')
                 .addStringOption((opt) =>
                     opt.setName('종목')
-                        .setDescription('종목 코드 또는 이름')
+                        .setDescription('종목 코드 또는 이름. 여러 개는 쉼표로 구분 (ex: SSGS, GRPW)')
                         .setRequired(true)
                 )
                 .addIntegerOption((opt) => opt.setName('일').setDescription('기간 (일)').setMinValue(0).setRequired(false))
@@ -352,7 +354,7 @@ module.exports = {
                 .setDescription('선물 차트를 실시간으로 표시합니다.')
                 .addStringOption((opt) =>
                     opt.setName('종목')
-                        .setDescription('종목 코드 또는 이름')
+                        .setDescription('종목 코드 또는 이름. 여러 개는 쉼표로 구분 (ex: SSGS, GRPW)')
                         .setRequired(true)
                 )
                 .addIntegerOption((opt) => opt.setName('일').setDescription('기간 (일)').setMinValue(0).setRequired(false))
@@ -470,9 +472,9 @@ module.exports = {
 
         // ── 주식차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '주식차트') {
-            let ticker = interaction.options.getString('종목');
-            ticker = tryGetTicker(ticker.trim());
-            if (!ticker) {
+            const tickerInput = interaction.options.getString('종목');
+            const tickerList = tickerInput.split(',').map(t => tryGetTicker(t.trim())).filter(Boolean);
+            if (tickerList.length === 0) {
                 await interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  차트 불러오기 실패').setDescription('존재하지 않는 종목입니다.')],
                 });
@@ -485,18 +487,19 @@ module.exports = {
             const hoursAgo = (days * 24) + hours;
 
             await interaction.deferReply();
-            const initial = await buildStockChartEmbed(ticker, hoursAgo, minutes);
+            const initial = await buildStockChartEmbed(tickerList, hoursAgo, minutes);
             const stopRow = makeStopButton(userId, uid);
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, userId, `주식차트 (${ticker})`, msg.channelId, msg.id, interaction.client,
-                () => buildStockChartEmbed(ticker, hoursAgo, minutes), true, '주식차트', { ticker, hoursAgo, minutes });
+            const stockLabel = tickerList.join(', ');
+            startSession(uid, userId, `주식차트 (${stockLabel})`, msg.channelId, msg.id, interaction.client,
+                () => buildStockChartEmbed(tickerList, hoursAgo, minutes), true, '주식차트', { tickerList, hoursAgo, minutes });
 
         // ── 선물차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '선물차트') {
-            let ticker = interaction.options.getString('종목');
-            ticker = tryGetTicker(ticker.trim());
-            if (!ticker) {
+            const tickerInput = interaction.options.getString('종목');
+            const tickerList = tickerInput.split(',').map(t => tryGetTicker(t.trim())).filter(Boolean);
+            if (tickerList.length === 0) {
                 await interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  차트 불러오기 실패').setDescription('존재하지 않는 종목입니다.')],
                 });
@@ -509,12 +512,13 @@ module.exports = {
             const hoursAgo = (days * 24) + hours;
 
             await interaction.deferReply();
-            const initial = await buildFutureChartEmbed(ticker, hoursAgo, minutes);
+            const initial = await buildFutureChartEmbed(tickerList, hoursAgo, minutes);
             const stopRow = makeStopButton(userId, uid);
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
-            startSession(uid, userId, `선물차트 (${ticker})`, msg.channelId, msg.id, interaction.client,
-                () => buildFutureChartEmbed(ticker, hoursAgo, minutes), true, '선물차트', { ticker, hoursAgo, minutes });
+            const futureLabel = tickerList.join(', ');
+            startSession(uid, userId, `선물차트 (${futureLabel})`, msg.channelId, msg.id, interaction.client,
+                () => buildFutureChartEmbed(tickerList, hoursAgo, minutes), true, '선물차트', { tickerList, hoursAgo, minutes });
 
         // ── 지수차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '지수차트') {

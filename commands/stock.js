@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
 const { getStockList, tryGetTicker, getStockTimeRangeData, getStockInfo } = require('../systems/stock_sim');
 const { getStockName } = require('../systems/stock_name');
+const { DIVIDEND_YIELDS } = require('../setting');
 const { createCache, saveCache } = require('../utils/cache');
 const { v4: uuidv4 } = require('uuid');
 const { stockBuy, stockSell, stockShortSell, stockShortRepay } = require('../database');
@@ -38,10 +39,10 @@ module.exports = {
         )
         .addSubcommand((subCommand) =>
             subCommand.setName('차트')
-                .setDescription('주식 차트를 표시합니다.')
+                .setDescription('주식 차트를 표시합니다. 여러 종목을 콤마로 구분해 동시에 볼 수 있습니다.')
                 .addStringOption((option) =>
                     option.setName('종목')
-                        .setDescription('차트에 표시할 종목 코드 또는 종목명의 목록. ex) AAPL, TSLA, GME ...')
+                        .setDescription('종목 코드 또는 종목명 (쉼표로 여러 개 입력 가능. ex) HPMB,NERI)')
                         .setRequired(true)
                 )
                 .addIntegerOption((option) =>
@@ -230,6 +231,10 @@ module.exports = {
             }
 
             const stockInfo = await getStockInfo(ticker);
+            const dividendYield = DIVIDEND_YIELDS[ticker];
+            const dividendText = dividendYield
+                ? `\n**배당률:** ${dividendYield}% (3일당)`
+                : '\n**배당률:** 없음';
 
             await interaction.reply({
                 embeds: [
@@ -239,48 +244,21 @@ module.exports = {
                         .setDescription(`**종목명:** ${stockInfo.name}
                             **티커:** ${stockInfo.ticker}
                             **현재가격:** ${stockInfo.price.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}원
-                            **발행량:** ${stockInfo.totalQuantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주`)
+                            **발행량:** ${stockInfo.totalQuantity.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}주${dividendText}`)
                 ],
             });
         } else if (subCommand === "차트") {
-            /*
-            const ticker_input = interaction.options.getString('종목');
-            let ticker_list;
-            if (ticker_input === null) {
-                ticker_list = getTickerList();
-            }
-            else {
-                ticker_list = ticker_input.split(',');
-                const new_ticker_list = [];
-                for (let ticker of ticker_list) {
-                    new_ticker_list.push(tryGetTicker(ticker.trim()));
-                    if (ticker === null) {
-                        await interaction.reply({
-                            embeds: [
-                                new EmbedBuilder()
-                                    .setColor(0xEA4144)
-                                    .setTitle('정보 없음')
-                                    .setDescription(`존재하지 않는 종목이 포함되어 있습니다.`)
-                            ],
-                        });
-                        return;
-                    }
-                }
+            const tickerInput = interaction.options.getString('종목');
+            const tickerList = tickerInput.split(',').map(t => tryGetTicker(t.trim())).filter(Boolean);
+            const invalidTickers = tickerInput.split(',').map(t => t.trim()).filter(t => !tryGetTicker(t));
 
-                ticker_list = new_ticker_list;
-            }
-            */
-
-            let ticker = interaction.options.getString('종목');
-            ticker = tryGetTicker(ticker.trim());
-            
-            if (ticker === null) {
+            if (tickerList.length === 0) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle(':x:  차트 불러오기 실패')
-                            .setDescription(`존재하지 않는 종목입니다.`)
+                            .setDescription('존재하지 않는 종목입니다.')
                             .setTimestamp()
                     ],
                 });
@@ -301,7 +279,7 @@ module.exports = {
                 if (minutes === null) minutes = 0;
             }
 
-            const result = await generateStockChartImage(ticker, getStockTimeRangeData([ticker], (days * 24) + hours, minutes), minutes);
+            const result = await generateStockChartImage(tickerList, getStockTimeRangeData(tickerList, (days * 24) + hours, minutes), minutes);
             
             try {
                 await interaction.reply({

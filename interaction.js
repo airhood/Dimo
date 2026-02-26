@@ -1,5 +1,5 @@
 const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { createUser, deleteUser, getUserAsset } = require('./database');
+const { createUser, deleteUser, getUserAsset, buyProperty, sellProperty, takePropertyMortgage } = require('./database');
 const { loadCache, saveCache, deleteCache } = require('./utils/cache');
 const { drawCard, handTotal, buildActionRow, buildInProgressEmbed, handleHandEnd, canSplitHand, resolveGame, resolveInsurance } = require('./systems/blackjack_system');
 const moment = require('moment-timezone');
@@ -729,6 +729,225 @@ function addInteractionHandler(client) {
                 const { stopSession } = require('./systems/realtime_manager');
                 stopSession(uid);
                 await interaction.update({ components: [] });
+
+            } else if (action === 'property_buy_confirm') {
+                const uid = customID[2];
+                const cache = loadCache(uid);
+                if (!cache) {
+                    return interaction.reply({ content: '매수 요청이 만료되었습니다.', ephemeral: true });
+                }
+                deleteCache(uid);
+
+                const result = await buyProperty(userID, cache.propertyId);
+                if (result.state === 'not_found' || result.state === 'expired') {
+                    return interaction.update({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('매물 없음').setDescription('해당 매물이 더 이상 존재하지 않습니다.')],
+                        components: [],
+                    });
+                }
+                if (result.state === 'no_balance') {
+                    return interaction.update({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('잔액 부족').setDescription('잔액이 부족합니다.')],
+                        components: [],
+                    });
+                }
+                if (result.state === 'error') {
+                    return interaction.update({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription('매수 중 오류가 발생했습니다.')],
+                        components: [],
+                    });
+                }
+
+                return interaction.update({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ECC71)
+                            .setTitle('✅ 부동산 매수 완료')
+                            .setDescription(`**${result.data.listing.name}**을 **${result.data.listing.price.toLocaleString()}원**에 매수했습니다.`)
+                            .setTimestamp()
+                    ],
+                    components: [],
+                });
+
+            } else if (action === 'property_buy_cancel') {
+                const uid = customID[2];
+                deleteCache(uid);
+                return interaction.update({
+                    embeds: [new EmbedBuilder().setColor(0x95A5A6).setTitle('매수 취소').setDescription('매수가 취소되었습니다.')],
+                    components: [],
+                });
+
+            } else if (action === 'property_sell_confirm') {
+                const uid = customID[2];
+                const cache = loadCache(uid);
+                if (!cache) {
+                    return interaction.reply({ content: '매도 요청이 만료되었습니다.', ephemeral: true });
+                }
+                deleteCache(uid);
+
+                const result = await sellProperty(userID, cache.propertyIndex);
+                if (result.state === 'not_found') {
+                    return interaction.update({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('부동산 없음').setDescription('해당 부동산을 찾을 수 없습니다.')],
+                        components: [],
+                    });
+                }
+                if (result.state === 'has_mortgage') {
+                    return interaction.update({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('매도 불가').setDescription('담보대출이 남아 있어 매도할 수 없습니다.')],
+                        components: [],
+                    });
+                }
+                if (result.state === 'error') {
+                    return interaction.update({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription('매도 중 오류가 발생했습니다.')],
+                        components: [],
+                    });
+                }
+
+                return interaction.update({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ECC71)
+                            .setTitle('✅ 부동산 매도 완료')
+                            .setDescription(`**${result.data.property.name}**을 **${result.data.sellAmount.toLocaleString()}원**에 매도했습니다.\n손익: **${result.data.profitLoss >= 0 ? '+' : ''}${result.data.profitLoss.toLocaleString()}원**`)
+                            .setTimestamp()
+                    ],
+                    components: [],
+                });
+
+            } else if (action === 'property_sell_cancel') {
+                const uid = customID[2];
+                deleteCache(uid);
+                return interaction.update({
+                    embeds: [new EmbedBuilder().setColor(0x95A5A6).setTitle('매도 취소').setDescription('매도가 취소되었습니다.')],
+                    components: [],
+                });
+
+            } else if (action === 'property_mortgage_confirm') {
+                const uid = customID[2];
+                const cache = loadCache(uid);
+                if (!cache) {
+                    return interaction.reply({ content: '대출 요청이 만료되었습니다.', ephemeral: true });
+                }
+                deleteCache(uid);
+
+                const result = await takePropertyMortgage(userID, cache.propertyIndex, cache.amount);
+                if (result.state === 'not_found') {
+                    return interaction.update({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('부동산 없음').setDescription('해당 부동산을 찾을 수 없습니다.')],
+                        components: [],
+                    });
+                }
+                if (result.state === 'already_mortgaged') {
+                    return interaction.update({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('이미 대출 중').setDescription('해당 부동산에 이미 담보대출이 있습니다.')],
+                        components: [],
+                    });
+                }
+                if (result.state === 'exceed_ltv') {
+                    return interaction.update({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('한도 초과').setDescription(`LTV 한도를 초과했습니다. 최대: **${result.data.maxLoan.toLocaleString()}원**`)],
+                        components: [],
+                    });
+                }
+                if (result.state === 'error') {
+                    return interaction.update({
+                        embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle('서버 오류').setDescription('대출 중 오류가 발생했습니다.')],
+                        components: [],
+                    });
+                }
+
+                return interaction.update({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ECC71)
+                            .setTitle('✅ 담보대출 완료')
+                            .setDescription(`**${result.data.property.name}** 담보대출 **${result.data.amount.toLocaleString()}원**이 실행되었습니다.\n만기일: ${new Date(result.data.dueDate).toLocaleDateString('ko-KR')}`)
+                            .setTimestamp()
+                    ],
+                    components: [],
+                });
+
+            } else if (action === 'property_mortgage_cancel') {
+                const uid = customID[2];
+                deleteCache(uid);
+                return interaction.update({
+                    embeds: [new EmbedBuilder().setColor(0x95A5A6).setTitle('대출 취소').setDescription('대출이 취소되었습니다.')],
+                    components: [],
+                });
+
+            } else if (action === 'property_list_prev') {
+                const uid = customID[2];
+                const cache = loadCache(uid);
+                if (!cache) return;
+
+                const { pages, currentPage } = cache;
+                if (currentPage === 0) return;
+
+                const pageToLoad = currentPage - 1;
+
+                const prevBtn = new ButtonBuilder()
+                    .setCustomId(`property_list_prev-${interaction.user.id}-${uid}`)
+                    .setLabel('이전')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(pageToLoad === 0);
+                const nextBtn = new ButtonBuilder()
+                    .setCustomId(`property_list_next-${interaction.user.id}-${uid}`)
+                    .setLabel('다음')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(pageToLoad === pages.length - 1);
+
+                const row = new ActionRowBuilder().addComponents(prevBtn, nextBtn);
+
+                await interaction.update({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x3498DB)
+                            .setTitle('🏠 부동산 매물 목록')
+                            .setDescription(pages[pageToLoad])
+                            .setTimestamp()
+                    ],
+                    components: [row],
+                });
+
+                saveCache(uid, { ...cache, currentPage: pageToLoad });
+
+            } else if (action === 'property_list_next') {
+                const uid = customID[2];
+                const cache = loadCache(uid);
+                if (!cache) return;
+
+                const { pages, currentPage } = cache;
+                if (currentPage === pages.length - 1) return;
+
+                const pageToLoad = currentPage + 1;
+
+                const prevBtn = new ButtonBuilder()
+                    .setCustomId(`property_list_prev-${interaction.user.id}-${uid}`)
+                    .setLabel('이전')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(pageToLoad === 0);
+                const nextBtn = new ButtonBuilder()
+                    .setCustomId(`property_list_next-${interaction.user.id}-${uid}`)
+                    .setLabel('다음')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(pageToLoad === pages.length - 1);
+
+                const row = new ActionRowBuilder().addComponents(prevBtn, nextBtn);
+
+                await interaction.update({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x3498DB)
+                            .setTitle('🏠 부동산 매물 목록')
+                            .setDescription(pages[pageToLoad])
+                            .setTimestamp()
+                    ],
+                    components: [row],
+                });
+
+                saveCache(uid, { ...cache, currentPage: pageToLoad });
             }
         }
     });

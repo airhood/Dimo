@@ -254,10 +254,10 @@ module.exports = {
                 });
             }
         } else if (subCommand === '차트') {
-            let ticker = interaction.options.getString('종목');
-            ticker = tryGetTicker(ticker.trim());
-            
-            if (ticker === null) {
+            const tickerInput = interaction.options.getString('종목');
+            const tickerList = tickerInput.split(',').map(t => tryGetTicker(t.trim())).filter(Boolean);
+
+            if (tickerList.length === 0) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -286,8 +286,8 @@ module.exports = {
                 if (hours === null) hours = 0;
                 if (minutes === null) minutes = 0;
             }
-            
-            const result = await generateStockChartImage(ticker, getOptionTimeRangeData([ticker], (days * 24) + hours, minutes, direction, strikePrice), minutes);
+
+            const result = await generateStockChartImage(tickerList, getOptionTimeRangeData(tickerList, (days * 24) + hours, minutes, direction, strikePrice), minutes);
 
             try {
                 await interaction.reply({

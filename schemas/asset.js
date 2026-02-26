@@ -282,6 +282,51 @@ const AssetSchema = new Schema({
             required: true,
         },
     }],
+    properties: [{
+        propertyId: {
+            type: String,
+            required: true,
+        },
+        name: {
+            type: String,
+            required: true,
+        },
+        region: {
+            type: String,
+            required: true,
+        },
+        type: {
+            type: String,
+            required: true,
+        },
+        size: {
+            type: Number,
+            required: true,
+        },
+        purchasePrice: {
+            type: Number,
+            required: true,
+        },
+        purchaseDate: {
+            type: Date,
+            required: true,
+        },
+        rentalYield: {
+            type: Number,
+            required: true,
+        },
+        purchaseIndex: {
+            type: Number,
+            default: 1.0,
+        },
+        mortgage: {
+            amount: { type: Number },
+            interestRate: { type: Number },
+            startDate: { type: Date },
+            dueDate: { type: Date },
+            uid: { type: String },
+        },
+    }],
 });
 
 module.exports = mongoose.model('Asset', AssetSchema);

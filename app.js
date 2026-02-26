@@ -15,6 +15,8 @@ const { initAutoTradeScheduler } = require('./systems/auto_trade_scheduler');
 const { initReservationChecker } = require('./systems/reservation_checker');
 const { setTimezone } = require('./utils/korean_time');
 const { loadKeywordsFromFile } = require('./chat_bot/message_filter');
+const { initDividendSystem } = require('./systems/dividend_system');
+const { initRealEstateSystem } = require('./systems/real_estate_system');
 
 require('dotenv').config();
 
@@ -93,6 +95,16 @@ module.exports = {
         if (!result10) return false;
 
         console.log('[BOOT] Reservation checker loaded');
+
+        const result11 = initDividendSystem();
+        if (!result11) return false;
+
+        console.log('[BOOT] Dividend system loaded');
+
+        const result12 = initRealEstateSystem();
+        if (!result12) return false;
+
+        console.log('[BOOT] Real estate system loaded');
 
         loadKeywordsFromFile();
 

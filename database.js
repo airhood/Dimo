@@ -9,7 +9,9 @@ require('dotenv').config();
 const moment = require('moment-timezone');
 const fs = require('fs');
 const { getKoreanTime }= require('./utils/korean_time');
-const { INITIAL_BALANCE, SHORT_SELL_MARGIN_RATE, OPTION_UNIT_QUANTITY } = require('./setting');
+const { INITIAL_BALANCE, SHORT_SELL_MARGIN_RATE, OPTION_UNIT_QUANTITY, DIVIDEND_YIELDS, PROPERTY_MORTGAGE_LTV, PROPERTY_MORTGAGE_INTEREST_RATE, PROPERTY_MORTGAGE_TERM_DAYS } = require('./setting');
+const { v4: uuidv4 } = require('uuid');
+const { getMarketListings, getListingById, removeListingById, getCurrentIndex, calcCurrentValue } = require('./systems/real_estate_system');
 
 
 mongoose.connection.on('connected', () => {
@@ -42,6 +44,7 @@ const TransactionSchedule = require('./schemas/transaction_schedule');
 
 const Notice = require('./schemas/notice');
 const TransactionLog = require('./schemas/transaction_log');
+const Property = require('./schemas/property');
 
 
 let serversideLockedAccounts = [];
@@ -4018,6 +4021,214 @@ module.exports = {
             };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:increaseLevelPointBy': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    // ── 부동산 ────────────────────────────────────────────────────────────────
+
+    async buyProperty(userID, propertyId) {
+        try {
+            const listing = getListingById(propertyId);
+            if (!listing) {
+                return { state: 'not_found', data: null };
+            }
+
+            if (new Date(listing.listedUntil) < new Date()) {
+                return { state: 'expired', data: null };
+            }
+
+            const user = await User.findOne({ userID });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            if (userAsset.balance < listing.price) {
+                return { state: 'no_balance', data: null };
+            }
+
+            userAsset.balance -= listing.price;
+            userAsset.balance = Math.round(userAsset.balance);
+
+            if (!userAsset.properties) userAsset.properties = [];
+            userAsset.properties.push({
+                propertyId: listing.propertyId,
+                name: listing.name,
+                region: listing.region,
+                type: listing.type,
+                size: listing.size,
+                purchasePrice: listing.price,
+                purchaseDate: new Date(),
+                rentalYield: listing.rentalYield,
+                purchaseIndex: getCurrentIndex(listing.region, listing.type),
+                mortgage: {},
+            });
+
+            await userAsset.save();
+            removeListingById(propertyId);
+
+            module.exports.addTransactionLog(userID, 'property_buy', `${listing.name} 매수 (${listing.price.toLocaleString()}원)`);
+
+            serverLog(`[INFO] Property bought. userID: ${userID}, property: ${listing.name}`);
+            return { state: 'success', data: { listing } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:buyProperty': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async sellProperty(userID, propertyIndex) {
+        try {
+            const user = await User.findOne({ userID });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            const idx = propertyIndex - 1;
+            if (!userAsset.properties || idx < 0 || idx >= userAsset.properties.length) {
+                return { state: 'not_found', data: null };
+            }
+
+            const prop = userAsset.properties[idx];
+
+            // 담보대출 잔액이 있으면 매도 불가
+            if (prop.mortgage && prop.mortgage.amount > 0) {
+                return { state: 'has_mortgage', data: null };
+            }
+
+            const sellAmount = calcCurrentValue(prop);
+            userAsset.balance += sellAmount;
+            userAsset.balance = Math.round(userAsset.balance);
+            userAsset.properties.splice(idx, 1);
+
+            await userAsset.save();
+
+            const profitLoss = sellAmount - prop.purchasePrice;
+            module.exports.addTransactionLog(userID, 'property_sell', `${prop.name} 매도 (${sellAmount.toLocaleString()}원, 손익 ${profitLoss >= 0 ? '+' : ''}${profitLoss.toLocaleString()}원)`);
+
+            serverLog(`[INFO] Property sold. userID: ${userID}, property: ${prop.name}`);
+            return { state: 'success', data: { property: prop, sellAmount, profitLoss: sellAmount - prop.purchasePrice } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:sellProperty': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async takePropertyMortgage(userID, propertyIndex, amount) {
+        try {
+            const user = await User.findOne({ userID });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            const idx = propertyIndex - 1;
+            if (!userAsset.properties || idx < 0 || idx >= userAsset.properties.length) {
+                return { state: 'not_found', data: null };
+            }
+
+            const prop = userAsset.properties[idx];
+
+            // 이미 대출 존재
+            if (prop.mortgage && prop.mortgage.amount > 0) {
+                return { state: 'already_mortgaged', data: null };
+            }
+
+            // LTV 한도
+            const maxLoan = Math.floor(prop.purchasePrice * PROPERTY_MORTGAGE_LTV);
+            if (amount > maxLoan) {
+                return { state: 'exceed_ltv', data: { maxLoan } };
+            }
+
+            const now = new Date();
+            const dueDate = new Date(now.getTime() + PROPERTY_MORTGAGE_TERM_DAYS * 24 * 60 * 60 * 1000);
+
+            prop.mortgage = {
+                amount,
+                interestRate: PROPERTY_MORTGAGE_INTEREST_RATE,
+                startDate: now,
+                dueDate,
+                uid: uuidv4(),
+            };
+
+            userAsset.balance += amount;
+            userAsset.balance = Math.round(userAsset.balance);
+            await userAsset.save();
+
+            module.exports.addTransactionLog(userID, 'property_mortgage', `${prop.name} 담보대출 (${amount.toLocaleString()}원)`);
+
+            serverLog(`[INFO] Property mortgage taken. userID: ${userID}, property: ${prop.name}, amount: ${amount}`);
+            return { state: 'success', data: { property: prop, amount, dueDate } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:takePropertyMortgage': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async repayPropertyMortgage(userID, propertyIndex) {
+        try {
+            const user = await User.findOne({ userID });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            const idx = propertyIndex - 1;
+            if (!userAsset.properties || idx < 0 || idx >= userAsset.properties.length) {
+                return { state: 'not_found', data: null };
+            }
+
+            const prop = userAsset.properties[idx];
+            if (!prop.mortgage || !prop.mortgage.amount || prop.mortgage.amount <= 0) {
+                return { state: 'no_mortgage', data: null };
+            }
+
+            const repayAmount = prop.mortgage.amount;
+            if (userAsset.balance < repayAmount) {
+                return { state: 'no_balance', data: null };
+            }
+
+            userAsset.balance -= repayAmount;
+            userAsset.balance = Math.round(userAsset.balance);
+            prop.mortgage = {};
+
+            await userAsset.save();
+
+            module.exports.addTransactionLog(userID, 'property_mortgage_repay', `${prop.name} 담보대출 상환 (${repayAmount.toLocaleString()}원)`);
+
+            serverLog(`[INFO] Property mortgage repaid. userID: ${userID}, property: ${prop.name}`);
+            return { state: 'success', data: { property: prop, repayAmount } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:repayPropertyMortgage': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getPropertyMarket(region, type) {
+        try {
+            let listings = getMarketListings();
+            if (region) listings = listings.filter(l => l.region === region);
+            if (type) listings = listings.filter(l => l.type === type);
+            return { state: 'success', data: listings };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getPropertyMarket': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getUserProperties(userID) {
+        try {
+            const user = await User.findOne({ userID });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            return { state: 'success', data: userAsset.properties || [] };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getUserProperties': ${err}`);
             return { state: 'error', data: null };
         }
     },
