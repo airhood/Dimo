@@ -51,13 +51,14 @@ function isDue(lastPayoutDate) {
     return diffDays >= PAYOUT_INTERVAL_DAYS;
 }
 
-async function distributeDividends() {
+async function distributeDividends(cutoffDate) {
     if (!discordClient) {
         serverLog('[WARN] distributeDividends: discordClient not set');
         return;
     }
 
-    serverLog('[INFO] Starting dividend distribution...');
+    const cutoff = new Date(cutoffDate);
+    serverLog(`[INFO] Starting dividend distribution... (cutoff: ${cutoff.toISOString()})`);
 
     try {
         const users = await User.find({}).populate('asset');
@@ -71,10 +72,14 @@ async function distributeDividends() {
             if (!userAsset.stocks || userAsset.stocks.length === 0) continue;
 
             // 보유 종목별 배당금 합산
+            // 조건: 주식(stocks)만 대상, 직전 배당 시점 이전에 매수한 보유분만 인정
             const dividendBreakdown = {};
             let totalDividend = 0;
 
             for (const holding of userAsset.stocks) {
+                // 직전 배당 시점 이전에 매수했어야 배당 지급
+                if (new Date(holding.purchaseDate) >= cutoff) continue;
+
                 const ticker = holding.ticker;
                 const yieldRate = DIVIDEND_YIELDS[ticker];
                 if (!yieldRate) continue;
@@ -132,7 +137,15 @@ async function checkAndDistribute() {
     const state = loadState();
     if (!isDue(state.lastPayoutDate)) return;
 
-    await distributeDividends();
+    if (!state.lastPayoutDate) {
+        // 최초 실행: 기준 시점만 기록하고 배당 없이 종료
+        // 다음 배당 주기부터 이 시점 이전 매수분에 대해 배당 지급
+        serverLog('[INFO] Dividend system first run: recording initial payout date, no payout this cycle.');
+        saveState({ lastPayoutDate: new Date().toISOString() });
+        return;
+    }
+
+    await distributeDividends(state.lastPayoutDate);
 
     saveState({ lastPayoutDate: new Date().toISOString() });
 }

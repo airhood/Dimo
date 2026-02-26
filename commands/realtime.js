@@ -9,6 +9,7 @@ const { generateStockChartImage, generateIndexChartImage } = require('../systems
 const { calculateAssetValue } = require('../systems/credit_system');
 const { startSession, restoreSession, stopSession, getSessionsByUser, stopSessionByIndex, loadPersistedSessions } = require('../systems/realtime_manager');
 const { getCachedChart } = require('../systems/chart_cache');
+const { getUserChartSettings } = require('../systems/chart_settings');
 const { serverLog } = require('../server/server_logger');
 
 const INDEX_CHOICES = [
@@ -173,11 +174,13 @@ async function buildLeaderboardEmbed() {
     };
 }
 
-async function buildStockChartEmbed(tickerList, hoursAgo, minutesAgo) {
+async function buildStockChartEmbed(tickerList, hoursAgo, minutesAgo, userId) {
     const tickers = Array.isArray(tickerList) ? tickerList : [tickerList];
-    const key = `stock_${tickers.join(',')}_${hoursAgo}h_${minutesAgo}m`;
+    const settings = userId ? getUserChartSettings(userId) : {};
+    const settingsKey = `${(settings.chartType ?? 'area')}_${(settings.candleInterval ?? 5)}_${(settings.indicators ?? []).join('-')}`;
+    const key = `stock_${tickers.join(',')}_${hoursAgo}h_${minutesAgo}m_${settingsKey}`;
     const result = await getCachedChart(key, () =>
-        generateStockChartImage(tickers, getStockTimeRangeData(tickers, hoursAgo, minutesAgo), minutesAgo)
+        generateStockChartImage(tickers, getStockTimeRangeData(tickers, hoursAgo, minutesAgo), minutesAgo, settings)
     );
     return {
         embeds: [
@@ -190,11 +193,13 @@ async function buildStockChartEmbed(tickerList, hoursAgo, minutesAgo) {
     };
 }
 
-async function buildFutureChartEmbed(tickerList, hoursAgo, minutesAgo) {
+async function buildFutureChartEmbed(tickerList, hoursAgo, minutesAgo, userId) {
     const tickers = Array.isArray(tickerList) ? tickerList : [tickerList];
-    const key = `future_${tickers.join(',')}_${hoursAgo}h_${minutesAgo}m`;
+    const settings = userId ? getUserChartSettings(userId) : {};
+    const settingsKey = `${(settings.chartType ?? 'area')}_${(settings.candleInterval ?? 5)}_${(settings.indicators ?? []).join('-')}`;
+    const key = `future_${tickers.join(',')}_${hoursAgo}h_${minutesAgo}m_${settingsKey}`;
     const result = await getCachedChart(key, () =>
-        generateStockChartImage(tickers, getFutureTimeRangeData(tickers, hoursAgo, minutesAgo), minutesAgo)
+        generateStockChartImage(tickers, getFutureTimeRangeData(tickers, hoursAgo, minutesAgo), minutesAgo, settings)
     );
     return {
         embeds: [
@@ -251,8 +256,8 @@ async function restorePersistedSessions(client) {
             case '옵션가격':  updateFn = () => buildOptionPriceEmbed(params.ticker); break;
             case '지수':      updateFn = () => buildIndexEmbed(params.indicator); break;
             case '순위':      updateFn = () => buildLeaderboardEmbed(); break;
-            case '주식차트':  updateFn = () => buildStockChartEmbed(params.tickerList ?? params.ticker, params.hoursAgo, params.minutes); break;
-            case '선물차트':  updateFn = () => buildFutureChartEmbed(params.tickerList ?? params.ticker, params.hoursAgo, params.minutes); break;
+            case '주식차트':  updateFn = () => buildStockChartEmbed(params.tickerList ?? params.ticker, params.hoursAgo, params.minutes, params.userId); break;
+            case '선물차트':  updateFn = () => buildFutureChartEmbed(params.tickerList ?? params.ticker, params.hoursAgo, params.minutes, params.userId); break;
             case '지수차트':  updateFn = () => buildIndexChartEmbed(params.indicator, params.hoursAgo); break;
             default: continue;
         }
@@ -486,14 +491,22 @@ module.exports = {
             if (days === 0 && hours === 0 && minutes === 0) hours = 6;
             const hoursAgo = (days * 24) + hours;
 
+            const stockSettings = getUserChartSettings(userId);
+            if (stockSettings.chartType === 'candlestick' && tickerList.length > 1) {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  차트 불러오기 실패').setDescription('캔들차트는 단일 종목만 지원합니다.').setTimestamp()],
+                });
+                return;
+            }
+
             await interaction.deferReply();
-            const initial = await buildStockChartEmbed(tickerList, hoursAgo, minutes);
+            const initial = await buildStockChartEmbed(tickerList, hoursAgo, minutes, userId);
             const stopRow = makeStopButton(userId, uid);
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
             const stockLabel = tickerList.join(', ');
             startSession(uid, userId, `주식차트 (${stockLabel})`, msg.channelId, msg.id, interaction.client,
-                () => buildStockChartEmbed(tickerList, hoursAgo, minutes), true, '주식차트', { tickerList, hoursAgo, minutes });
+                () => buildStockChartEmbed(tickerList, hoursAgo, minutes, userId), true, '주식차트', { tickerList, hoursAgo, minutes, userId });
 
         // ── 선물차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '선물차트') {
@@ -511,14 +524,22 @@ module.exports = {
             if (days === 0 && hours === 0 && minutes === 0) hours = 6;
             const hoursAgo = (days * 24) + hours;
 
+            const futureSettings = getUserChartSettings(userId);
+            if (futureSettings.chartType === 'candlestick' && tickerList.length > 1) {
+                await interaction.reply({
+                    embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x:  차트 불러오기 실패').setDescription('캔들차트는 단일 종목만 지원합니다.').setTimestamp()],
+                });
+                return;
+            }
+
             await interaction.deferReply();
-            const initial = await buildFutureChartEmbed(tickerList, hoursAgo, minutes);
+            const initial = await buildFutureChartEmbed(tickerList, hoursAgo, minutes, userId);
             const stopRow = makeStopButton(userId, uid);
             await interaction.editReply({ embeds: initial.embeds, files: initial.files, components: [stopRow] });
             const msg = await interaction.fetchReply();
             const futureLabel = tickerList.join(', ');
             startSession(uid, userId, `선물차트 (${futureLabel})`, msg.channelId, msg.id, interaction.client,
-                () => buildFutureChartEmbed(tickerList, hoursAgo, minutes), true, '선물차트', { tickerList, hoursAgo, minutes });
+                () => buildFutureChartEmbed(tickerList, hoursAgo, minutes, userId), true, '선물차트', { tickerList, hoursAgo, minutes, userId });
 
         // ── 지수차트 ──────────────────────────────────────────────────────────
         } else if (subCommand === '지수차트') {

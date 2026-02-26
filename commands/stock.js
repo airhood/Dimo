@@ -6,6 +6,7 @@ const { createCache, saveCache } = require('../utils/cache');
 const { v4: uuidv4 } = require('uuid');
 const { stockBuy, stockSell, stockShortSell, stockShortRepay } = require('../database');
 const { generateStockChartImage } = require('../systems/stock_chart');
+const { getUserChartSettings } = require('../systems/chart_settings');
 const { serverLog } = require('../server/server_logger');
 const fs = require('fs');
 
@@ -279,8 +280,23 @@ module.exports = {
                 if (minutes === null) minutes = 0;
             }
 
-            const result = await generateStockChartImage(tickerList, getStockTimeRangeData(tickerList, (days * 24) + hours, minutes), minutes);
-            
+            const chartSettings = getUserChartSettings(interaction.user.id);
+
+            if (chartSettings.chartType === 'candlestick' && tickerList.length > 1) {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  차트 불러오기 실패')
+                            .setDescription('캔들차트는 단일 종목만 지원합니다.\n`/차트설정 차트종류 종류:선형` 으로 선형차트로 변경하거나, 종목을 하나만 입력해 주세요.')
+                            .setTimestamp()
+                    ],
+                });
+                return;
+            }
+
+            const result = await generateStockChartImage(tickerList, getStockTimeRangeData(tickerList, (days * 24) + hours, minutes), minutes, chartSettings);
+
             try {
                 await interaction.reply({
                     embeds: [
