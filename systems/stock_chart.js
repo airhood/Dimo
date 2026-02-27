@@ -227,6 +227,22 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
             ]) {
                 mainSeries.push({ name, type: 'line', data: toXY(candleT, data) });
             }
+            const ichBullish = candleT
+                .map((t, i) => {
+                    const a = ich.spanA[i], b = ich.spanB[i];
+                    if (a === null || b === null) return null;
+                    return { x: t, y: a >= b ? [b, a] : [Math.min(a, b), Math.min(a, b)] };
+                })
+                .filter(Boolean);
+            const ichBearish = candleT
+                .map((t, i) => {
+                    const a = ich.spanA[i], b = ich.spanB[i];
+                    if (a === null || b === null) return null;
+                    return { x: t, y: a < b ? [a, b] : [Math.min(a, b), Math.min(a, b)] };
+                })
+                .filter(Boolean);
+            mainSeries.push({ name: '구름(상승)', type: 'rangeArea', data: ichBullish });
+            mainSeries.push({ name: '구름(하락)', type: 'rangeArea', data: ichBearish });
         }
 
         // 이치모쿠 구름 오버레이 (선행스팬A/B 라인 + 구름 채움)
@@ -236,16 +252,22 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
             const ich = calcIchimoku(candleClose);
             mainSeries.push({ name: '선행스팬A', type: 'line', data: toXY(candleT, ich.spanA) });
             mainSeries.push({ name: '선행스팬B', type: 'line', data: toXY(candleT, ich.spanB) });
-            const cloudData = candleT
+            const bullishCloud = candleT
                 .map((t, i) => {
                     const a = ich.spanA[i], b = ich.spanB[i];
-                    if (a !== null && b !== null) {
-                        return { x: t, y: [Math.min(a, b), Math.max(a, b)] };
-                    }
-                    return null;
+                    if (a === null || b === null) return null;
+                    return { x: t, y: a >= b ? [b, a] : [Math.min(a, b), Math.min(a, b)] };
                 })
                 .filter(Boolean);
-            mainSeries.push({ name: '구름', type: 'rangeArea', data: cloudData });
+            const bearishCloud = candleT
+                .map((t, i) => {
+                    const a = ich.spanA[i], b = ich.spanB[i];
+                    if (a === null || b === null) return null;
+                    return { x: t, y: a < b ? [a, b] : [Math.min(a, b), Math.min(a, b)] };
+                })
+                .filter(Boolean);
+            mainSeries.push({ name: '구름(상승)', type: 'rangeArea', data: bullishCloud });
+            mainSeries.push({ name: '구름(하락)', type: 'rangeArea', data: bearishCloud });
         }
     } else {
         // Area 시리즈 (멀티 가능)
@@ -314,6 +336,22 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
                         data: tArr2.map((t, i) => s.data[i] !== null ? [t, s.data[i]] : null).filter(Boolean),
                     });
                 }
+                const bullishCloud5 = tArr2
+                    .map((t, i) => {
+                        const a = ich.spanA[i], b = ich.spanB[i];
+                        if (a === null || b === null) return null;
+                        return { x: t, y: a >= b ? [b, a] : [Math.min(a, b), Math.min(a, b)] };
+                    })
+                    .filter(Boolean);
+                const bearishCloud5 = tArr2
+                    .map((t, i) => {
+                        const a = ich.spanA[i], b = ich.spanB[i];
+                        if (a === null || b === null) return null;
+                        return { x: t, y: a < b ? [a, b] : [Math.min(a, b), Math.min(a, b)] };
+                    })
+                    .filter(Boolean);
+                mainSeries.push({ name: '구름(상승)', type: 'rangeArea', color: '#A5D6A7', data: bullishCloud5 });
+                mainSeries.push({ name: '구름(하락)', type: 'rangeArea', color: '#EF9A9A', data: bearishCloud5 });
             }
 
             // 이치모쿠 구름 오버레이 (선행스팬A/B 라인 + 구름 채움)
@@ -323,23 +361,31 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
                 mainSeries.push({
                     name: '선행스팬A',
                     type: 'line',
+                    color: '#43A047',
                     data: tArr2.map((t, i) => ich.spanA[i] !== null ? [t, ich.spanA[i]] : null).filter(Boolean),
                 });
                 mainSeries.push({
                     name: '선행스팬B',
                     type: 'line',
+                    color: '#EF5350',
                     data: tArr2.map((t, i) => ich.spanB[i] !== null ? [t, ich.spanB[i]] : null).filter(Boolean),
                 });
-                const cloudData = tArr2
+                const bullishCloud = tArr2
                     .map((t, i) => {
                         const a = ich.spanA[i], b = ich.spanB[i];
-                        if (a !== null && b !== null) {
-                            return { x: t, y: [Math.min(a, b), Math.max(a, b)] };
-                        }
-                        return null;
+                        if (a === null || b === null) return null;
+                        return { x: t, y: a >= b ? [b, a] : [Math.min(a, b), Math.min(a, b)] };
                     })
                     .filter(Boolean);
-                mainSeries.push({ name: '구름', type: 'rangeArea', data: cloudData });
+                const bearishCloud = tArr2
+                    .map((t, i) => {
+                        const a = ich.spanA[i], b = ich.spanB[i];
+                        if (a === null || b === null) return null;
+                        return { x: t, y: a < b ? [a, b] : [Math.min(a, b), Math.min(a, b)] };
+                    })
+                    .filter(Boolean);
+                mainSeries.push({ name: '구름(상승)', type: 'rangeArea', color: '#A5D6A7', data: bullishCloud });
+                mainSeries.push({ name: '구름(하락)', type: 'rangeArea', color: '#EF9A9A', data: bearishCloud });
             }
         }
     }
@@ -382,12 +428,13 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
             overlayStrokeWidths.push(1.5, 1.5, 1.5);
         }
         if (hasIchimoku) {
-            overlayColors.push('#E53935', '#1565C0', '#43A047', '#FB8C00', '#8E24AA');   // 전환, 기준, 선행A, 선행B, 후행
-            overlayStrokeWidths.push(1.5, 1.5, 1.5, 1.5, 1.5);
+            overlayColors.push('#E53935', '#1565C0', '#43A047', '#FB8C00', '#8E24AA',   // 전환, 기준, 선행A, 선행B, 후행
+                               '#A5D6A7', '#EF9A9A');                                   // 구름(상승=연초록), 구름(하락=연빨강)
+            overlayStrokeWidths.push(1.5, 1.5, 1.5, 1.5, 1.5, 0, 0);
         }
         if (hasIchimokuCloud) {
-            overlayColors.push('#43A047', '#EF5350', '#78909C');                         // 선행A(초록), 선행B(빨강), 구름(회청)
-            overlayStrokeWidths.push(1.5, 1.5, 0);                                      // 구름 rangeArea는 테두리 없음
+            overlayColors.push('#43A047', '#EF5350', '#A5D6A7', '#EF9A9A');              // 선행A(초록), 선행B(빨강), 구름(상승=연초록), 구름(하락=연빨강)
+            overlayStrokeWidths.push(1.5, 1.5, 0, 0);                                   // 구름 rangeArea는 테두리 없음
         }
 
         candleConfig.colors = ['#546E7A', ...overlayColors];
@@ -398,8 +445,8 @@ async function generateStockChartImage(tickerList, timeRangeData, targetMinuteIn
     const overlayFillOps   = [];
     if (hasMA)           { overlayStrokeOps.push(0.55, 0.55);                  overlayFillOps.push(0, 0); }
     if (hasBB)           { overlayStrokeOps.push(0.55, 0.55, 0.55);            overlayFillOps.push(0, 0, 0); }
-    if (hasIchimoku)     { overlayStrokeOps.push(0.55, 0.55, 0.55, 0.55, 0.55); overlayFillOps.push(0, 0, 0, 0, 0); }
-    if (hasIchimokuCloud){ overlayStrokeOps.push(0.55, 0.55, 0.3);             overlayFillOps.push(0, 0, 0.25); }
+    if (hasIchimoku)     { overlayStrokeOps.push(0.55, 0.55, 0.55, 0.55, 0.55, 0, 0); overlayFillOps.push(0, 0, 0, 0, 0, 1, 1); }
+    if (hasIchimokuCloud){ overlayStrokeOps.push(0.55, 0.55, 0, 0);                  overlayFillOps.push(0, 0, 1, 1); }
     const areaStrokeOpacities = [1, ...overlayStrokeOps];
     const areaFillOpacities   = [(isMulti ? 0.1 : 0.3), ...overlayFillOps];
 

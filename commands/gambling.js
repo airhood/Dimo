@@ -126,9 +126,12 @@ module.exports = {
                 return;
             }
 
+            const embedColor = transactionAmount > 0 ? 0x2ECC71 : transactionAmount < 0 ? 0xEA4144 : 0xF1C40F;
+
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
+                        .setColor(0xF1C40F)
                         .setTitle(':game_die:  주사위')
                         .addFields(
                             { name: ':coin: 배팅금액', value: `\`\`\`${betAmount}\`\`\``, inline: false },
@@ -148,6 +151,7 @@ module.exports = {
             await interaction.editReply({
                 embeds: [
                     new EmbedBuilder()
+                        .setColor(0xF1C40F)
                         .setTitle(':game_die:  주사위')
                         .addFields(
                             { name: ':coin: 배팅금액', value: `\`\`\`${betAmount}\`\`\``, inline: false },
@@ -163,6 +167,7 @@ module.exports = {
             await interaction.editReply({
                 embeds: [
                     new EmbedBuilder()
+                        .setColor(0xF1C40F)
                         .setTitle(':game_die:  주사위')
                         .addFields(
                             { name: ':coin: 배팅금액', value: `\`\`\`${betAmount}\`\`\``, inline: false },
@@ -178,6 +183,7 @@ module.exports = {
             await interaction.editReply({
                 embeds: [
                     new EmbedBuilder()
+                        .setColor(embedColor)
                         .setTitle(':game_die:  주사위')
                         .addFields(
                             { name: ':coin: 배팅금액', value: `\`\`\`${betAmount}\`\`\``, inline: false },
@@ -240,9 +246,12 @@ module.exports = {
                 return;
             }
             
+            const embedColor = transactionAmount > 0 ? 0x2ECC71 : 0xEA4144;
+
             await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
+                        .setColor(embedColor)
                         .setTitle(':game_die:  숫자 맞추기')
                         .addFields(
                             { name: ':coin: 배팅금액', value: `\`\`\`${betAmount}\`\`\``, inline: false },

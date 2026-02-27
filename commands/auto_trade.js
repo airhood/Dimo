@@ -7,10 +7,13 @@ const {
     TextInputBuilder,
     TextInputStyle,
     ActionRowBuilder,
+    AttachmentBuilder,
 } = require('discord.js');
 const AutoTrade = require('../schemas/auto_trade');
 const { getUserState } = require('../database');
 const { validateScript } = require('../systems/auto_trade_interpreter');
+const { runBacktest } = require('../systems/backtest_engine');
+const { INITIAL_BALANCE } = require('../setting');
 const moment = require('moment-timezone');
 
 const MAX_LOGS = 50;
@@ -60,6 +63,30 @@ module.exports = {
         .addSubcommand((sub) =>
             sub.setName('도움말')
                 .setDescription('DimoScript 문법 및 함수 목록을 표시합니다.')
+        )
+        .addSubcommand((sub) =>
+            sub.setName('백테스팅')
+                .setDescription('등록된 스크립트를 역사적 데이터로 시뮬레이션합니다.')
+                .addStringOption((opt) =>
+                    opt.setName('기간')
+                        .setDescription('백테스팅 기간')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: '1시간',  value: '1'  },
+                            { name: '3시간',  value: '3'  },
+                            { name: '6시간',  value: '6'  },
+                            { name: '12시간', value: '12' },
+                            { name: '24시간', value: '24' },
+                            { name: '48시간', value: '48' },
+                        )
+                )
+                .addIntegerOption((opt) =>
+                    opt.setName('시작잔액')
+                        .setDescription('시뮬레이션 시작 잔액 (기본: 1,000,000원)')
+                        .setRequired(false)
+                        .setMinValue(100000)
+                        .setMaxValue(1000000000)
+                )
         ),
 
     async execute(interaction) {
@@ -498,6 +525,78 @@ module.exports = {
                 ],
                 ephemeral: priv,
             });
+        }
+
+        if (sub === '백테스팅') {
+            const hours = parseInt(interaction.options.getString('기간'), 10);
+            const startBalance = interaction.options.getInteger('시작잔액') ?? INITIAL_BALANCE;
+
+            const entry = await AutoTrade.findOne({ userId: interaction.user.id, accountKey });
+            const priv = entry?.privateMode ?? false;
+
+            if (!entry || !entry.script) {
+                return interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xE57E22)
+                            .setTitle('스크립트 없음')
+                            .setDescription(`**[${accountLabel}]**에 등록된 스크립트가 없습니다.\n\`/자동매매 등록\`으로 스크립트를 먼저 등록하세요.`)
+                    ],
+                    ephemeral: priv,
+                });
+            }
+
+            await interaction.deferReply({ ephemeral: priv });
+
+            const result = await runBacktest(entry.script, { hours, startBalance });
+
+            if (!result.ok) {
+                return interaction.editReply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xEA4144)
+                            .setTitle('백테스팅 실패')
+                            .setDescription(result.error)
+                    ],
+                });
+            }
+
+            const sign = result.returnRate >= 0 ? '+' : '';
+            const mddStr = result.mdd > 0 ? `-${result.mdd.toFixed(2)}%` : '0.00%';
+            const embedColor = result.returnRate >= 0 ? 0x2ecc71 : 0xe74c3c;
+
+            // Recent trades block (up to 10)
+            const recentTrades = result.trades.slice(-10);
+            const tradeBlock = recentTrades.length > 0
+                ? recentTrades.map((t) => `${t.success ? '✅' : '❌'} ${t.summary}`).join('\n')
+                : '거래 없음';
+
+            const summaryEmbed = new EmbedBuilder()
+                .setColor(embedColor)
+                .setTitle(`🔬 백테스팅 결과 [${hours}시간]`)
+                .addFields(
+                    { name: '시작 잔액',     value: `${startBalance.toLocaleString()}원`,                 inline: true },
+                    { name: '최종 자산가치', value: `${Math.round(result.finalValue).toLocaleString()}원`, inline: true },
+                    { name: '수익률',        value: `${sign}${result.returnRate.toFixed(2)}%`,             inline: true },
+                    { name: '최대 낙폭',     value: mddStr,                                               inline: true },
+                    { name: '총 거래 횟수',  value: `${result.tradeCount}회  (성공 ${result.successCount} / 실패 ${result.failCount})`, inline: true },
+                    { name: '\u200B', value: '\u200B', inline: true },
+                    {
+                        name: `최근 거래 ${recentTrades.length}건`,
+                        value: `\`\`\`\n${tradeBlock.slice(0, 1000)}\n\`\`\``,
+                        inline: false,
+                    },
+                )
+                .setTimestamp()
+                .setFooter({ text: `[${accountLabel}] | 백테스팅은 실제 거래가 아닙니다.` });
+
+            if (result.chartBuffer) {
+                const attachment = new AttachmentBuilder(result.chartBuffer, { name: 'backtest_chart.png' });
+                summaryEmbed.setImage('attachment://backtest_chart.png');
+                return interaction.editReply({ embeds: [summaryEmbed], files: [attachment] });
+            }
+
+            return interaction.editReply({ embeds: [summaryEmbed] });
         }
 
         if (sub === '보안') {

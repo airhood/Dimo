@@ -343,10 +343,10 @@ class Parser {
 
 // ── Evaluator ─────────────────────────────────────────────────────────────────
 
-const TIMEOUT_MS = 10000;
+const DEFAULT_TIMEOUT_MS = 10000;
 
 class Evaluator {
-    constructor(userId, accountKey, dbFuncs, priceFuncs, discordClient = null) {
+    constructor(userId, accountKey, dbFuncs, priceFuncs, discordClient = null, timeoutMs = DEFAULT_TIMEOUT_MS) {
         this.userId = userId;
         this.accountKey = accountKey;
         this.vars = {};
@@ -356,6 +356,7 @@ class Evaluator {
         this.discordClient = discordClient;
         this.trades = [];
         this.startTime = Date.now();
+        this.timeoutMs = timeoutMs;
     }
 
     _pushTrade(summary, success) {
@@ -363,8 +364,8 @@ class Evaluator {
     }
 
     _checkTimeout() {
-        if (Date.now() - this.startTime > TIMEOUT_MS) {
-            throw new Error('스크립트 실행 시간 초과 (10초)');
+        if (Date.now() - this.startTime > this.timeoutMs) {
+            throw new Error(`스크립트 실행 시간 초과 (${this.timeoutMs}ms)`);
         }
     }
 
@@ -891,6 +892,17 @@ async function withAccount(userId, accountKey, fn) {
 }
 
 /**
+ * Parses a DimoScript source string and returns the AST.
+ * Throws on parse error.
+ */
+function parseScript(source) {
+    if (source.length > 4000) throw new Error('스크립트가 4000자를 초과합니다.');
+    const tokens = tokenize(source);
+    const parser = new Parser(tokens);
+    return parser.parseProgram();
+}
+
+/**
  * Parses and validates a DimoScript source string.
  * Returns { ok: true } on success, or { ok: false, error: String }.
  */
@@ -960,4 +972,4 @@ async function executeScript(userId, accountKey, source, discordClient = null) {
     }
 }
 
-module.exports = { executeScript, validateScript };
+module.exports = { executeScript, validateScript, parseScript, Evaluator };
