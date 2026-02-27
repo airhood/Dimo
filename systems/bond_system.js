@@ -13,10 +13,10 @@ const TRADEABLE_MATURITIES = [3, 7, 14, 21];
 //   kappa       : 기준금리로의 평균회귀 속도 (작을수록 자유롭게 드리프트)
 //   sigma       : 분 단위 변동성 (클수록 주식처럼 활발하게 움직임)
 const MATURITY_PARAMS = {
-    3:  { termPremium: 0.10, kappa: 0.007, sigma: 0.055 },
-    7:  { termPremium: 0.25, kappa: 0.005, sigma: 0.075 },
-    14: { termPremium: 0.50, kappa: 0.003, sigma: 0.095 },
-    21: { termPremium: 0.75, kappa: 0.002, sigma: 0.110 },
+    3:  { termPremium: 0.10, kappa: 0.08, sigma: 0.030 },
+    7:  { termPremium: 0.25, kappa: 0.06, sigma: 0.040 },
+    14: { termPremium: 0.50, kappa: 0.04, sigma: 0.055 },
+    21: { termPremium: 0.75, kappa: 0.025, sigma: 0.065 },
 };
 
 const MAX_HISTORY = 240; // 240분(4시간) 보관
