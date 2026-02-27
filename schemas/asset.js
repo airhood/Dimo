@@ -268,6 +268,36 @@ const AssetSchema = new Schema({
             required: true,
         },
     }],
+    bonds: [{
+        faceValue: {
+            type: Number,
+            required: true,
+        },
+        quantity: {
+            type: Number,
+            required: true,
+        },
+        couponRate: {
+            type: Number,
+            required: true,
+        },
+        maturityDays: {
+            type: Number,
+            required: true,
+        },
+        purchaseDate: {
+            type: Date,
+            required: true,
+        },
+        maturityDate: {
+            type: Date,
+            required: true,
+        },
+        uid: {
+            type: Number,
+            required: true,
+        },
+    }],
     loanHistory: [{
         amount: {
             type: Number,

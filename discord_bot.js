@@ -91,14 +91,19 @@ module.exports = {
 				}
 			} catch (error) {
 				console.error(error);
+				const errorEmbed = new EmbedBuilder()
+					.setColor(0xEA4144)
+					.setTitle('오류')
+					.setDescription('명령어 실행 중 오류가 발생했습니다.\n문제가 지속되면 공식 디스코드 서버 **디모랜드**에서 문의해주세요.')
+					.setTimestamp();
 				if (interaction.replied || interaction.deferred) {
-					await interaction.followUp({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+					await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
 				} else {
 					try {
-						await interaction.reply({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+						await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
 					} catch (err) {
 						try {
-							await interaction.editReply({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+							await interaction.editReply({ embeds: [errorEmbed] });
 						} catch (err) {
 
 						}

@@ -1,6 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder, CommandInteractionOptionResolver } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, CommandInteractionOptionResolver } = require('discord.js');
 const { loan, loanRepay, openFixedDeposit, openSavingsAccount, getUserCredit, checkUserExists, getActiveAsset } = require('../database');
-const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint } = require('../systems/bank_manager');
+const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint, getHistoricalRates, generateRateChart } = require('../systems/bank_manager');
 const { getCreditGrade, calculateFundCreditRating } = require('../systems/credit_system');
 
 module.exports = {
@@ -100,6 +100,10 @@ module.exports = {
         .addSubcommand((subCommand) =>
             subCommand.setName('적금금리')
                 .setDescription('적금금리는 변동될 수 있습니다.')
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('금리차트')
+                .setDescription('기준금리 / 예금금리 / 적금금리의 최근 12개월 추이를 차트로 확인합니다.')
         )
         .addSubcommand((subCommand) =>
             subCommand.setName('신용등급')
@@ -286,6 +290,28 @@ module.exports = {
                     ]
                 });
             }
+        } else if (subCommand === '금리차트') {
+            await interaction.deferReply();
+
+            const chartBuffer = await generateRateChart();
+            const attachment = new AttachmentBuilder(chartBuffer, { name: 'rate_chart.png' });
+
+            const rates = getHistoricalRates(1)[0];
+            await interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle('금리 추이 차트 (최근 12개월)')
+                        .addFields(
+                            { name: '기준금리', value: `\`${rates.base}%\``, inline: true },
+                            { name: '예금금리', value: `\`${rates.deposit}%\``, inline: true },
+                            { name: '적금금리', value: `\`${rates.savings}%\``, inline: true },
+                        )
+                        .setImage('attachment://rate_chart.png')
+                        .setTimestamp(),
+                ],
+                files: [attachment],
+            });
         } else if (subCommand === '예금금리') {
             const interestRatePoint = getFixedDepositInterestRatePoint();
 

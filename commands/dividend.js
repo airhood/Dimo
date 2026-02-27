@@ -34,15 +34,22 @@ module.exports = {
         const entries = Object.entries(DIVIDEND_YIELDS)
             .sort((a, b) => b[1] - a[1]);
 
-        const COL = { ticker: 6, name: 18, rate: 5, price: 12, perShare: 10 };
+        // name 컬럼은 한글/영어 혼용이라 폰트 렌더링 차이로 정확한 공백 정렬 불가
+        // │ 구분자를 사용해 컬럼 경계를 명확히 표시
+        const COL = { ticker: 4, name: 20, rate: 6, price: 11 };
 
         const header =
-            padR('티커',   COL.ticker) +
-            padR('종목명', COL.name)   +
-            padL('배당률', COL.rate)   + '  ' +
-            padL('현재가격', COL.price) + '  ' +
+            padR('티커',     COL.ticker) + ' │ ' +
+            padR('종목명',   COL.name)   + ' │ ' +
+            padL('배당률',   COL.rate)   + ' │ ' +
+            padL('현재가격', COL.price)  + ' │ ' +
             '주당배당금';
-        const sep = '─'.repeat(58);
+        const sep =
+            '─'.repeat(COL.ticker + 2) + '┼' +
+            '─'.repeat(COL.name   + 2) + '┼' +
+            '─'.repeat(COL.rate   + 2) + '┼' +
+            '─'.repeat(COL.price  + 2) + '┼' +
+            '─'.repeat(12);
 
         let rows = '';
         for (const [ticker, rate] of entries) {
@@ -54,10 +61,10 @@ module.exports = {
             const rateStr = `${rate}%`;
 
             rows +=
-                padR(ticker,      COL.ticker) +
-                padR(name,        COL.name)   +
-                padL(rateStr,     COL.rate)   + '  ' +
-                padL(priceStr,    COL.price)  + '  ' +
+                padR(ticker,   COL.ticker) + ' │ ' +
+                padR(name,     COL.name)   + ' │ ' +
+                padL(rateStr,  COL.rate)   + ' │ ' +
+                padL(priceStr, COL.price)  + ' │ ' +
                 perShareStr + '\n';
         }
 

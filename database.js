@@ -4,6 +4,7 @@ const { serverLog } = require('./server/server_logger');
 const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionExpirationDate, getOptionStrikePriceList } = require('./systems/stock_sim');
 const { getEtfPrice, ETF_DEFINITIONS } = require('./systems/etf_system');
 const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, getLoanInterestRatePoint, getFixedDepositInterestRatePoint } = require('./systems/bank_manager');
+const { FACE_VALUE, getBondYield, calcMaturityValue, calcMarketPrice } = require('./systems/bond_system');
 const { calculateFundCreditRating, calculateAssetValue } = require('./systems/credit_system');
 require('dotenv').config();
 const moment = require('moment-timezone');
@@ -4229,6 +4230,104 @@ module.exports = {
             return { state: 'success', data: userAsset.properties || [] };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getUserProperties': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    // ── 채권 ────────────────────────────────────────────────────────────────
+
+    async buyBond(id, maturityDays, quantity) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            const totalCost = FACE_VALUE * quantity;
+            if (userAsset.balance < totalCost) return { state: 'no_balance', data: null };
+
+            const couponRate = getBondYield(maturityDays);
+            const purchaseDate = new Date();
+            const maturityDate = new Date();
+            maturityDate.setDate(purchaseDate.getDate() + maturityDays);
+
+            const uid = userAsset.bonds.length === 0
+                ? 0
+                : Math.max(...userAsset.bonds.map(b => b.uid)) + 1;
+
+            userAsset.bonds.push({
+                faceValue: FACE_VALUE,
+                quantity,
+                couponRate,
+                maturityDays,
+                purchaseDate,
+                maturityDate,
+                uid,
+            });
+            userAsset.balance -= totalCost;
+
+            const schedResult = await module.exports.setTransactionSchedule(
+                `${id}-bond_${uid}`, id,
+                `redeem_bond ${id} ${userAsset._id} ${uid} at ${maturityDate.getTime()}`,
+            );
+            if (schedResult.state === 'error') return { state: 'error', data: null };
+
+            await userAsset.save();
+
+            const maturityValue = calcMaturityValue(FACE_VALUE, couponRate, maturityDays) * quantity;
+            return { state: 'success', data: { couponRate, totalCost, maturityValue } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:buyBond': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async sellBond(id, uid) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            const bond = userAsset.bonds.find(b => b.uid === uid);
+            if (!bond) return { state: 'not_found', data: null };
+
+            const now = new Date();
+            const daysHeld = Math.max(0, Math.floor((now - new Date(bond.purchaseDate)) / (1000 * 60 * 60 * 24)));
+            const currentYield = getBondYield(bond.maturityDays);
+            const marketPricePerUnit = calcMarketPrice(bond.faceValue, bond.couponRate, bond.maturityDays, daysHeld, currentYield);
+            const totalMarketValue = marketPricePerUnit * bond.quantity;
+            const purchaseCost = bond.faceValue * bond.quantity;
+
+            userAsset.balance += totalMarketValue;
+            userAsset.balance = Math.round(userAsset.balance);
+
+            const index = userAsset.bonds.findIndex(b => b.uid === uid);
+            userAsset.bonds.splice(index, 1);
+
+            await module.exports.deleteTransactionSchedule(`${id}-bond_${uid}`);
+            await userAsset.save();
+
+            return { state: 'success', data: { marketValue: totalMarketValue, gain: totalMarketValue - purchaseCost } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:sellBond': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getUserBonds(id) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            return { state: 'success', data: userAsset.bonds || [] };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getUserBonds': ${err}`);
             return { state: 'error', data: null };
         }
     },

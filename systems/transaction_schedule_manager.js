@@ -362,6 +362,58 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
+        program.command('redeem_bond <id> <asset_id> <uid> at <date> <identification_code>')
+            .action((id, asset_id, uid, date, identification_code) => {
+                const dateObj = new Date();
+                dateObj.setTime(date);
+                const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
+                    const userAsset = await Asset.findById(asset_id);
+                    if (!userAsset) {
+                        serverLog('[ERROR] Error finding user asset');
+                        return null;
+                    }
+
+                    let index;
+                    let bond;
+                    userAsset.bonds.forEach((element, _index) => {
+                        if (element.uid == uid) {
+                            bond = element;
+                            index = _index;
+                        }
+                    });
+
+                    if (!bond) {
+                        serverLog(`[WARN] Bond uid=${uid} not found at redemption (already sold?)`);
+                        return null;
+                    }
+
+                    const maturityValue = Math.round(
+                        bond.faceValue * (1 + bond.couponRate / 100 * bond.maturityDays / 365) * bond.quantity
+                    );
+
+                    userAsset.balance += maturityValue;
+                    userAsset.balance = Math.round(userAsset.balance);
+                    userAsset.bonds.splice(index, 1);
+
+                    const saveResult = await userAsset.save();
+                    if (!saveResult) {
+                        serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
+                        return null;
+                    }
+
+                    const result = await deleteTransactionSchedule(`${id}-bond_${uid}`);
+                    if (!result) {
+                        serverLog('[ERROR] Delete transaction schedule failed.');
+                        return null;
+                    }
+
+                    serverLog(`[INFO] Redeemed bond uid=${uid} for ${maturityValue}원. asset_id: ${asset_id}`);
+                    return true;
+                });
+
+                schedule_job_list[identification_code] = job;
+            });
+
         program.command('pay_money_savings_account <id> <asset_id> <uid> <cycle> at <date> <identification_code>')
             .action((id, asset_id, uid, cycle, date, identification_code) => {
                 const dateObj = new Date();
