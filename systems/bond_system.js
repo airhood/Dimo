@@ -4,26 +4,26 @@ const axios = require('axios');
 const FACE_VALUE = 1000000; // 액면가 100만원
 
 // 수익률 커브에 표시할 만기 전체
-const CURVE_MATURITIES = [1, 3, 7, 14];
-// 매수 가능한 만기 (1일물 포함 — 하루 만에 금리 변동 거래 가능)
-const TRADEABLE_MATURITIES = [1, 3, 7, 14];
+const CURVE_MATURITIES = [3, 7, 14, 21];
+// 매수 가능한 만기
+const TRADEABLE_MATURITIES = [3, 7, 14, 21];
 
 // 만기별 OU(오른슈타인-울렌베크) 시뮬레이션 파라미터
 //   termPremium : 기준금리 대비 기간 프리미엄 (%)
 //   kappa       : 기준금리로의 평균회귀 속도 (작을수록 자유롭게 드리프트)
 //   sigma       : 분 단위 변동성 (클수록 주식처럼 활발하게 움직임)
 const MATURITY_PARAMS = {
-    1:  { termPremium: 0.00, kappa: 0.010, sigma: 0.040 },
     3:  { termPremium: 0.10, kappa: 0.007, sigma: 0.055 },
     7:  { termPremium: 0.25, kappa: 0.005, sigma: 0.075 },
     14: { termPremium: 0.50, kappa: 0.003, sigma: 0.095 },
+    21: { termPremium: 0.75, kappa: 0.002, sigma: 0.110 },
 };
 
 const MAX_HISTORY = 240; // 240분(4시간) 보관
 
 // in-memory 상태
-let currentYields = {};       // { 1: %, 3: %, 7: %, 14: % }
-let yieldHistory  = [];       // [{ ts, yields:{1,3,7,14} }, ...]
+let currentYields = {};       // { 3: %, 7: %, 14: %, 21: % }
+let yieldHistory  = [];       // [{ ts, yields:{3,7,14,21} }, ...]
 
 // ── 내부 헬퍼 ─────────────────────────────────────────────────────────────
 

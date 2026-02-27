@@ -6,7 +6,7 @@ const {
     generateBondChart, generateYieldCurveChart,
 } = require('../systems/bond_system');
 
-const PRODUCTS = { '1': 1, '3': 3, '7': 7, '14': 14 };
+const PRODUCTS = { '3': 3, '7': 7, '14': 14, '21': 21 };
 
 function fmt(n) { return Math.round(n).toLocaleString(); }
 
@@ -34,10 +34,10 @@ module.exports = {
                         .setDescription('국채 만기')
                         .setRequired(true)
                         .addChoices(
-                            { name: '1일물', value: '1' },
                             { name: '3일물', value: '3' },
                             { name: '7일물', value: '7' },
                             { name: '14일물', value: '14' },
+                            { name: '21일물', value: '21' },
                         )
                 )
                 .addIntegerOption((opt) =>
@@ -90,7 +90,7 @@ module.exports = {
             await interaction.deferReply();
             const chartBuffer = await generateBondChart();
             const attachment  = new AttachmentBuilder(chartBuffer, { name: 'bond_chart.png' });
-            const curve = getYieldCurve().filter(c => [3, 7, 14].includes(c.maturity));
+            const curve = getYieldCurve().filter(c => [3, 7, 14, 21].includes(c.maturity));
             const fields = curve.map(c => ({ name: `${c.maturity}일물`, value: `\`${c.yield}%\``, inline: true }));
             await interaction.editReply({
                 embeds: [
