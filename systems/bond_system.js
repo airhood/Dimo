@@ -143,7 +143,7 @@ async function generateBondChart() {
             decimalsInFloat: 2,
         },
         legend: { show: true },
-        colors: ['#4A90D9', '#27AE60', '#E74C3C'],
+        colors: ['#4A90D9', '#27AE60', '#E74C3C', '#F39C12'],
     };
 
     const response = await axios.post(
