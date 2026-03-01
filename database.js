@@ -2690,10 +2690,10 @@ module.exports = {
             maturityDate.setDate(depositDate.getDate() + product);
 
             let uid;
-            if (userAsset.futures.length === 0) {
+            if (userAsset.fixed_deposits.length === 0) {
                 uid = 0;
             } else {
-                uid = userAsset.futures[userAsset.futures.length - 1].uid + 1;
+                uid = userAsset.fixed_deposits[userAsset.fixed_deposits.length - 1].uid + 1;
             }
 
             userAsset.fixed_deposits.push({
@@ -2715,7 +2715,7 @@ module.exports = {
                 };
             }
 
-            const saveResult = userAsset.save();
+            const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user asset`);
                 return {
@@ -2780,10 +2780,10 @@ module.exports = {
             endDate.setDate(startDate.getDate() + product);
 
             let uid;
-            if (userAsset.futures.length === 0) {
+            if (userAsset.savings_accounts.length === 0) {
                 uid = 0;
             } else {
-                uid = userAsset.futures[userAsset.futures.length - 1].uid + 1;
+                uid = userAsset.savings_accounts[userAsset.savings_accounts.length - 1].uid + 1;
             }
 
             userAsset.savings_accounts.push({
@@ -2823,7 +2823,7 @@ module.exports = {
                 };
             }
 
-            const saveResult = userAsset.save();
+            const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user asset`);
                 return {

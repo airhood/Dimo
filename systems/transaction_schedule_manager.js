@@ -63,7 +63,7 @@ module.exports = {
                     let index;
                     let short;
                     userAsset.stockShortSales.forEach((element, _index) => {
-                        if (element.uid === uid) {
+                        if (element.uid === Number(uid)) {
                             short = element;
                             index = _index;
                         }
@@ -157,7 +157,7 @@ module.exports = {
                     let index;
                     let binaryOption;
                     userAsset.binary_options.forEach((element, _index) => {
-                        if (element.uid === uid) {
+                        if (element.uid === Number(uid)) {
                             binaryOption = element;
                             index = _index;
                         }
@@ -231,7 +231,7 @@ module.exports = {
                     let index;
                     let loan;
                     userAsset.loans.forEach((element, _index) => {
-                        if (element.uid === uid) {
+                        if (element.uid === Number(uid)) {
                             loan = element;
                             index = _index;
                         }
@@ -283,7 +283,7 @@ module.exports = {
                     let index;
                     let fixed_deposit;
                     userAsset.fixed_deposits.forEach((element, _index) => {
-                        if (element.uid === uid) {
+                        if (element.uid === Number(uid)) {
                             fixed_deposit = element;
                             index = _index;
                         }
@@ -330,7 +330,7 @@ module.exports = {
                     let index;
                     let savings_account;
                     userAsset.savings_accounts.forEach((element, _index) => {
-                        if (element.uid === uid) {
+                        if (element.uid === Number(uid)) {
                             savings_account = element;
                             index = _index;
                         }
@@ -429,7 +429,7 @@ module.exports = {
                     let index;
                     let savings_account;
                     userAsset.savings_accounts.forEach((element, _index) => {
-                        if (element.uid === uid) {
+                        if (element.uid === Number(uid)) {
                             savings_account = element;
                             index = _index;
                         }
