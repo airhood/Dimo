@@ -4,6 +4,7 @@ const { serverLog } = require('../server/server_logger');
 const { getStockPrice, getFuturePrice } = require('./stock_sim');
 const Asset = require('../schemas/asset');
 const User = require('../schemas/user');
+const Reservation = require('../schemas/reservation');
 
 let discordClient = null;
 
@@ -131,6 +132,20 @@ async function checkAllPositions() {
 
             serverLog(`[INFO] Force-liquidated ${liquidated.length} position(s) for user ${user.userID}`);
 
+            // 강제청산으로 무효화된 예약 자동 취소
+            let cancelledReservationCount = 0;
+            if (hadFutureLiquidated) {
+                // 선물 청산 예약: 포지션 번호가 달라지므로 전부 취소
+                const cancelResult = await Reservation.updateMany(
+                    { userId: user.userID, type: 'future_liquidate', status: 'pending' },
+                    { $set: { status: 'cancelled' } },
+                );
+                cancelledReservationCount = cancelResult.modifiedCount;
+                if (cancelledReservationCount > 0) {
+                    serverLog(`[INFO] Cancelled ${cancelledReservationCount} stale future_liquidate reservation(s) for user ${user.userID}`);
+                }
+            }
+
             // DM 발송
             try {
                 const discordUser = await discordClient.users.fetch(user.userID);
@@ -163,6 +178,17 @@ async function checkAllPositions() {
                             .setTimestamp();
                     }
                     await discordUser.send({ embeds: [embed] });
+                }
+                if (cancelledReservationCount > 0) {
+                    await discordUser.send({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0x95A5A6)
+                                .setTitle('📋 예약 자동 취소')
+                                .setDescription(`강제청산으로 인해 유효하지 않아진 **선물 청산 예약 ${cancelledReservationCount}건**이 자동 취소되었습니다.`)
+                                .setTimestamp(),
+                        ],
+                    });
                 }
             } catch (dmErr) {
                 serverLog(`[WARN] Failed to send forced liquidation DM to user ${user.userID}: ${dmErr}`);
