@@ -5,6 +5,7 @@ const { program } = require('commander');
 const { serverLog } = require("../server/server_logger");
 const schedule = require('node-schedule');
 const { OPTION_UNIT_QUANTITY } = require('../setting');
+const Reservation = require('../schemas/reservation');
 
 const future_execute_list = {};
 const option_execute_list = {};
@@ -643,7 +644,20 @@ module.exports = {
                         serverLog('[ERROR] Delete transaction schedule failed.');
                         return null;
                     }
-    
+
+                    // 옵션 만기로 무효화된 옵션 청산 예약 자동 취소
+                    const cancelResult = await Reservation.updateMany(
+                        {
+                            userId: transaction_schedule.id,
+                            type: { $in: ['option_call_liquidate', 'option_put_liquidate'] },
+                            status: 'pending',
+                        },
+                        { $set: { status: 'cancelled' } },
+                    );
+                    if (cancelResult.modifiedCount > 0) {
+                        serverLog(`[INFO] Cancelled ${cancelResult.modifiedCount} stale option liquidate reservation(s) for user ${transaction_schedule.id}`);
+                    }
+
                     serverLog(`[INFO] Option execute process success. asset_id: ${transaction_schedule.asset_id}}`);
                 }
             }));
