@@ -281,7 +281,6 @@ module.exports = {
             if (loadCache(`bj_${userId}`)) {
                 await interaction.reply({
                     embeds: [new EmbedBuilder().setColor(0xEA4144).setTitle(':x: 진행 중인 게임').setDescription('이미 블랙잭 게임이 진행 중입니다.\n버튼을 눌러 게임을 계속 진행해주세요.')],
-                    ephemeral: true,
                 });
                 return;
             }

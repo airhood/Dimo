@@ -27,7 +27,6 @@ module.exports = {
                         .setTitle('데이터 없음')
                         .setDescription('아직 시장 데이터가 없습니다. 잠시 후 다시 시도해주세요.')
                 ],
-                ephemeral: true,
             });
         }
 

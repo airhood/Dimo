@@ -72,12 +72,9 @@ module.exports = {
             embeds: [
                 new EmbedBuilder()
                     .setColor(0xF1C40F)
-                    .setTitle(':moneybag:  주식 배당금 정보')
-                    .setDescription('배당은 **3일마다** 자동 지급됩니다.\n배당 기준일 이전부터 보유한 주식에만 지급됩니다.')
-                    .addFields({
-                        name: '종목별 배당률 (3일당)',
-                        value: `\`\`\`${header}\n${sep}\n${rows}\`\`\``,
-                    })
+                    .setTitle(':moneybag:  주식 배당금 정보 (3일당)')
+                    .setDescription(`\`\`\`${header}\n${sep}\n${rows}\`\`\``)
+                    .setFooter({ text: '배당은 3일마다 자동 지급 · 기준일 이전 보유분에만 지급' })
                     .setTimestamp(),
             ],
         });

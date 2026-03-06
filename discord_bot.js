@@ -97,10 +97,10 @@ module.exports = {
 					.setDescription('명령어 실행 중 오류가 발생했습니다.\n문제가 지속되면 공식 디스코드 서버 **디모랜드**에서 문의해주세요.')
 					.setTimestamp();
 				if (interaction.replied || interaction.deferred) {
-					await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+					await interaction.followUp({ embeds: [errorEmbed] });
 				} else {
 					try {
-						await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+						await interaction.reply({ embeds: [errorEmbed] });
 					} catch (err) {
 						try {
 							await interaction.editReply({ embeds: [errorEmbed] });

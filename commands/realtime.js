@@ -414,7 +414,7 @@ module.exports = {
         if (subCommand === '자산') {
             const initial = await buildAssetEmbed(userId);
             if (!initial) {
-                await interaction.reply({ embeds: [errorEmbed()], ephemeral: true });
+                await interaction.reply({ embeds: [errorEmbed()] });
                 return;
             }
             const stopRow = makeStopButton(userId, uid);
@@ -452,7 +452,7 @@ module.exports = {
             }
             const initial = buildOptionPriceEmbed(ticker);
             if (!initial) {
-                await interaction.reply({ embeds: [errorEmbed()], ephemeral: true });
+                await interaction.reply({ embeds: [errorEmbed()] });
                 return;
             }
             const stopRow = makeStopButton(userId, uid);
@@ -479,7 +479,7 @@ module.exports = {
         } else if (subCommand === '순위') {
             const initial = await buildLeaderboardEmbed();
             if (!initial) {
-                await interaction.reply({ embeds: [errorEmbed()], ephemeral: true });
+                await interaction.reply({ embeds: [errorEmbed()] });
                 return;
             }
             const stopRow = makeStopButton(userId, uid);
