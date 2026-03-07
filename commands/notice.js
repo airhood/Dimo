@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
 const { v4: uuidv4 } = require('uuid');
-const { createCache, saveCache } = require('../cache');
+const { createCache, saveCache } = require('../utils/cache');
 const { getNoticeList } = require('../database');
 const moment = require('moment-timezone');
 
@@ -44,20 +44,20 @@ module.exports = {
         createCache(uid, 15);
         saveCache(uid, cacheData);
 
-        const previousPage = new ButtonBuilder()
-            .setCustomId(`notice_previous_page-${interaction.user.id}-${uid}`)
+        const ieoJeon = new ButtonBuilder()
+            .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
             .setLabel('이전')
             .setStyle(ButtonStyle.Primary)
             .setDisabled(!(notices.data.length > 1));
 
-        const nextPage = new ButtonBuilder()
-            .setCustomId(`notice_next_page-${interaction.user.id}-${uid}`)
+        const daEum = new ButtonBuilder()
+            .setCustomId(`notice_previous_page-${interaction.user.id}-${uid}`)
             .setLabel('다음')
             .setStyle(ButtonStyle.Primary)
             .setDisabled(true);
-        
+
         const row = new ActionRowBuilder()
-            .addComponents(previousPage, nextPage);
+            .addComponents(ieoJeon, daEum);
 
         const formattedDate = moment(notices.data[0].date).tz('Asia/Seoul').format('YYYY-MM-DD');
         

@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { tryGetTicker } = require('../stock_system/stock_sim');
+const { tryGetTicker } = require('../systems/stock_sim');
 const { binaryOption } = require('../database');
 
 module.exports = {

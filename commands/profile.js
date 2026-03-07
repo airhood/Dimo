@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { checkUserExists, getLevelInfo, getUserProfile } = require('../database');
+const { checkUserExists, getLevelInfo, getUserProfile, checkAndGrantAchievements } = require('../database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -42,6 +42,15 @@ module.exports = {
                 ],
             });
             return;
+        }
+
+        // 자신의 프로필을 볼 때만 업적 검사 및 지급
+        let newAchievements = [];
+        if (targetUser.id === interaction.user.id) {
+            const achievementResult = await checkAndGrantAchievements(interaction.user.id);
+            if (achievementResult.state === 'success') {
+                newAchievements = achievementResult.data;
+            }
         }
 
         const levelInfo = await getLevelInfo(targetUser.id);
@@ -95,17 +104,27 @@ module.exports = {
             }
         }
 
-        await interaction.reply({
-            embeds: [
-                new EmbedBuilder()
-                    .setColor(0x9E754F)
-                    .setTitle(`${targetUser.username}님의 프로필`)
-                    .addFields(
-                        { name: ':sparkles: 레벨', value: `${levelInfo.data.level}레벨 (${levelInfo.data.state}/${levelInfo.data.target})` },
-                        { name: ':diamond_shape_with_a_dot_inside: 업적', value: achievementsContent.join('\n') },
-                    )
-                    .setThumbnail(avatarURL)
-            ],
-        });
+        let achievementsString;
+        if (achievementsContent.length === 0) {
+            achievementsString = " ";
+        } else {
+            achievementsString = achievementsContent.join('\n');
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0x9E754F)
+            .setTitle(`${targetUser.username}님의 프로필`)
+            .addFields(
+                { name: ':sparkles: 레벨', value: `${levelInfo.data.level}레벨 (${levelInfo.data.state}/${levelInfo.data.target})` },
+                { name: ':diamond_shape_with_a_dot_inside: 업적', value: achievementsString },
+            )
+            .setThumbnail(avatarURL);
+
+        if (newAchievements.length > 0) {
+            const newAchievementsText = newAchievements.map(a => `**${a.name}** — ${a.description}`).join('\n');
+            embed.addFields({ name: ':tada: 새 업적 획득!', value: newAchievementsText });
+        }
+
+        await interaction.reply({ embeds: [embed] });
     }
 }

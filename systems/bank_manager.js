@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const axios = require('axios');
 const { calculateAssetValue, getAssetTotalLoan, initCreditSystemFuncDependencies } = require('./credit_system');
 
 function getInterestRate() {
@@ -94,6 +95,66 @@ function calculateLoanLimit(userAsset, creditRating, loanDueDate) {
 }
 
 
+// 과거 months개월의 금리 데이터를 역산하여 반환
+function getHistoricalRates(months = 12) {
+    const now = new Date();
+    const result = [];
+    for (let i = months - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const year = d.getFullYear();
+        const month = d.getMonth() + 1;
+        const label = `${year}-${month}`;
+
+        const hash = crypto.createHash('sha256').update(label).digest('hex');
+        const numericHash = parseInt(hash.substring(0, 8), 16);
+        const base = Number(((numericHash / 0xFFFFFFFF) * 4 + 1).toFixed(2));
+
+        result.push({
+            label,
+            base,
+            deposit: Number((base + 1.00).toFixed(2)),
+            savings: Number((base + 1.20).toFixed(2)),
+        });
+    }
+    return result;
+}
+
+async function generateRateChart() {
+    const rates = getHistoricalRates(12);
+    const categories = rates.map(r => r.label);
+
+    const chartConfig = {
+        chart: { type: 'line' },
+        title: { text: '금리 추이 (최근 12개월)' },
+        dataLabels: { enabled: false },
+        stroke: { width: 2, curve: 'stepline' },
+        series: [
+            { name: '기준금리', data: rates.map(r => r.base) },
+            { name: '예금금리', data: rates.map(r => r.deposit) },
+            { name: '적금금리', data: rates.map(r => r.savings) },
+        ],
+        xaxis: {
+            type: 'category',
+            categories,
+            title: { text: '연월' },
+            tickAmount: 8,
+        },
+        yaxis: {
+            title: { text: '금리 (%)' },
+            decimalsInFloat: 2,
+        },
+        legend: { show: true },
+        colors: ['#4A90D9', '#27AE60', '#8E44AD'],
+    };
+
+    const response = await axios.post(
+        'https://quickchart.io/apex-charts/render',
+        { config: chartConfig, width: 700, height: 350 },
+        { responseType: 'arraybuffer', timeout: 15000 },
+    );
+    return Buffer.from(response.data);
+}
+
 exports.getInterestRate = getInterestRate;
 exports.getInterestRatePoint = getInterestRatePoint;
 exports.getLoanInterestRate = getLoanInterestRate;
@@ -103,6 +164,8 @@ exports.getFixedDepositInterestRatePoint = getFixedDepositInterestRatePoint;
 exports.getSavingsAccountInterestRate = getSavingsAccountInterestRate;
 exports.getSavingsAccountInterestRatePoint = getSavingsAccountInterestRatePoint;
 
+exports.getHistoricalRates = getHistoricalRates;
+exports.generateRateChart = generateRateChart;
 exports.calculateCompoundInterestRate = calculateCompoundInterestRate;
 
 exports.calculateLoanLimit = calculateLoanLimit;

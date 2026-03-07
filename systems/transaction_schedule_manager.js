@@ -1,9 +1,11 @@
 const { getTransactionScheduleData, deleteTransactionSchedule } = require("../database");
 const { setOnFutureExpireListener, setOnOptionExpireListener, getStockPrice } = require("./stock_sim");
+const { collectPendingTaxes, assessTax } = require("./tax_system");
 const { program } = require('commander');
 const { serverLog } = require("../server/server_logger");
 const schedule = require('node-schedule');
 const { OPTION_UNIT_QUANTITY } = require('../setting');
+const Reservation = require('../schemas/reservation');
 
 const future_execute_list = {};
 const option_execute_list = {};
@@ -61,7 +63,7 @@ module.exports = {
                     let index;
                     let short;
                     userAsset.stockShortSales.forEach((element, _index) => {
-                        if (element.uid === uid) {
+                        if (element.uid === Number(uid)) {
                             short = element;
                             index = _index;
                         }
@@ -108,7 +110,7 @@ module.exports = {
                         return null;
                     }
 
-                    const result = deleteTransactionSchedule(`${id}-short_${uid}`);
+                    const result = await deleteTransactionSchedule(`${id}-short_${uid}`);
                     if (!result) {
                         serverLog('[ERROR] Delete transaction schedule failed.');
                         return null;
@@ -155,8 +157,8 @@ module.exports = {
                     let index;
                     let binaryOption;
                     userAsset.binary_options.forEach((element, _index) => {
-                        if (element.uid === uid) {
-                            short = element;
+                        if (element.uid === Number(uid)) {
+                            binaryOption = element;
                             index = _index;
                         }
                     });
@@ -202,7 +204,7 @@ module.exports = {
                         return null;
                     }
 
-                    const result = deleteTransactionSchedule(`${id}_binary_option_${uid}`);
+                    const result = await deleteTransactionSchedule(`${id}_binary_option_${uid}`);
                     if (!result) {
                         serverLog('[ERROR] Delete transaction schedule failed.');
                         return null;
@@ -229,8 +231,8 @@ module.exports = {
                     let index;
                     let loan;
                     userAsset.loans.forEach((element, _index) => {
-                        if (element.uid === uid) {
-                            short = element;
+                        if (element.uid === Number(uid)) {
+                            loan = element;
                             index = _index;
                         }
                     });
@@ -254,7 +256,7 @@ module.exports = {
                         return null;
                     }
 
-                    const result = deleteTransactionSchedule(`${id}-loan_${uid}`);
+                    const result = await deleteTransactionSchedule(`${id}-loan_${uid}`);
                     if (!result) {
                         serverLog('[ERROR] Delete transaction schedule failed.');
                         return null;
@@ -281,15 +283,16 @@ module.exports = {
                     let index;
                     let fixed_deposit;
                     userAsset.fixed_deposits.forEach((element, _index) => {
-                        if (element.uid === uid) {
-                            short = element;
+                        if (element.uid === Number(uid)) {
+                            fixed_deposit = element;
                             index = _index;
                         }
                     });
 
-                    const transactionAmount = fixed_deposit.amount * (fixed_deposit.interestRate * fixed_deposit.product);
+                    const transactionAmount = fixed_deposit.amount * (1 + fixed_deposit.interestRate);
 
                     userAsset.balance += transactionAmount;
+                    userAsset.balance = Math.round(userAsset.balance);
 
                     userAsset.fixed_deposits.splice(index, 1);
 
@@ -300,7 +303,7 @@ module.exports = {
                         return null;
                     }
 
-                    const result = deleteTransactionSchedule(`${id}-fixed_deposit_${uid}`);
+                    const result = await deleteTransactionSchedule(`${id}-fixed_deposit_${uid}`);
                     if (!result) {
                         serverLog('[ERROR] Delete transaction schedule failed.');
                         return null;
@@ -327,13 +330,13 @@ module.exports = {
                     let index;
                     let savings_account;
                     userAsset.savings_accounts.forEach((element, _index) => {
-                        if (element.uid === uid) {
-                            short = element;
+                        if (element.uid === Number(uid)) {
+                            savings_account = element;
                             index = _index;
                         }
                     });
 
-                    const compoundInterest = calculateCompoundInterestRate(savings_account.interestRate, savings_account.product);
+                    const compoundInterest = calculateCompoundInterestRate(1 + savings_account.interestRate, savings_account.product);
                     const transactionAmount = savings_account.amount * compoundInterest;
 
                     userAsset.balance += transactionAmount;
@@ -347,7 +350,7 @@ module.exports = {
                         return null;
                     }
 
-                    const result = deleteTransactionSchedule(`${id}-savings_account_${uid}`);
+                    const result = await deleteTransactionSchedule(`${id}-savings_account_${uid}`);
                     if (!result) {
                         serverLog('[ERROR] Delete transaction schedule failed.');
                         return null;
@@ -360,6 +363,58 @@ module.exports = {
                 schedule_job_list[identification_code] = job;
             });
         
+        program.command('redeem_bond <id> <asset_id> <uid> at <date> <identification_code>')
+            .action((id, asset_id, uid, date, identification_code) => {
+                const dateObj = new Date();
+                dateObj.setTime(date);
+                const job = schedule.scheduleJob(dateToCron(dateObj), async () => {
+                    const userAsset = await Asset.findById(asset_id);
+                    if (!userAsset) {
+                        serverLog('[ERROR] Error finding user asset');
+                        return null;
+                    }
+
+                    let index;
+                    let bond;
+                    userAsset.bonds.forEach((element, _index) => {
+                        if (element.uid == uid) {
+                            bond = element;
+                            index = _index;
+                        }
+                    });
+
+                    if (!bond) {
+                        serverLog(`[WARN] Bond uid=${uid} not found at redemption (already sold?)`);
+                        return null;
+                    }
+
+                    const maturityValue = Math.round(
+                        bond.faceValue * (1 + bond.couponRate / 100 * bond.maturityDays / 365) * bond.quantity
+                    );
+
+                    userAsset.balance += maturityValue;
+                    userAsset.balance = Math.round(userAsset.balance);
+                    userAsset.bonds.splice(index, 1);
+
+                    const saveResult = await userAsset.save();
+                    if (!saveResult) {
+                        serverLog(`[ERROR] Transaction failed. Failed to save user asset data. asset_id: ${asset_id}`);
+                        return null;
+                    }
+
+                    const result = await deleteTransactionSchedule(`${id}-bond_${uid}`);
+                    if (!result) {
+                        serverLog('[ERROR] Delete transaction schedule failed.');
+                        return null;
+                    }
+
+                    serverLog(`[INFO] Redeemed bond uid=${uid} for ${maturityValue}원. asset_id: ${asset_id}`);
+                    return true;
+                });
+
+                schedule_job_list[identification_code] = job;
+            });
+
         program.command('pay_money_savings_account <id> <asset_id> <uid> <cycle> at <date> <identification_code>')
             .action((id, asset_id, uid, cycle, date, identification_code) => {
                 const dateObj = new Date();
@@ -374,8 +429,8 @@ module.exports = {
                     let index;
                     let savings_account;
                     userAsset.savings_accounts.forEach((element, _index) => {
-                        if (element.uid === uid) {
-                            short = element;
+                        if (element.uid === Number(uid)) {
+                            savings_account = element;
                             index = _index;
                         }
                     });
@@ -431,6 +486,11 @@ module.exports = {
         if (!result) return false;
 
         setOnFutureExpireListener(async () => {
+            // 1) 미납 세금 강제 징수
+            await collectPendingTaxes();
+            // 2) 새 세금 고지 (선물 정산 후 자산 기준)
+            // 선물 정산이 끝난 뒤 assessTax가 실행되도록 마지막에 배치
+
             console.log(`future_execute_list: ${JSON.stringify(future_execute_list)}`);
             const results = await Promise.all(Object.entries(future_execute_list).map(async ([identification_code, transaction_schedule]) => {
                 const userAsset = await Asset.findById(transaction_schedule.asset_id);
@@ -442,39 +502,16 @@ module.exports = {
                 let error = false;
 
                 const futureResults = await Promise.all(userAsset.futures.map(async (future) => {
-                    if (future.quantity > 0) {
-                        const currentPrice = getStockPrice(future.ticker);
-                        const transactionAmount = currentPrice * future.quantity;
-                        
-                        if (userAsset.balance < transactionAmount) {
-                            serverLog(`[INFO] Buy stock failed. Not enough balance. asset_id: ${transaction_schedule.asset_id}`);
-                            error = true;
-                            return false;
-                        }
-                        
-                        userAsset.balance -= transactionAmount;
-                        
-                        const purchaseDate = new Date();
-                        
-                        userAsset.stocks.push({
-                            ticker: future.ticker,
-                            quantity: future.quantity,
-                            purchasePrice: future.purchasePrice,
-                            purchaseDate: purchaseDate,
-                        });
-        
-                        serverLog(`[INFO] Buy ${future.quantity}shares of '${future.ticker}' stock by future success. asset_id: ${transaction_schedule.asset_id}`);
-                        return true;
-                    } else if (future.quantity < 0) {
-                        const currentPrice = getStockPrice(future.ticker);
-                        
-                        const transactionAmount = currentPrice * Math.abs(future.quantity);
+                    const currentPrice = getStockPrice(future.ticker);
+                    const initValue = future.purchasePrice * future.quantity * future.leverage;
+                    const currentValue = currentPrice * future.quantity * future.leverage;
+                    const transactionAmount = (currentValue - initValue) + future.margin;
 
-                        userAsset.balance -= transactionAmount;
+                    userAsset.balance += transactionAmount;
+                    userAsset.balance = Math.round(userAsset.balance);
 
-                        serverLog(`[INFO] Sell ${future.quantity}shares of '${future.ticker}' stock by future success. asset_id: ${transaction_schedule.asset_id}`);
-                        return true;
-                    }
+                    serverLog(`[INFO] Settled ${Math.abs(future.quantity)}contracts of '${future.ticker}' future (quantity: ${future.quantity}). asset_id: ${transaction_schedule.asset_id}`);
+                    return true;
                 }));
 
                 if (error) {
@@ -497,6 +534,9 @@ module.exports = {
                     serverLog(`[INFO] Future execute process success. asset_id: ${transaction_schedule.asset_id}}`);
                 }
             }));
+
+            // 3) 선물 정산 완료 후 세금 고지
+            await assessTax();
         });
 
         setOnOptionExpireListener(async () => {
@@ -532,7 +572,7 @@ module.exports = {
                         }
                     } else if (option.optionType === 'put') {
                         const currentPrice = getStockPrice(option.ticker);
-                        if (currentPrice > option.strikePrice) {
+                        if (currentPrice < option.strikePrice) {
                             let holdingStockQuantity = 0;
                             userAsset.stocks.forEach((stock) => {
                                 if (stock.ticker === option.ticker) {
@@ -604,7 +644,20 @@ module.exports = {
                         serverLog('[ERROR] Delete transaction schedule failed.');
                         return null;
                     }
-    
+
+                    // 옵션 만기로 무효화된 옵션 청산 예약 자동 취소
+                    const cancelResult = await Reservation.updateMany(
+                        {
+                            userId: transaction_schedule.id,
+                            type: { $in: ['option_call_liquidate', 'option_put_liquidate'] },
+                            status: 'pending',
+                        },
+                        { $set: { status: 'cancelled' } },
+                    );
+                    if (cancelResult.modifiedCount > 0) {
+                        serverLog(`[INFO] Cancelled ${cancelResult.modifiedCount} stale option liquidate reservation(s) for user ${transaction_schedule.id}`);
+                    }
+
                     serverLog(`[INFO] Option execute process success. asset_id: ${transaction_schedule.asset_id}}`);
                 }
             }));
@@ -629,7 +682,7 @@ module.exports = {
         if (future_execute_list[identification_code] !== undefined) {
             delete future_execute_list[identification_code];
         } else if (option_execute_list[identification_code] !== undefined) {
-            delete future_execute_list[identification_code];
+            delete option_execute_list[identification_code];
         } else {
             schedule_job_list[identification_code].cancel();
             delete schedule_job_list[identification_code];

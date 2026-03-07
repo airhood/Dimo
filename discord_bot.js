@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { Client, Events, GatewayIntentBits, Collection, EmbedBuilder } = require('discord.js');
+const { Client, Events, GatewayIntentBits, Collection, EmbedBuilder, MessageFlags } = require('discord.js');
 const { token } = require('./config.json');
 
 const { increaseLevelPoint, checkUserExists } = require('./database');
@@ -8,9 +8,15 @@ const { addInteractionHandler } = require('./interaction');
 const { serverLog, setClient_server_logger, setupAdminChannel } = require('./server/server_logger');
 const { setClient_status_tracker, setupStatusChannel } = require('./server/status_tracker');
 const { dimoChat } = require('./chat_bot/chat_bot');
-const { addToBucket, existsInCurrentBucket } = require('./message_reference_tracker');
+const { addToBucket, existsInCurrentBucket } = require('./systems/message_reference_tracker');
 const { filterMessage, wrapMentions } = require('./chat_bot/message_filter');
 const { setClient_koreanbots_update, setUpdateInterval } = require('./koreanbots_update');
+const { setClientForNotifications } = require('./systems/notification_checker');
+const { setClientForMarginCall } = require('./systems/margin_call_checker');
+const { setClientForReservations } = require('./systems/reservation_checker');
+const { setClientForAutoTrade } = require('./systems/auto_trade_scheduler');
+const { setClientForDividends } = require('./systems/dividend_system');
+const { setClientForRealEstate } = require('./systems/real_estate_system');
 
 const client = new Client({
 	intents: [
@@ -85,14 +91,19 @@ module.exports = {
 				}
 			} catch (error) {
 				console.error(error);
+				const errorEmbed = new EmbedBuilder()
+					.setColor(0xEA4144)
+					.setTitle('오류')
+					.setDescription('명령어 실행 중 오류가 발생했습니다.\n문제가 지속되면 공식 디스코드 서버 **디모랜드**에서 문의해주세요.')
+					.setTimestamp();
 				if (interaction.replied || interaction.deferred) {
-					await interaction.followUp({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+					await interaction.followUp({ embeds: [errorEmbed] });
 				} else {
 					try {
-						await interaction.reply({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+						await interaction.reply({ embeds: [errorEmbed] });
 					} catch (err) {
 						try {
-							await interaction.editReply({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+							await interaction.editReply({ embeds: [errorEmbed] });
 						} catch (err) {
 
 						}
@@ -107,31 +118,47 @@ module.exports = {
 		});
 		
 		
-		client.once(Events.ClientReady, (readyClient) => {
+		client.once(Events.ClientReady, async (readyClient) => {
 			serverLog(`[INFO] Bot ready! Logged in as ${readyClient.user.tag}`);
 			setClient_server_logger(client);
 			setClient_status_tracker(client);
 			setClient_koreanbots_update(client);
+			setClientForNotifications(client);
+			setClientForMarginCall(client);
+			setClientForAutoTrade(client);
+			setClientForReservations(client);
+			setClientForDividends(client);
+			setClientForRealEstate(client);
 			setupAdminChannel();
 			setupStatusChannel();
 			if (process.env.NODE_ENV === 'production') {
 				setUpdateInterval();
-				
+
 				console.log('[INFO] Koreanbots api loaded');
 			}
+			const { restorePersistedSessions } = require('./commands/realtime');
+			await restorePersistedSessions(readyClient);
 		});
 		
 		client.on(Events.MessageCreate, async (message) => {
 			if (message.author.bot) return;
-		
+
 			const DIMO_PREFIX = '디모야';
 			if (message.content.startsWith(DIMO_PREFIX)) {
+				// 기존: "디모야"로 시작하는 메시지
 				const userMessage = message.content.slice(DIMO_PREFIX.length).trim();
 		
 				if (message.content.trim() === DIMO_PREFIX) {
 					await message.reply('나 불렀어?');
 					addToBucket(null, true);
-				}else if (userMessage) {
+				} else if (userMessage) {
+					// 유저 입력 필터링
+					if (!filterMessage(userMessage)) {
+						await message.reply("그런 말은 대답하기 싫어.");
+						addToBucket(null, true);
+						return;
+					}
+
 					if (message.reference) {
 						const referenceMessageID = message.reference.messageId;
 						if (existsInCurrentBucket(referenceMessageID) === true) {
@@ -151,7 +178,7 @@ module.exports = {
 									addToBucket(sent, false);
 									messageID = sent.id;
 								} else {
-									const sent = await message.reply(`${formattedContent}\n\n**부적절한 내용 전송으로 경고가 부여되었습니다.**`);
+									const sent = await message.reply('그 내용은 전달할 수 없어.');
 									addToBucket(sent, false);
 									messageID = sent.id;
 								}
@@ -159,9 +186,8 @@ module.exports = {
 								result.callback(messageID.trim());
 							} else if (result.result === 'reply_timeout') {
 								await message.reply('내용이 기억이 안나.');
-								console.log('a');
 								addToBucket(null, true);
-							} else if ('error') {
+							} else if (result.result === 'error') {
 								await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
 								addToBucket(null, true);
 							}
@@ -182,7 +208,7 @@ module.exports = {
 									addToBucket(sent, false);
 									messageID = sent.id;
 								} else {
-									const sent = await message.reply(`${formattedContent}\n\n**부적절한 내용 전송으로 경고가 부여되었습니다.**`);
+									const sent = await message.reply('그 내용은 전달할 수 없어.');
 									addToBucket(sent, false);
 									messageID = sent.id;
 								}
@@ -191,7 +217,7 @@ module.exports = {
 							} else if (result.result === 'reply_timeout') {
 								await message.reply('내용이 기억이 안나.');
 								addToBucket(null, true);
-							} else if ('error') {
+							} else if (result.result === 'error') {
 								await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
 								addToBucket(null, true);
 							}
@@ -216,7 +242,7 @@ module.exports = {
 								addToBucket(sent, false);
 								messageID = sent.id;
 							} else {
-								const sent = await message.reply(`${formattedContent}\n\n**부적절한 내용 전송으로 경고가 부여되었습니다.**`);
+								const sent = await message.reply('그 내용은 전달할 수 없어.');
 								addToBucket(sent, false);
 								messageID = sent.id;
 							}
@@ -225,15 +251,59 @@ module.exports = {
 						} else if (result.result === 'reply_timeout') {
 							await message.reply('내용이 기억이 안나.');
 							addToBucket(null, true);
-						} else if ('error') {
+						} else if (result.result === 'error') {
 							await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
 							addToBucket(null, true);
 						}
 					}
 				}
+			} else if (message.reference) {
+				// "디모야" 없이 디모의 메시지에 reply한 경우
+				const referenceMessageID = message.reference.messageId;
+				const bucketStatus = existsInCurrentBucket(referenceMessageID);
+				if (bucketStatus !== true && bucketStatus !== 'special') return;
+
+				const userMessage = message.content.trim();
+				if (!userMessage) return;
+
+				if (!filterMessage(userMessage)) {
+					await message.reply("그런 말은 대답하기 싫어.");
+					addToBucket(null, true);
+					return;
+				}
+
+				const result = await dimoChat(message.content, {
+					messageID: message.id,
+					referenceMessageID: bucketStatus === true ? referenceMessageID : null,
+				});
+
+				if (result.result === 'success') {
+					const content = result.content;
+					const formattedContent = content.replace(/<user>/g, message.author.username);
+
+					let messageID;
+					if (filterMessage(formattedContent)) {
+						const wrappedContent = wrapMentions(formattedContent);
+						const sent = await message.reply(wrappedContent);
+						addToBucket(sent, false);
+						messageID = sent.id;
+					} else {
+						const sent = await message.reply('그 내용은 전달할 수 없어.');
+						addToBucket(sent, false);
+						messageID = sent.id;
+					}
+
+					result.callback(messageID.trim());
+				} else if (result.result === 'reply_timeout') {
+					await message.reply('내용이 기억이 안나.');
+					addToBucket(null, true);
+				} else if (result.result === 'error') {
+					await message.reply('Google Gemini API 과부하로 인해 디모가 응답할 수 없어요 ㅠㅠㅠㅠ\n\n챗봇 이외의 기능은 정상적으로 사용할 수 있습니다.');
+					addToBucket(null, true);
+				}
 			}
 		});
-		
+
 		addInteractionHandler(client);
 		
 

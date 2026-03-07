@@ -1,13 +1,18 @@
 const mongoose = require('mongoose');
 const { mongodb_url }  = require('./config.json');
 const { serverLog } = require('./server/server_logger');
-const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionExpirationDate } = require('./stock_system/stock_sim');
-const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, getLoanInterestRatePoint, getFixedDepositInterestRatePoint } = require('./stock_system/bank_manager');
+const { getStockPrice, getFuturePrice, getFutureExpirationDate, getOptionPrice, getOptionExpirationDate, getOptionStrikePriceList } = require('./systems/stock_sim');
+const { getEtfPrice, ETF_DEFINITIONS } = require('./systems/etf_system');
+const { getLoanInterestRate, getFixedDepositInterestRate, calculateLoanLimit, getLoanInterestRatePoint, getFixedDepositInterestRatePoint } = require('./systems/bank_manager');
+const { FACE_VALUE, getBondYield, calcMaturityValue, calcMarketPrice } = require('./systems/bond_system');
+const { calculateFundCreditRating, calculateAssetValue } = require('./systems/credit_system');
 require('dotenv').config();
 const moment = require('moment-timezone');
 const fs = require('fs');
-const { getKoreanTime }= require('./korean_time');
-const { INITIAL_BALANCE, SHORT_SELL_MARGIN_RATE, OPTION_UNIT_QUANTITY } = require('./setting');
+const { getKoreanTime }= require('./utils/korean_time');
+const { INITIAL_BALANCE, SHORT_SELL_MARGIN_RATE, OPTION_UNIT_QUANTITY, DIVIDEND_YIELDS, PROPERTY_MORTGAGE_LTV, PROPERTY_MORTGAGE_INTEREST_RATE, PROPERTY_MORTGAGE_TERM_DAYS } = require('./setting');
+const { v4: uuidv4 } = require('uuid');
+const { getMarketListings, getListingById, removeListingById, getCurrentIndex, calcCurrentValue } = require('./systems/real_estate_system');
 
 
 mongoose.connection.on('connected', () => {
@@ -33,11 +38,14 @@ const Asset = require('./schemas/asset');
 const State = require('./schemas/state');
 const Ban = require('./schemas/ban');
 const NotificationSchedule = require('./schemas/notification_schedule');
+const Notification = require('./schemas/notification');
 const Fund = require('./schemas/fund');
 
 const TransactionSchedule = require('./schemas/transaction_schedule');
 
 const Notice = require('./schemas/notice');
+const TransactionLog = require('./schemas/transaction_log');
+const Property = require('./schemas/property');
 
 
 let serversideLockedAccounts = [];
@@ -165,6 +173,7 @@ module.exports = {
                 fixed_deposits: [],
                 savings_accounts: [],
                 loans: [],
+                etfs: [],
             });
 
             if (!newAsset) {
@@ -429,25 +438,102 @@ module.exports = {
 
     async getUserAsset(id) {
         try {
-            const result = await User.findOne({ userID: id }).populate('asset');
-            if (result === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
+            const user = await User.findOne({ userID: id }).populate('state');
+            if (!user) {
+                serverLog('[ERROR] Error finding user');
+                return { state: 'error', data: null };
             }
 
-            return {
-                state: 'success',
-                data: result,
-            };
+            const currentAccount = user.state.currentAccount;
+            if (currentAccount !== '@self') {
+                const fundName = currentAccount.replace('@fund_', '');
+                const fund = await Fund.findOne({ name: fundName }).populate('asset');
+                if (!fund) return { state: 'error', data: null };
+                return { state: 'success', data: { asset: fund.asset }, isFund: true, fundName };
+            }
+
+            const userWithAsset = await User.findOne({ userID: id }).populate('asset');
+            if (!userWithAsset) return { state: 'error', data: null };
+            return { state: 'success', data: userWithAsset, isFund: false };
         } catch (err) {
             serverLog(`[ERROR] Error at 'database.js:getUserAsset': ${err}`);
-            return {
-                state: 'error',
-                data: null,
-            };
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getUserPersonalAsset(id) {
+        try {
+            const result = await User.findOne({ userID: id }).populate('asset');
+            if (!result) {
+                serverLog('[ERROR] Error finding user asset');
+                return { state: 'error', data: null };
+            }
+            return { state: 'success', data: result, isFund: false };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getUserPersonalAsset': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getFundAsset(fundName) {
+        try {
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                return { state: 'no_fund', data: null };
+            }
+            return { state: 'success', data: { asset: fund.asset }, isFund: true, fundName };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getFundAsset': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getActiveAsset(id) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            const userState = await State.findById(user.state);
+            if (!userState) return { state: 'error', data: null };
+
+            if (userState.currentAccount !== '@self') {
+                const fundName = userState.currentAccount.replace('@fund_', '');
+                const fund = await Fund.findOne({ name: fundName }).populate('asset');
+                if (!fund) return { state: 'error', data: null };
+                return { state: 'success', data: fund.asset, isFund: true, fundName };
+            }
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+            return { state: 'success', data: userAsset, isFund: false };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getActiveAsset': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getAssetByAccountKey(id, accountKey) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            if (!accountKey || accountKey === '@self') {
+                const userAsset = await Asset.findById(user.asset);
+                if (!userAsset) return { state: 'error', data: null };
+                return { state: 'success', data: userAsset };
+            }
+
+            if (accountKey.startsWith('@fund_')) {
+                const fundName = accountKey.replace('@fund_', '');
+                const fund = await Fund.findOne({ name: fundName }).populate('asset');
+                if (!fund) return { state: 'error', data: null };
+                return { state: 'success', data: fund.asset };
+            }
+
+            return { state: 'error', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getAssetByAccountKey': ${err}`);
+            return { state: 'error', data: null };
         }
     },
 
@@ -574,24 +660,77 @@ module.exports = {
         }
     },
 
+    async transferToFund(fromUserID, fundName, amount) {
+        try {
+            if (isServersideLocked(fromUserID)) {
+                return { state: 'locked', data: null };
+            }
+
+            const user = await User.findOne({ userID: fromUserID });
+            if (!user) {
+                serverLog(`[ERROR] transferToFund: user not found. id: ${fromUserID}`);
+                return { state: 'error', data: null };
+            }
+
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                serverLog(`[INFO] transferToFund: fund not found. fundName: ${fundName}`);
+                return { state: 'no_fund', data: null };
+            }
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) {
+                serverLog(`[ERROR] transferToFund: user asset not found. id: ${fromUserID}`);
+                return { state: 'error', data: null };
+            }
+
+            if (userAsset.balance < amount) {
+                serverLog(`[INFO] transferToFund: insufficient balance. id: ${fromUserID}`);
+                return { state: 'no_balance', data: null };
+            }
+
+            userAsset.balance -= amount;
+            userAsset.balance = Math.round(userAsset.balance);
+            const saveFromResult = await userAsset.save();
+            if (!saveFromResult) {
+                serverLog(`[ERROR] transferToFund: failed to save user asset. id: ${fromUserID}`);
+                return { state: 'error', data: null };
+            }
+
+            fund.asset.balance += amount;
+            fund.asset.balance = Math.round(fund.asset.balance);
+            const saveFundResult = await fund.asset.save();
+            if (!saveFundResult) {
+                serverLog(`[ERROR] transferToFund: failed to save fund asset. Rolling back. id: ${fromUserID}`);
+                userAsset.balance += amount;
+                userAsset.balance = Math.round(userAsset.balance);
+                const rollback = await userAsset.save();
+                if (!rollback) {
+                    serverLog(`[ERROR] transferToFund: rollback failed. Locking account. id: ${fromUserID}`);
+                    serversideLockAccount(fromUserID);
+                }
+                return { state: 'error', data: null };
+            }
+
+            serverLog(`[INFO] transferToFund: ${amount}원 from ${fromUserID} to fund '${fundName}'.`);
+            return { state: 'success', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:transferToFund': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
     async addBalance(id, amount) {
         try {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return {
-                    state: 'error',
-                    data: null,
-                };
+                return { state: 'error', data: null };
             }
-            
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
+                return { state: 'error', data: null };
             }
 
             userAsset.balance += amount;
@@ -625,19 +764,12 @@ module.exports = {
             const user = await User.findOne({ userID: id });
             if (user === null) {
                 serverLog('[ERROR] Error finding user');
-                return {
-                    state: 'error',
-                    data: null,
-                };
+                return { state: 'error', data: null };
             }
-            
             const userAsset = await Asset.findById(user.asset);
             if (userAsset === null) {
                 serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
+                return { state: 'error', data: null };
             }
 
             userAsset.balance = balance;
@@ -817,29 +949,20 @@ module.exports = {
 
     async stockBuy(id, ticker, quantity) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const currentPrice = getStockPrice(ticker);
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
-                serverLog(`[INFO] Buy stock failed. Not enough balance. id: ${id}`);
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / currentPrice);
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -880,6 +1003,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Buy ${quantity}shares of '${ticker}' stock success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'stock_buy', `${ticker} ${quantity}주 매수 (${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -895,25 +1019,30 @@ module.exports = {
 
     async stockSell(id, ticker, quantity) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const currentPrice = getStockPrice(ticker);
+
+            if (quantity > 0 && quantity < 1) {
+                let totalOwned = 0;
+                for (const stock of userAsset.stocks) {
+                    if (stock.ticker === ticker) totalOwned += stock.quantity;
+                }
+                quantity = Math.floor(totalOwned * quantity);
+                if (quantity === 0) {
+                    return {
+                        state: 'no_stock',
+                        data: null,
+                    };
+                }
+            }
 
             if (quantity === 0) {
                 for (let i = 0; i < userAsset.stocks.length; i++) {
@@ -969,6 +1098,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Sell ${quantity}shares of '${ticker}' stock success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'stock_sell', `${ticker} ${quantity}주 매도 (${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -984,28 +1114,26 @@ module.exports = {
 
     async stockShortSell(id, ticker, quantity) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const currentPrice = getStockPrice(ticker);
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / (currentPrice * SHORT_SELL_MARGIN_RATE));
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / (currentPrice * SHORT_SELL_MARGIN_RATE));
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
+                if (quantity === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             const transactionAmount = currentPrice * quantity;
@@ -1067,6 +1195,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Short sell ${quantity}shares of '${ticker}' stock success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'stock_short_sell', `${ticker} ${quantity}주 공매도 (매도가 ${currentPrice.toLocaleString()}원, 증거금 ${margin.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1082,23 +1211,14 @@ module.exports = {
 
     async stockShortRepay(id, positionNum) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             if (userAsset.stockShortSales.length < positionNum) {
                 return {
@@ -1160,7 +1280,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Repay ${quantity}shares of '${ticker}' stock success. id: ${id}`);
-
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'stock_short_repay', `${ticker} 공매도 상환 ${quantity}주`);
             return {
                 state: 'success',
                 data: short,
@@ -1176,28 +1296,20 @@ module.exports = {
 
     async futureLong(id, ticker, quantity, leverage) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const currentPrice = getFuturePrice(ticker);
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / currentPrice);
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1218,7 +1330,7 @@ module.exports = {
 
             const expirationDate = getFutureExpirationDate();
             const purchaseDate = new Date();
-            
+
             userAsset.futures.push({
                 ticker: ticker,
                 quantity: quantity,
@@ -1289,6 +1401,7 @@ module.exports = {
             }
             
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' future success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'future_long', `${ticker} 선물 매수 ${quantity}계약 (레버리지 ${leverage}배, 증거금 ${margin.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1304,28 +1417,20 @@ module.exports = {
 
     async futureShort(id, ticker, quantity, leverage) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             const currentPrice = getStockPrice(ticker);
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / currentPrice);
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / currentPrice);
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1346,7 +1451,7 @@ module.exports = {
 
             const expirationDate = getFutureExpirationDate();
             const purchaseDate = new Date();
-            
+
             userAsset.futures.push({
                 ticker: ticker,
                 quantity: -quantity,
@@ -1407,6 +1512,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' future success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'future_short', `${ticker} 선물 매도 ${quantity}계약 (레버리지 ${leverage}배, 증거금 ${margin.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1422,23 +1528,14 @@ module.exports = {
 
     async futureLiquidate(id, positionNum) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             if (userAsset.futures.length < positionNum) {
                 return {
@@ -1482,6 +1579,7 @@ module.exports = {
             }
             
             serverLog(`[INFO] Liquidated ${quantity}contracts of '${ticker}' future success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'future_liquidate', `${ticker} 선물 청산 (손익 ${(transactionAmount - margin) >= 0 ? '+' : ''}${Math.round(transactionAmount - margin).toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: position,
@@ -1497,27 +1595,25 @@ module.exports = {
 
     async callOptionBuy(id, ticker, quantity, strikePrice) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
+            const userAsset = activeAsset.data;
+
+            const strikePriceList = getOptionStrikePriceList(ticker);
+            if (!strikePriceList || !strikePriceList.includes(strikePrice)) {
                 return {
-                    state: 'error',
+                    state: 'invalid_strike_price',
                     data: null,
                 };
             }
-            
+
             const optionPrices = getOptionPrice(ticker);
-            const callOptionPrice = optionPrices.call;
-            const currentPrice = callOptionPrice[strikePrice.toString()];
+            const currentPrice = optionPrices.call[strikePrice.toString()] ?? 0;
             if (!currentPrice) {
                 return {
                     state: 'invalid_strike_price',
@@ -1525,8 +1621,9 @@ module.exports = {
                 };
             }
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1577,6 +1674,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' call option success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'call_option_buy', `${ticker} 콜옵션 매수 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1592,27 +1690,25 @@ module.exports = {
 
     async callOptionSell(id, ticker, quantity, strikePrice) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
+            const userAsset = activeAsset.data;
+
+            const strikePriceList = getOptionStrikePriceList(ticker);
+            if (!strikePriceList || !strikePriceList.includes(strikePrice)) {
                 return {
-                    state: 'error',
+                    state: 'invalid_strike_price',
                     data: null,
                 };
             }
 
             const optionPrices = getOptionPrice(ticker);
-            const callOptionPrice = optionPrices.call;
-            const currentPrice = callOptionPrice[strikePrice.toString()];
+            const currentPrice = optionPrices.call[strikePrice.toString()] ?? 0;
             if (!currentPrice) {
                 return {
                     state: 'invalid_strike_price',
@@ -1620,8 +1716,9 @@ module.exports = {
                 };
             }
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1672,6 +1769,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' call option success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'call_option_sell', `${ticker} 콜옵션 매도 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1687,27 +1785,25 @@ module.exports = {
 
     async putOptionBuy(id, ticker, quantity, strikePrice) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
+            const userAsset = activeAsset.data;
+
+            const strikePriceList = getOptionStrikePriceList(ticker);
+            if (!strikePriceList || !strikePriceList.includes(strikePrice)) {
                 return {
-                    state: 'error',
+                    state: 'invalid_strike_price',
                     data: null,
                 };
             }
 
             const optionPrices = getOptionPrice(ticker);
-            const putOptionPrice = optionPrices.put;
-            const currentPrice = putOptionPrice[strikePrice.toString()];
+            const currentPrice = optionPrices.put[strikePrice.toString()] ?? 0;
             if (!currentPrice) {
                 return {
                     state: 'invalid_strike_price',
@@ -1715,8 +1811,9 @@ module.exports = {
                 };
             }
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1767,6 +1864,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Buy ${quantity}contracts of '${ticker}' put option success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'put_option_buy', `${ticker} 풋옵션 매수 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1782,27 +1880,25 @@ module.exports = {
 
     async putOptionSell(id, ticker, quantity, strikePrice) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
+            const userAsset = activeAsset.data;
+
+            const strikePriceList = getOptionStrikePriceList(ticker);
+            if (!strikePriceList || !strikePriceList.includes(strikePrice)) {
                 return {
-                    state: 'error',
+                    state: 'invalid_strike_price',
                     data: null,
                 };
             }
 
             const optionPrices = getOptionPrice(ticker);
-            const putOptionPrice = optionPrices.put;
-            const currentPrice = putOptionPrice[strikePrice.toString()];
+            const currentPrice = optionPrices.put[strikePrice.toString()] ?? 0;
             if (!currentPrice) {
                 return {
                     state: 'invalid_strike_price',
@@ -1810,8 +1906,9 @@ module.exports = {
                 };
             }
 
-            if (quantity === 0) {
-                quantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / (currentPrice * OPTION_UNIT_QUANTITY));
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
                 if (quantity === 0) {
                     return {
                         state: 'no_balance',
@@ -1862,6 +1959,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Sell ${quantity}contracts of '${ticker}' put option success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'put_option_sell', `${ticker} 풋옵션 매도 ${quantity}계약 (행사가 ${strikePrice.toLocaleString()}원, ${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: quantity,
@@ -1877,23 +1975,14 @@ module.exports = {
 
     async optionLiquidate(id, positionNum) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             if (userAsset.options.length < positionNum) {
                 return {
@@ -1947,6 +2036,7 @@ module.exports = {
             }
             
             serverLog(`[INFO] Liquidated ${quantity}contracts of '${ticker}' ${optionType} option success. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'option_liquidate', `${ticker} ${optionType === 'call' ? '콜' : '풋'}옵션 청산 (${transactionAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: position,
@@ -1962,22 +2052,23 @@ module.exports = {
 
     async binaryOption(id, ticker, prediction, time, amount) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
+            const userAsset = activeAsset.data;
+
+            if (amount >= 0 && amount < 1) {
+                amount = amount === 0 ? userAsset.balance : Math.floor(userAsset.balance * amount);
+                if (amount === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
             }
 
             if (userAsset.balance < amount) {
@@ -1985,16 +2076,6 @@ module.exports = {
                     state: 'no_balance',
                     data: null,
                 };
-            }
-
-            if (amount === 0) {
-                amount = userAsset.balance;
-                if (amount === 0) {
-                    return {
-                        state: 'no_balance',
-                        data: null,
-                    };
-                }
             }
 
             const now  = new Date();
@@ -2038,6 +2119,7 @@ module.exports = {
             }
             
             serverLog(`[INFO] Binary option. ticker: ${ticker}, prediction: ${prediction}, time: ${time}, amount: ${amount}. id: ${id}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'binary_option', `${ticker} 바이너리옵션 ${prediction === 'up' ? '상승' : '하락'} ${time}시간 (${amount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: amount,
@@ -2053,33 +2135,30 @@ module.exports = {
 
     async loan(id, amount, dueDate, interestType, days) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
-            
-            const creditRating = await module.exports.getUserCredit(id);
-            if (creditRating.state === 'error') {
-                return {
-                    state: 'error',
-                    data: null,
-                };
+            const userAsset = activeAsset.data;
+
+            let creditRatingValue;
+            if (activeAsset.isFund) {
+                creditRatingValue = calculateFundCreditRating(userAsset);
+            } else {
+                const creditRating = await module.exports.getUserCredit(id);
+                if (creditRating.state === 'error') {
+                    return {
+                        state: 'error',
+                        data: null,
+                    };
+                }
+                creditRatingValue = creditRating.data;
             }
 
-            const loanLimit = calculateLoanLimit(userAsset, creditRating.data, dueDate);
+            const loanLimit = calculateLoanLimit(userAsset, creditRatingValue, dueDate);
 
             console.log(`loanLimit: ${loanLimit}`);
 
@@ -2141,6 +2220,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Loaned ${amount} amount of money.`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'loan', `대출 ${amount.toLocaleString()}원 (${interestType})`);
             return {
                 state: 'success',
                 data: getLoanInterestRatePoint(),
@@ -2156,23 +2236,14 @@ module.exports = {
 
     async loanRepay(id, loanNumber) {
         try {
-            const user = await User.findOne({ userID: id });
-            if (user === null) {
-                serverLog('[ERROR] Error finding user');
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
                 return {
                     state: 'error',
                     data: null,
                 };
             }
-            
-            const userAsset = await Asset.findById(user.asset);
-            if (userAsset === null) {
-                serverLog('[ERROR] Error finding user asset');
-                return {
-                    state: 'error',
-                    data: null,
-                };
-            }
+            const userAsset = activeAsset.data;
 
             if (userAsset.loans.length < loanNumber) {
                 return {
@@ -2204,6 +2275,13 @@ module.exports = {
 
             userAsset.balance -= transactionAmount;
 
+            const isOnTime = new Date() <= new Date(loan.dueDate);
+            userAsset.loanHistory.push({
+                amount: loan.amount,
+                onTime: isOnTime,
+                repaidAt: new Date(),
+            });
+
             userAsset.loans.splice(loanNumber - 1, 1);
 
             const saveResult = await userAsset.save();
@@ -2224,6 +2302,7 @@ module.exports = {
             }
 
             serverLog(`[INFO] Repayed ${amount} amount of loaned money.`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'loan_repay', `대출 상환 ${Math.round(transactionAmount).toLocaleString()}원`);
             return {
                 state: 'success',
                 data: amount,
@@ -2294,11 +2373,7 @@ module.exports = {
         try {
             const result = await TransactionSchedule.deleteOne({ identification_code: identification_code });
             if (result.deletedCount === 0) {
-                serverLog(`[ERROR] Cannot delete transaction schedule. Matching transaction schedule not found.`);
-                return {
-                    state: 'error',
-                    data: null,
-                };
+                serverLog(`[WARN] deleteTransactionSchedule: schedule not found. identification_code: ${identification_code}`);
             }
             return {
                 state: 'success',
@@ -2592,6 +2667,16 @@ module.exports = {
                 };
             }
 
+            if (amount >= 0 && amount < 1) {
+                amount = amount === 0 ? userAsset.balance : Math.floor(userAsset.balance * amount);
+                if (amount === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
+            }
+
             if (userAsset.balance < amount) {
                 return {
                     state: 'no_balance',
@@ -2605,10 +2690,10 @@ module.exports = {
             maturityDate.setDate(depositDate.getDate() + product);
 
             let uid;
-            if (userAsset.futures.length === 0) {
+            if (userAsset.fixed_deposits.length === 0) {
                 uid = 0;
             } else {
-                uid = userAsset.futures[userAsset.futures.length - 1].uid + 1;
+                uid = userAsset.fixed_deposits[userAsset.fixed_deposits.length - 1].uid + 1;
             }
 
             userAsset.fixed_deposits.push({
@@ -2630,7 +2715,7 @@ module.exports = {
                 };
             }
 
-            const saveResult = userAsset.save();
+            const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user asset`);
                 return {
@@ -2672,6 +2757,16 @@ module.exports = {
                 };
             }
 
+            if (amount >= 0 && amount < 1) {
+                amount = amount === 0 ? userAsset.balance : Math.floor(userAsset.balance * amount);
+                if (amount === 0) {
+                    return {
+                        state: 'no_balance',
+                        data: null,
+                    };
+                }
+            }
+
             if (userAsset.balance < amount) {
                 return {
                     state: 'no_balance',
@@ -2685,10 +2780,10 @@ module.exports = {
             endDate.setDate(startDate.getDate() + product);
 
             let uid;
-            if (userAsset.futures.length === 0) {
+            if (userAsset.savings_accounts.length === 0) {
                 uid = 0;
             } else {
-                uid = userAsset.futures[userAsset.futures.length - 1].uid + 1;
+                uid = userAsset.savings_accounts[userAsset.savings_accounts.length - 1].uid + 1;
             }
 
             userAsset.savings_accounts.push({
@@ -2728,7 +2823,7 @@ module.exports = {
                 };
             }
 
-            const saveResult = userAsset.save();
+            const saveResult = await userAsset.save();
             if (!saveResult) {
                 serverLog(`[ERROR] Error saving user asset`);
                 return {
@@ -2749,20 +2844,64 @@ module.exports = {
         }
     },
 
-    async addNotification(id, command) {
-
+    async addNotification(userID, alertScope, targetPnL, direction, options = {}) {
+        try {
+            const { type, positionNum, ticker, strikePrice } = options;
+            const notification = await Notification.create({
+                userID,
+                alertScope,
+                type: type ?? undefined,
+                positionNum: positionNum ?? undefined,
+                ticker: ticker ?? undefined,
+                strikePrice: strikePrice ?? undefined,
+                targetPnL,
+                direction,
+                nextCheckAt: new Date(),
+            });
+            if (!notification) {
+                serverLog(`[ERROR] addNotification: failed to create notification.`);
+                return { state: 'error', data: null };
+            }
+            return { state: 'success', data: notification };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:addNotification': ${err}`);
+            return { state: 'error', data: null };
+        }
     },
 
-    async deleteNotification(id, notificationNum) {
-
+    async deleteNotification(userID, notificationNum) {
+        try {
+            const notifications = await Notification.find({ userID }).sort({ createdAt: 1 });
+            if (notificationNum < 1 || notificationNum > notifications.length) {
+                return { state: 'invalid_num', data: null };
+            }
+            const target = notifications[notificationNum - 1];
+            await Notification.deleteOne({ _id: target._id });
+            return { state: 'success', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:deleteNotification': ${err}`);
+            return { state: 'error', data: null };
+        }
     },
 
-    async getNotificationList() {
-
+    async getNotifications(userID) {
+        try {
+            const notifications = await Notification.find({ userID }).sort({ createdAt: 1 });
+            return { state: 'success', data: notifications };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getNotifications': ${err}`);
+            return { state: 'error', data: null };
+        }
     },
 
-    async resetNotification() {
-
+    async resetNotification(userID) {
+        try {
+            await Notification.deleteMany({ userID });
+            return { state: 'success', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:resetNotification': ${err}`);
+            return { state: 'error', data: null };
+        }
     },
 
     async setCreditRating(id, creditRating) {
@@ -2937,10 +3076,28 @@ module.exports = {
         }
     },
 
-    async fundCreate(id, fundName, description, fee) {
+    async fundCreate(id, fundName, description, fee, initialAmount) {
         try {
+            const creatorUser = await User.findOne({ userID: id });
+            if (!creatorUser) {
+                serverLog(`[ERROR] fundCreate: User not found for userID=${id}`);
+                return { state: 'error', data: null };
+            }
+            const creatorAsset = await Asset.findById(creatorUser.asset);
+            if (!creatorAsset) {
+                serverLog(`[ERROR] fundCreate: Asset not found for userID=${id}, assetId=${creatorUser.asset}`);
+                return { state: 'error', data: null };
+            }
+            if (creatorAsset.balance < initialAmount) {
+                serverLog(`[INFO] fundCreate insufficient_balance: balance=${creatorAsset.balance}, required=${initialAmount}`);
+                return {
+                    state: 'insufficient_balance',
+                    data: { balance: creatorAsset.balance },
+                };
+            }
+
             const asset = await Asset.create({
-                balance: 0,
+                balance: initialAmount,
                 stocks: [],
                 stockShortSales: [],
                 futures: [],
@@ -2963,6 +3120,7 @@ module.exports = {
                 name: fundName,
                 description: description,
                 fee: fee,
+                total_units: Math.floor(initialAmount / 1000),
                 administrators: [{
                     userID: id,
                     isTopAdmin: true,
@@ -2989,11 +3147,26 @@ module.exports = {
                 };
             }
 
+            creatorAsset.balance -= initialAmount;
+            await creatorAsset.save();
+
+            // 생성 즉시 가격 캐시 등록 (다음 시간 업데이트 전에도 /자산에서 가격이 표시되도록)
+            const { setFundPrice } = require('./systems/fund_price');
+            const initialUnitPrice = fund.total_units > 0 ? initialAmount / fund.total_units : 1000;
+            setFundPrice(fundName, initialUnitPrice);
+
+            module.exports.addTransactionLog(id, 'fund_create', `${fundName} 펀드 개설 (초기 자금 ${initialAmount.toLocaleString()}원)`);
             return {
                 state: 'success',
                 data: null,
             };
         } catch (err) {
+            if (err.code === 11000) {
+                return {
+                    state: 'duplicate_name',
+                    data: null,
+                };
+            }
             serverLog(`[ERROR] Error at 'database.js:createFund': ${err}`);
             return {
                 state: 'error',
@@ -3067,7 +3240,6 @@ module.exports = {
         try {
             const funds = await Fund.find().populate('asset');
             if (funds.length === 0) {
-                serverLog('[ERROR] Error finding fund');
                 return {
                     state: 'no_fund',
                     data: null,
@@ -3091,7 +3263,7 @@ module.exports = {
         try {
             const fund = await Fund.findOne({ name: fundName });
             if (!fund) {
-                serverLog('[ERROR] Error finding fund');
+                serverLog(`[INFO] fundAddAdministrator: fund not found. fundName: ${fundName}`);
                 return {
                     state: 'no_fund',
                     data: null,
@@ -3129,7 +3301,7 @@ module.exports = {
         try {
             const fund = await Fund.findOne({ name: fundName });
             if (!fund) {
-                serverLog('[ERROR] Error finding fund');
+                serverLog(`[INFO] fundRemoveAdministrator: fund not found. fundName: ${fundName}`);
                 return {
                     state: 'no_fund',
                     data: null,
@@ -3144,6 +3316,13 @@ module.exports = {
             }
 
             const administrator = fund.administrators[administratorNum - 1];
+
+            if (administrator.isTopAdmin) {
+                return {
+                    state: 'cannot_remove_owner',
+                    data: null,
+                };
+            }
 
             fund.administrators.splice(administratorNum - 1, 1);
 
@@ -3173,9 +3352,9 @@ module.exports = {
         try {
             const fund = await Fund.findOne({ name: fundName });
             if (!fund) {
-                serverLog('[ERROR] Error finding fund');
+                serverLog(`[INFO] fundGetAdministrators: fund not found. fundName: ${fundName}`);
                 return {
-                    state: 'error',
+                    state: 'no_fund',
                     data: null,
                 };
             }
@@ -3197,7 +3376,7 @@ module.exports = {
         try {
             const fund = await Fund.findOne({ name: fundName });
             if (!fund) {
-                serverLog('[ERROR] Error finding fund');
+                serverLog(`[INFO] fundLogin: fund not found. fundName: ${fundName}`);
                 return {
                     state: 'no_fund',
                     data: null,
@@ -3308,5 +3487,848 @@ module.exports = {
                 data: null,
             };
         }
-    }
+    },
+
+    async fundTransferOwnership(id, fundName, newOwnerId) {
+        try {
+            const fund = await Fund.findOne({ name: fundName });
+            if (!fund) {
+                serverLog(`[INFO] fundTransferOwnership: fund not found. fundName: ${fundName}`);
+                return { state: 'no_fund', data: null };
+            }
+
+            const currentOwner = fund.administrators.find(a => a.isTopAdmin);
+            if (!currentOwner || currentOwner.userID !== id) {
+                serverLog(`[INFO] fundTransferOwnership: not owner. id: ${id}, fundName: ${fundName}`);
+                return { state: 'not_owner', data: null };
+            }
+
+            const newOwnerAdmin = fund.administrators.find(a => a.userID === newOwnerId);
+            if (!newOwnerAdmin) {
+                return { state: 'not_admin', data: null };
+            }
+
+            currentOwner.isTopAdmin = false;
+            newOwnerAdmin.isTopAdmin = true;
+
+            await fund.save();
+
+            return { state: 'success', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:fundTransferOwnership': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async investFund(id, fundName, amount) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) {
+                serverLog(`[ERROR] investFund: user not found. id: ${id}`);
+                return { state: 'error', data: null };
+            }
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) {
+                serverLog(`[ERROR] investFund: user asset not found. id: ${id}`);
+                return { state: 'error', data: null };
+            }
+
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                serverLog(`[INFO] investFund: fund not found. fundName: ${fundName}`);
+                return { state: 'no_fund', data: null };
+            }
+
+            // 실시간 가격 계산 (요청 시점의 펀드 자산 가치 기준)
+            const totalAssetValue = calculateAssetValue(fund.asset);
+            const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
+
+            if (amount >= 0 && amount < 1) {
+                amount = amount === 0 ? userAsset.balance : Math.floor(userAsset.balance * amount);
+                if (amount === 0) {
+                    return { state: 'insufficient_balance', data: { balance: userAsset.balance } };
+                }
+            }
+
+            const units = Math.floor(amount / unitPrice);
+            if (units <= 0) {
+                return { state: 'insufficient_amount', data: { unitPrice } };
+            }
+
+            const actualCost = units * unitPrice;
+
+            if (userAsset.balance < actualCost) {
+                return { state: 'insufficient_balance', data: { balance: userAsset.balance } };
+            }
+
+            userAsset.balance -= actualCost;
+            fund.asset.balance += actualCost;
+            fund.total_units += units;
+
+            userAsset.funds.push({
+                name: fundName,
+                unit: units,
+                purchasePrice: unitPrice,
+                purchaseDate: new Date(),
+            });
+
+            await userAsset.save();
+            await fund.asset.save();
+            await fund.save();
+
+            // 거래 후 캐시 즉시 갱신 (가격은 수학적으로 동일하지만 /자산 표시 동기화)
+            const { setFundPrice } = require('./systems/fund_price');
+            const newUnitPrice = fund.total_units > 0 ? (totalAssetValue + actualCost) / fund.total_units : 1000;
+            setFundPrice(fundName, newUnitPrice);
+
+            module.exports.addTransactionLog(id, 'fund_invest', `${fundName} 펀드 투자 ${units}좌 (단가 ${Math.round(unitPrice).toLocaleString()}원, 총 ${Math.round(actualCost).toLocaleString()}원)`);
+            return { state: 'success', data: { units, unitPrice, actualCost } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:investFund': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async sellFundInvestment(id, fundName, units) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) {
+                serverLog(`[ERROR] sellFundInvestment: user not found. id: ${id}`);
+                return { state: 'error', data: null };
+            }
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) {
+                serverLog(`[ERROR] sellFundInvestment: user asset not found. id: ${id}`);
+                return { state: 'error', data: null };
+            }
+
+            const totalUserUnits = userAsset.funds
+                .filter(f => f.name === fundName)
+                .reduce((sum, f) => sum + f.unit, 0);
+
+            if (totalUserUnits === 0) {
+                return { state: 'no_investment', data: null };
+            }
+
+            if (units > 0 && units < 1) {
+                units = Math.floor(totalUserUnits * units);
+                if (units === 0) {
+                    return { state: 'no_investment', data: null };
+                }
+            }
+
+            if (totalUserUnits < units) {
+                return { state: 'insufficient_units', data: { ownedUnits: totalUserUnits } };
+            }
+
+            const fund = await Fund.findOne({ name: fundName }).populate('asset');
+            if (!fund) {
+                serverLog(`[INFO] sellFundInvestment: fund not found. fundName: ${fundName}`);
+                return { state: 'no_fund', data: null };
+            }
+
+            // 실시간 가격 계산 (요청 시점의 펀드 자산 가치 기준)
+            const totalAssetValue = calculateAssetValue(fund.asset);
+            const unitPrice = fund.total_units > 0 ? totalAssetValue / fund.total_units : 1000;
+            const currentValue = units * unitPrice;
+
+            // FIFO: remove units oldest-first, track weighted average purchase price
+            let unitsToRemove = units;
+            let weightedPurchaseCost = 0;
+            const newFunds = [];
+            for (const holding of userAsset.funds) {
+                if (holding.name !== fundName || unitsToRemove <= 0) {
+                    newFunds.push(holding);
+                    continue;
+                }
+                if (holding.unit <= unitsToRemove) {
+                    weightedPurchaseCost += holding.unit * holding.purchasePrice;
+                    unitsToRemove -= holding.unit;
+                } else {
+                    weightedPurchaseCost += unitsToRemove * holding.purchasePrice;
+                    holding.unit -= unitsToRemove;
+                    unitsToRemove = 0;
+                    newFunds.push(holding);
+                }
+            }
+            userAsset.funds = newFunds;
+
+            // Fee applies only to profit
+            const profit = currentValue - weightedPurchaseCost;
+            let feeAmount = 0;
+            if (profit > 0) {
+                feeAmount = profit * (fund.fee / 100);
+            }
+            const investorProceeds = currentValue - feeAmount;
+
+            userAsset.balance += investorProceeds;
+            fund.asset.balance -= currentValue;
+            fund.total_units -= units;
+
+            await userAsset.save();
+            await fund.asset.save();
+            await fund.save();
+
+            // Transfer fee to fund owner's personal account
+            if (feeAmount > 0) {
+                const ownerAdmin = fund.administrators.find(a => a.isTopAdmin);
+                if (ownerAdmin) {
+                    const ownerUser = await User.findOne({ userID: ownerAdmin.userID });
+                    if (ownerUser) {
+                        const ownerAsset = await Asset.findById(ownerUser.asset);
+                        if (ownerAsset) {
+                            ownerAsset.balance += feeAmount;
+                            await ownerAsset.save();
+                            module.exports.addTransactionLog(ownerAdmin.userID, 'fund_fee', `${fundName} 펀드 수수료 수령 (${Math.round(feeAmount).toLocaleString()}원)`);
+                        }
+                    }
+                }
+            }
+
+            // 거래 후 캐시 즉시 갱신
+            const { setFundPrice } = require('./systems/fund_price');
+            const newUnitPrice = fund.total_units > 0 ? (totalAssetValue - currentValue) / fund.total_units : 1000;
+            setFundPrice(fundName, newUnitPrice);
+
+            module.exports.addTransactionLog(id, 'fund_sell', `${fundName} 펀드 환매 ${units}좌 (수익 ${profit >= 0 ? '+' : ''}${Math.round(profit).toLocaleString()}원, 수령 ${Math.round(investorProceeds).toLocaleString()}원)`);
+            return { state: 'success', data: { units, unitPrice, currentValue, weightedPurchaseCost, profit, feeAmount, investorProceeds } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:sellFundInvestment': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async fundRename(id, oldName, newName) {
+        try {
+            const fund = await Fund.findOne({ name: oldName });
+            if (!fund) {
+                return { state: 'no_fund', data: null };
+            }
+
+            // Only topAdmin can rename the fund
+            const adminEntry = fund.administrators.find(a => a.userID === id);
+            if (!adminEntry || !adminEntry.isTopAdmin) {
+                return { state: 'not_owner', data: null };
+            }
+
+            // Check new name isn't already taken
+            const existing = await Fund.findOne({ name: newName });
+            if (existing) {
+                return { state: 'duplicate_name', data: null };
+            }
+
+            // Update fund document name
+            fund.name = newName;
+            await fund.save();
+
+            // Update all asset holdings with this fund name
+            await Asset.updateMany(
+                { 'funds.name': oldName },
+                { $set: { 'funds.$[elem].name': newName } },
+                { arrayFilters: [{ 'elem.name': oldName }] }
+            );
+
+            // Update State.currentAccount for any admin logged into this fund
+            await State.updateMany(
+                { currentAccount: `@fund_${oldName}` },
+                { $set: { currentAccount: `@fund_${newName}` } }
+            );
+
+            // Update Notification ticker for fund notifications
+            await Notification.updateMany(
+                { type: 'fund', ticker: oldName },
+                { $set: { ticker: newName } }
+            );
+
+            // Update price cache
+            const { renameFundPrice } = require('./systems/fund_price');
+            renameFundPrice(oldName, newName);
+
+            return { state: 'success', data: null };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:fundRename': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async checkAndGrantAchievements(id) {
+        try {
+            const { ACHIEVEMENTS } = require('./systems/achievement_system');
+
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            const profile = await Profile.findById(user.profile);
+            if (!profile) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            // 한 번의 집계 쿼리로 모든 거래 타입별 카운트 수집
+            const typeCounts = await TransactionLog.aggregate([
+                { $match: { userID: id } },
+                { $group: { _id: '$type', count: { $sum: 1 } } },
+            ]);
+            const logCounts = {};
+            typeCounts.forEach(t => { logCounts[t._id] = t.count; });
+            const totalTransactions = Object.values(logCounts).reduce((s, c) => s + c, 0);
+
+            const earnedNames = new Set(profile.achievements.map(a => a.name));
+            const context = { level: profile.level.level, asset: userAsset, logCounts, totalTransactions };
+
+            const newAchievements = [];
+            for (const achievement of ACHIEVEMENTS) {
+                if (earnedNames.has(achievement.name)) continue;
+                if (achievement.check(context)) {
+                    profile.achievements.push({ name: achievement.name, description: achievement.description });
+                    newAchievements.push({ name: achievement.name, description: achievement.description });
+                }
+            }
+
+            if (newAchievements.length > 0) {
+                await profile.save();
+            }
+
+            return { state: 'success', data: newAchievements };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:checkAndGrantAchievements': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    addTransactionLog(userID, type, logMessage) {
+        TransactionLog.create({ userID, type, logMessage }).catch((err) => {
+            serverLog(`[ERROR] Error at 'database.js:addTransactionLog': ${err}`);
+        });
+    },
+
+    async getTransactionLog(userID, limit) {
+        try {
+            const logs = await TransactionLog.find({ userID })
+                .sort({ transactionDate: -1 })
+                .limit(limit);
+            return { state: 'success', data: logs };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getTransactionLog': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async etfBuy(id, etfId, quantity) {
+        try {
+            if (!ETF_DEFINITIONS[etfId]) {
+                return { state: 'invalid_etf', data: null };
+            }
+
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
+                return { state: 'error', data: null };
+            }
+            const userAsset = activeAsset.data;
+
+            const currentPrice = getEtfPrice(etfId);
+            if (!currentPrice) {
+                return { state: 'error', data: null };
+            }
+
+            if (quantity >= 0 && quantity < 1) {
+                const maxQuantity = Math.floor(userAsset.balance / currentPrice);
+                quantity = quantity === 0 ? maxQuantity : Math.floor(maxQuantity * quantity);
+                if (quantity === 0) {
+                    return { state: 'no_balance', data: null };
+                }
+            }
+
+            const transactionAmount = currentPrice * quantity;
+
+            if (userAsset.balance < transactionAmount) {
+                return { state: 'no_balance', data: null };
+            }
+
+            userAsset.balance -= transactionAmount;
+            userAsset.balance = Math.round(userAsset.balance);
+
+            const purchaseDate = new Date();
+
+            if (!userAsset.etfs) userAsset.etfs = [];
+            userAsset.etfs.push({
+                etfId,
+                quantity,
+                purchasePrice: currentPrice,
+                purchaseDate,
+            });
+
+            await userAsset.save();
+
+            serverLog(`[INFO] ETF buy success. id: ${id}, etfId: ${etfId}, quantity: ${quantity}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'etf_buy', `${ETF_DEFINITIONS[etfId].name} ${quantity}좌 매수 (${transactionAmount.toLocaleString()}원)`);
+            return { state: 'success', data: quantity };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:etfBuy': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async etfSell(id, etfId, quantity) {
+        try {
+            if (!ETF_DEFINITIONS[etfId]) {
+                return { state: 'invalid_etf', data: null };
+            }
+
+            const activeAsset = await module.exports.getActiveAsset(id);
+            if (activeAsset.state === 'error') {
+                return { state: 'error', data: null };
+            }
+            const userAsset = activeAsset.data;
+
+            const currentPrice = getEtfPrice(etfId);
+            if (!currentPrice) {
+                return { state: 'error', data: null };
+            }
+
+            if (!userAsset.etfs) userAsset.etfs = [];
+
+            const totalOwned = userAsset.etfs
+                .filter(e => e.etfId === etfId)
+                .reduce((sum, e) => sum + e.quantity, 0);
+
+            if (quantity > 0 && quantity < 1) {
+                quantity = Math.floor(totalOwned * quantity);
+                if (quantity === 0) {
+                    return { state: 'no_etf', data: null };
+                }
+            }
+
+            if (quantity === 0) {
+                quantity = totalOwned;
+            }
+
+            if (totalOwned < quantity) {
+                return { state: 'no_etf', data: null };
+            }
+
+            let quantityLeft = quantity;
+            for (let i = userAsset.etfs.length - 1; i >= 0 && quantityLeft > 0; i--) {
+                const etf = userAsset.etfs[i];
+                if (etf.etfId !== etfId) continue;
+                if (etf.quantity <= quantityLeft) {
+                    quantityLeft -= etf.quantity;
+                    userAsset.etfs.splice(i, 1);
+                } else {
+                    etf.quantity -= quantityLeft;
+                    quantityLeft = 0;
+                }
+            }
+
+            const transactionAmount = currentPrice * quantity;
+            userAsset.balance += transactionAmount;
+            userAsset.balance = Math.round(userAsset.balance);
+
+            await userAsset.save();
+
+            serverLog(`[INFO] ETF sell success. id: ${id}, etfId: ${etfId}, quantity: ${quantity}`);
+            module.exports.addTransactionLog(activeAsset.isFund ? `@fund_${activeAsset.fundName}` : id, 'etf_sell', `${ETF_DEFINITIONS[etfId].name} ${quantity}좌 매도 (${transactionAmount.toLocaleString()}원)`);
+            return { state: 'success', data: quantity };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:etfSell': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async checkAndMarkAttendance(id) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return { state: 'error', data: null };
+            }
+
+            const userState = await State.findById(user.state);
+            if (userState === null) {
+                serverLog('[ERROR] Error finding user state');
+                return { state: 'error', data: null };
+            }
+
+            const now = new Date();
+            const today = new Date(now);
+            today.setHours(0, 0, 0, 0);
+
+            let newStreak;
+            if (userState.checkin_date == null) {
+                newStreak = 1;
+            } else {
+                const lastDay = new Date(userState.checkin_date);
+                lastDay.setHours(0, 0, 0, 0);
+                const diffDays = Math.round((today.getTime() - lastDay.getTime()) / (1000 * 60 * 60 * 24));
+
+                if (diffDays === 0) {
+                    return { state: 'success', data: { alreadyChecked: true } };
+                } else if (diffDays === 1) {
+                    newStreak = (userState.checkin_streak || 0) + 1;
+                } else {
+                    newStreak = 1;
+                }
+            }
+
+            const xpGained = 30;
+
+            userState.checkin_date = now;
+            userState.checkin_streak = newStreak;
+            await userState.save();
+
+            return { state: 'success', data: { alreadyChecked: false, streak: newStreak, xpGained } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:checkAndMarkAttendance': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async increaseLevelPointBy(id, amount) {
+        const DEFAULT_POINT_REQUIRED = 100;
+        const LEVEL_UP_POINT_GAP = 20;
+
+        try {
+            const user = await User.findOne({ userID: id });
+            if (user === null) {
+                serverLog('[ERROR] Error finding user');
+                return { state: 'error', data: null };
+            }
+
+            const userProfile = await Profile.findById(user.profile);
+            if (userProfile === null) {
+                serverLog('[ERROR] Error finding user profile');
+                return { state: 'error', data: null };
+            }
+
+            userProfile.level.state += amount;
+            let threshold = DEFAULT_POINT_REQUIRED + LEVEL_UP_POINT_GAP * userProfile.level.level;
+            while (userProfile.level.state >= threshold) {
+                userProfile.level.state -= threshold;
+                userProfile.level.level += 1;
+                threshold = DEFAULT_POINT_REQUIRED + LEVEL_UP_POINT_GAP * userProfile.level.level;
+            }
+
+            await userProfile.save();
+
+            return {
+                state: 'success',
+                data: {
+                    level: userProfile.level.level,
+                    state: userProfile.level.state,
+                    target: threshold,
+                },
+            };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:increaseLevelPointBy': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    // ── 부동산 ────────────────────────────────────────────────────────────────
+
+    async buyProperty(userID, propertyId) {
+        try {
+            const listing = getListingById(propertyId);
+            if (!listing) {
+                return { state: 'not_found', data: null };
+            }
+
+            if (new Date(listing.listedUntil) < new Date()) {
+                return { state: 'expired', data: null };
+            }
+
+            const user = await User.findOne({ userID });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            if (userAsset.balance < listing.price) {
+                return { state: 'no_balance', data: null };
+            }
+
+            userAsset.balance -= listing.price;
+            userAsset.balance = Math.round(userAsset.balance);
+
+            if (!userAsset.properties) userAsset.properties = [];
+            userAsset.properties.push({
+                propertyId: listing.propertyId,
+                name: listing.name,
+                region: listing.region,
+                type: listing.type,
+                size: listing.size,
+                purchasePrice: listing.price,
+                purchaseDate: new Date(),
+                rentalYield: listing.rentalYield,
+                purchaseIndex: getCurrentIndex(listing.region, listing.type),
+                mortgage: {},
+            });
+
+            await userAsset.save();
+            removeListingById(propertyId);
+
+            module.exports.addTransactionLog(userID, 'property_buy', `${listing.name} 매수 (${listing.price.toLocaleString()}원)`);
+
+            serverLog(`[INFO] Property bought. userID: ${userID}, property: ${listing.name}`);
+            return { state: 'success', data: { listing } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:buyProperty': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async sellProperty(userID, propertyIndex) {
+        try {
+            const user = await User.findOne({ userID });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            const idx = propertyIndex - 1;
+            if (!userAsset.properties || idx < 0 || idx >= userAsset.properties.length) {
+                return { state: 'not_found', data: null };
+            }
+
+            const prop = userAsset.properties[idx];
+
+            // 담보대출 잔액이 있으면 매도 불가
+            if (prop.mortgage && prop.mortgage.amount > 0) {
+                return { state: 'has_mortgage', data: null };
+            }
+
+            const sellAmount = calcCurrentValue(prop);
+            userAsset.balance += sellAmount;
+            userAsset.balance = Math.round(userAsset.balance);
+            userAsset.properties.splice(idx, 1);
+
+            await userAsset.save();
+
+            const profitLoss = sellAmount - prop.purchasePrice;
+            module.exports.addTransactionLog(userID, 'property_sell', `${prop.name} 매도 (${sellAmount.toLocaleString()}원, 손익 ${profitLoss >= 0 ? '+' : ''}${profitLoss.toLocaleString()}원)`);
+
+            serverLog(`[INFO] Property sold. userID: ${userID}, property: ${prop.name}`);
+            return { state: 'success', data: { property: prop, sellAmount, profitLoss: sellAmount - prop.purchasePrice } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:sellProperty': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async takePropertyMortgage(userID, propertyIndex, amount) {
+        try {
+            const user = await User.findOne({ userID });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            const idx = propertyIndex - 1;
+            if (!userAsset.properties || idx < 0 || idx >= userAsset.properties.length) {
+                return { state: 'not_found', data: null };
+            }
+
+            const prop = userAsset.properties[idx];
+
+            // 이미 대출 존재
+            if (prop.mortgage && prop.mortgage.amount > 0) {
+                return { state: 'already_mortgaged', data: null };
+            }
+
+            // LTV 한도
+            const maxLoan = Math.floor(prop.purchasePrice * PROPERTY_MORTGAGE_LTV);
+            if (amount > maxLoan) {
+                return { state: 'exceed_ltv', data: { maxLoan } };
+            }
+
+            const now = new Date();
+            const dueDate = new Date(now.getTime() + PROPERTY_MORTGAGE_TERM_DAYS * 24 * 60 * 60 * 1000);
+
+            prop.mortgage = {
+                amount,
+                interestRate: PROPERTY_MORTGAGE_INTEREST_RATE,
+                startDate: now,
+                dueDate,
+                uid: uuidv4(),
+            };
+
+            userAsset.balance += amount;
+            userAsset.balance = Math.round(userAsset.balance);
+            await userAsset.save();
+
+            module.exports.addTransactionLog(userID, 'property_mortgage', `${prop.name} 담보대출 (${amount.toLocaleString()}원)`);
+
+            serverLog(`[INFO] Property mortgage taken. userID: ${userID}, property: ${prop.name}, amount: ${amount}`);
+            return { state: 'success', data: { property: prop, amount, dueDate } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:takePropertyMortgage': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async repayPropertyMortgage(userID, propertyIndex) {
+        try {
+            const user = await User.findOne({ userID });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            const idx = propertyIndex - 1;
+            if (!userAsset.properties || idx < 0 || idx >= userAsset.properties.length) {
+                return { state: 'not_found', data: null };
+            }
+
+            const prop = userAsset.properties[idx];
+            if (!prop.mortgage || !prop.mortgage.amount || prop.mortgage.amount <= 0) {
+                return { state: 'no_mortgage', data: null };
+            }
+
+            const repayAmount = prop.mortgage.amount;
+            if (userAsset.balance < repayAmount) {
+                return { state: 'no_balance', data: null };
+            }
+
+            userAsset.balance -= repayAmount;
+            userAsset.balance = Math.round(userAsset.balance);
+            prop.mortgage = {};
+
+            await userAsset.save();
+
+            module.exports.addTransactionLog(userID, 'property_mortgage_repay', `${prop.name} 담보대출 상환 (${repayAmount.toLocaleString()}원)`);
+
+            serverLog(`[INFO] Property mortgage repaid. userID: ${userID}, property: ${prop.name}`);
+            return { state: 'success', data: { property: prop, repayAmount } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:repayPropertyMortgage': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getPropertyMarket(region, type) {
+        try {
+            let listings = getMarketListings();
+            if (region) listings = listings.filter(l => l.region === region);
+            if (type) listings = listings.filter(l => l.type === type);
+            return { state: 'success', data: listings };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getPropertyMarket': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getUserProperties(userID) {
+        try {
+            const user = await User.findOne({ userID });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            return { state: 'success', data: userAsset.properties || [] };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getUserProperties': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    // ── 채권 ────────────────────────────────────────────────────────────────
+
+    async buyBond(id, maturityDays, quantity) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            const totalCost = FACE_VALUE * quantity;
+            if (userAsset.balance < totalCost) return { state: 'no_balance', data: null };
+
+            const couponRate = getBondYield(maturityDays);
+            const purchaseDate = new Date();
+            const maturityDate = new Date();
+            maturityDate.setDate(purchaseDate.getDate() + maturityDays);
+
+            const uid = userAsset.bonds.length === 0
+                ? 0
+                : Math.max(...userAsset.bonds.map(b => b.uid)) + 1;
+
+            userAsset.bonds.push({
+                faceValue: FACE_VALUE,
+                quantity,
+                couponRate,
+                maturityDays,
+                purchaseDate,
+                maturityDate,
+                uid,
+            });
+            userAsset.balance -= totalCost;
+
+            const schedResult = await module.exports.setTransactionSchedule(
+                `${id}-bond_${uid}`, id,
+                `redeem_bond ${id} ${userAsset._id} ${uid} at ${maturityDate.getTime()}`,
+            );
+            if (schedResult.state === 'error') return { state: 'error', data: null };
+
+            await userAsset.save();
+
+            const maturityValue = calcMaturityValue(FACE_VALUE, couponRate, maturityDays) * quantity;
+            return { state: 'success', data: { couponRate, totalCost, maturityValue } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:buyBond': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async sellBond(id, uid) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            const bond = userAsset.bonds.find(b => b.uid === uid);
+            if (!bond) return { state: 'not_found', data: null };
+
+            const now = new Date();
+            const daysHeld = Math.max(0, Math.floor((now - new Date(bond.purchaseDate)) / (1000 * 60 * 60 * 24)));
+            const currentYield = getBondYield(bond.maturityDays);
+            const marketPricePerUnit = calcMarketPrice(bond.faceValue, bond.couponRate, bond.maturityDays, daysHeld, currentYield);
+            const totalMarketValue = marketPricePerUnit * bond.quantity;
+            const purchaseCost = bond.faceValue * bond.quantity;
+
+            userAsset.balance += totalMarketValue;
+            userAsset.balance = Math.round(userAsset.balance);
+
+            const index = userAsset.bonds.findIndex(b => b.uid === uid);
+            userAsset.bonds.splice(index, 1);
+
+            await module.exports.deleteTransactionSchedule(`${id}-bond_${uid}`);
+            await userAsset.save();
+
+            return { state: 'success', data: { marketValue: totalMarketValue, gain: totalMarketValue - purchaseCost } };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:sellBond': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
+
+    async getUserBonds(id) {
+        try {
+            const user = await User.findOne({ userID: id });
+            if (!user) return { state: 'error', data: null };
+
+            const userAsset = await Asset.findById(user.asset);
+            if (!userAsset) return { state: 'error', data: null };
+
+            return { state: 'success', data: userAsset.bonds || [] };
+        } catch (err) {
+            serverLog(`[ERROR] Error at 'database.js:getUserBonds': ${err}`);
+            return { state: 'error', data: null };
+        }
+    },
 }

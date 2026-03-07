@@ -94,3 +94,13 @@ recent-stock_prices.txt
 tempCodeRunnerFile.js
 
 .idea/
+
+assets/charts
+
+.claude/
+
+data/*
+!data/company_info.txt
+!data/stock_meta.txt
+!data/stock_names.txt
+!data/filter_keywords.txt

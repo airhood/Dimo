@@ -1,7 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { tryGetTicker, getOptionPrice, getOptionStrikePriceList, getOptionTimeRangeData, getOptionExpirationDate } = require('../stock_system/stock_sim');
+const { tryGetTicker, getOptionPrice, getOptionStrikePriceList, getOptionTimeRangeData, getOptionExpirationDate } = require('../systems/stock_sim');
 const { callOptionBuy, callOptionSell, putOptionBuy, putOptionSell, optionLiquidate } = require('../database');
-const { generateStockChartImage } = require('../stock_system/stock_chart');
+const { generateStockChartImage } = require('../systems/stock_chart');
+const { getUserChartSettings } = require('../systems/chart_settings');
 const { serverLog } = require('../server/server_logger');
 const fs = require('fs');
 const moment = require('moment-timezone');
@@ -83,9 +84,9 @@ module.exports = {
                                 .setDescription('콜옵션을 매수하려는 종목 코드 또는 종목명')
                                 .setRequired(true)
                         )
-                        .addIntegerOption((option) =>
+                        .addNumberOption((option) =>
                             option.setName('수량')
-                                .setDescription('매수할 콜옵션의 수량 (0 입력시 올인)')
+                                .setDescription('매수할 콜옵션의 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                                 .setMinValue(0)
                                 .setRequired(true)
                         )
@@ -104,9 +105,9 @@ module.exports = {
                                 .setDescription('콜옵션을 매도하려는 종목 코드 또는 종목명')
                                 .setRequired(true)
                         )
-                        .addIntegerOption((option) =>
+                        .addNumberOption((option) =>
                             option.setName('수량')
-                                .setDescription('매도할 콜옵션의 수량 (0 입력시 올인)')
+                                .setDescription('매도할 콜옵션의 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                                 .setMinValue(0)
                                 .setRequired(true)
                         )
@@ -130,9 +131,9 @@ module.exports = {
                                 .setDescription('풋옵션을 매수하려는 종목 코드 또는 종목명')
                                 .setRequired(true)
                         )
-                        .addIntegerOption((option) =>
+                        .addNumberOption((option) =>
                             option.setName('수량')
-                                .setDescription('매수할 풋옵션의 수량 (0 입력시 올인)')
+                                .setDescription('매수할 풋옵션의 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                                 .setMinValue(0)
                                 .setRequired(true)
                         )
@@ -151,9 +152,9 @@ module.exports = {
                                 .setDescription('풋옵션을 매도하려는 종목 코드 또는 종목명')
                                 .setRequired(true)
                         )
-                        .addIntegerOption((option) =>
+                        .addNumberOption((option) =>
                             option.setName('수량')
-                                .setDescription('매도할 풋옵션의 수량 (0 입력시 올인)')
+                                .setDescription('매도할 풋옵션의 수량 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                                 .setMinValue(0)
                                 .setRequired(true)
                         )
@@ -254,10 +255,10 @@ module.exports = {
                 });
             }
         } else if (subCommand === '차트') {
-            let ticker = interaction.options.getString('종목');
-            ticker = tryGetTicker(ticker.trim());
-            
-            if (ticker === null) {
+            const tickerInput = interaction.options.getString('종목');
+            const tickerList = tickerInput.split(',').map(t => tryGetTicker(t.trim())).filter(Boolean);
+
+            if (tickerList.length === 0) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -286,31 +287,49 @@ module.exports = {
                 if (hours === null) hours = 0;
                 if (minutes === null) minutes = 0;
             }
-            
-            const result = await generateStockChartImage(ticker, getOptionTimeRangeData([ticker], (days * 24) + hours, minutes, direction, strikePrice), minutes);
 
-            try {
+            const chartSettings = getUserChartSettings(interaction.user.id);
+
+            if (chartSettings.chartType === 'candlestick' && tickerList.length > 1) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle(':chart_with_upwards_trend:  옵션 차트')
-                            .setImage(`attachment://${result.filename}`)
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  차트 불러오기 실패')
+                            .setDescription('캔들차트는 단일 종목만 지원합니다.\n`/차트설정 차트종류 종류:선형` 으로 선형차트로 변경하거나, 종목을 하나만 입력해 주세요.')
+                            .setTimestamp()
                     ],
-                    files: [{
-                        attachment: result.filepath,
-                        name: result.filename,
-                    }],
+                });
+                return;
+            }
+
+            const charts = await generateStockChartImage(tickerList, getOptionTimeRangeData(tickerList, (days * 24) + hours, minutes, direction, strikePrice), minutes, chartSettings);
+
+            try {
+                const mainChart = charts[0];
+                const embeds = [
+                    new EmbedBuilder()
+                        .setTitle(':chart_with_upwards_trend:  옵션 차트')
+                        .setImage(`attachment://${mainChart.filename}`),
+                ];
+                charts.slice(1).forEach(panel => {
+                    embeds.push(new EmbedBuilder().setTitle(panel.label).setImage(`attachment://${panel.filename}`));
                 });
 
-                try {
-                    fs.unlink(result.filepath,  (err) => {
-                        if (err) {
-                            serverLog(`[ERROR] Error deleting chart image file: ${err}`);
-                        }
-                    });
-                } catch (err) {
-                    serverLog(`[ERROR] Error deleting chart image file: ${err}`);
-                }
+                await interaction.reply({
+                    embeds,
+                    files: charts.map(c => ({ attachment: c.filepath, name: c.filename })),
+                });
+
+                charts.forEach(c => {
+                    try {
+                        fs.unlink(c.filepath, (err) => {
+                            if (err) serverLog(`[ERROR] Error deleting chart image file: ${err}`);
+                        });
+                    } catch (err) {
+                        serverLog(`[ERROR] Error deleting chart image file: ${err}`);
+                    }
+                });
             } catch (err) {
                 serverLog(`[ERROR] Error uploading chart image: ${err}`);
 
@@ -417,12 +436,12 @@ module.exports = {
                         });
                     }
 
-                    const quantity = interaction.options.getInteger('수량');
+                    const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
                     const strikePrice = interaction.options.getInteger('행사가격');
 
                     const result = await callOptionBuy(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result.state === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strike_price') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -481,12 +500,12 @@ module.exports = {
                         });
                     }
 
-                    const quantity = interaction.options.getInteger('수량');
+                    const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
                     const strikePrice = interaction.options.getInteger('행사가격');
 
                     const result = await callOptionSell(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result.state === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strike_price') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -547,12 +566,12 @@ module.exports = {
                         });
                     }
                     
-                    const quantity = interaction.options.getInteger('수량');
+                    const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
                     const strikePrice = interaction.options.getInteger('행사가격');
 
                     const result = await putOptionBuy(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result.state === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strike_price') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()
@@ -611,12 +630,12 @@ module.exports = {
                         });
                     }
 
-                    const quantity = interaction.options.getInteger('수량');
+                    const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
                     const strikePrice = interaction.options.getInteger('행사가격');
 
                     const result = await putOptionSell(interaction.user.id, ticker, quantity, strikePrice);
 
-                    if (result.state === 'invalid_strikePrice') {
+                    if (result.state === 'invalid_strike_price') {
                         await interaction.reply({
                             embeds: [
                                 new EmbedBuilder()

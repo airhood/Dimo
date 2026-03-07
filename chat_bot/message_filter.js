@@ -1,3 +1,4 @@
+const fs = require('fs');
 const { serverLog } = require("../server/server_logger");
 
 let keywordList = [];
@@ -5,58 +6,68 @@ let keywordList = [];
 const keywordFilePath = './data/filter_keywords.txt';
 
 function loadKeywordsFromFile() {
-    fs.readFile(keywordFilePath, 'utf8', (err, data) => {
-        if (err) {
-            serverLog(`[ERROR] Error reading 'filter_keywords.txt': ${err}`);
+    try {
+        if (!fs.existsSync(keywordFilePath)) {
+            fs.writeFileSync(keywordFilePath, '', 'utf8');
+            serverLog('[INFO] Created empty filter_keywords.txt');
             return;
         }
-
+        const data = fs.readFileSync(keywordFilePath, 'utf8');
         keywordList = data.split('\n').map(line => line.trim()).filter(line => line !== '');
-        serverLog(`[ERROR] Loaded filter keywords.`);
-    });
+        serverLog(`[INFO] Loaded ${keywordList.length} filter keywords.`);
+    } catch (err) {
+        serverLog(`[ERROR] Error reading 'filter_keywords.txt': ${err}`);
+    }
 }
 
+function saveKeywordsToFile() {
+    try {
+        fs.writeFileSync(keywordFilePath, keywordList.join('\n'), 'utf8');
+    } catch (err) {
+        serverLog(`[ERROR] Error writing 'filter_keywords.txt': ${err}`);
+    }
+}
+
+// Case-insensitive keyword check
 function containsKeyword(message) {
-    return keywordList.some(keyword => message.includes(keyword));
+    const lower = message.toLowerCase();
+    return keywordList.some(keyword => lower.includes(keyword.toLowerCase()));
 }
 
 function addKeyword(keyword) {
-    if (!keywordList.includes(keyword)) {
-        keywordList.push(keyword);
-        serverLog(`[INFO] '${keyword}' was added to keyword list.`);
+    const normalized = keyword.trim();
+    if (!keywordList.some(k => k.toLowerCase() === normalized.toLowerCase())) {
+        keywordList.push(normalized);
+        saveKeywordsToFile();
+        serverLog(`[INFO] '${normalized}' was added to keyword list.`);
         return true;
     } else {
-        serverLog(`[INFO] '${keyword}' already exists in keyword list.`);
+        serverLog(`[INFO] '${normalized}' already exists in keyword list.`);
         return false;
     }
 }
 
 function removeKeyword(keyword) {
-    const index = keywordList.indexOf(keyword);
+    const normalized = keyword.trim();
+    const index = keywordList.findIndex(k => k.toLowerCase() === normalized.toLowerCase());
     if (index > -1) {
         keywordList.splice(index, 1);
-        serverLog(`[INFO] '${keyword}' was removed from keyword list.`);
+        saveKeywordsToFile();
+        serverLog(`[INFO] '${normalized}' was removed from keyword list.`);
         return true;
     } else {
-        console.log(`${keyword} 는 목록에 없습니다.`);
-        serverLog(`[INFO] '${keyword}' doesn't exist in keyword list.`);
+        serverLog(`[INFO] '${normalized}' doesn't exist in keyword list.`);
         return false;
     }
 }
 
+// Returns true if the message is clean, false if it contains a keyword
 function filterMessage(message) {
-    if (containsKeyword(message)) {
-        return false;
-    } else {
-        return true;
-    }
+    return !containsKeyword(message);
 }
 
 function wrapMentions(message) {
-    // @everyone과 @here만 감싸기 위한 정규 표현식
     const mentionPattern = /(@everyone|@here)/g;
-    
-    // 멘션을 `로 감싸기
     return message.replace(mentionPattern, '`$&`');
 }
 

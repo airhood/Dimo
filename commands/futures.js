@@ -1,10 +1,11 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
-const { tryGetTicker, getFutureList, getFutureExpirationDate, getFutureTimeRangeData } = require('../stock_system/stock_sim');
-const { getStockName } = require('../stock_system/stock_name');
-const { createCache, saveCache } = require('../cache');
+const { tryGetTicker, getFutureList, getFutureExpirationDate, getFutureTimeRangeData } = require('../systems/stock_sim');
+const { getStockName } = require('../systems/stock_name');
+const { createCache, saveCache } = require('../utils/cache');
 const { v4: uuidv4 } = require('uuid');
 const { futureLiquidate, futureLong, futureShort } = require('../database');
-const { generateStockChartImage } = require('../stock_system/stock_chart');
+const { generateStockChartImage } = require('../systems/stock_chart');
+const { getUserChartSettings } = require('../systems/chart_settings');
 const { serverLog } = require('../server/server_logger');
 const fs = require('fs');
 const moment = require('moment-timezone');
@@ -39,10 +40,10 @@ module.exports = {
         )
         .addSubcommand((subCommand) =>
             subCommand.setName('차트')
-                .setDescription('선물 차트를 표시합니다.')
+                .setDescription('선물 차트를 표시합니다. 여러 종목을 쉼표로 구분해 동시에 볼 수 있습니다.')
                 .addStringOption((option) =>
                     option.setName('종목')
-                        .setDescription('차트에 표시할 종목 코드 또는 종목명의 목록. ex) AAPL, TSLA, GME ...')
+                        .setDescription('종목 코드 또는 종목명 (쉼표로 여러 개 입력 가능. ex) HPMB,NERI)')
                         .setRequired(true)
                 )
                 .addIntegerOption((option) =>
@@ -75,9 +76,9 @@ module.exports = {
                         .setDescription('선물의 종목 코드 또는 종목명')
                         .setRequired(true)
                 )
-                .addIntegerOption((option) =>
+                .addNumberOption((option) =>
                     option.setName('수량')
-                        .setDescription('선물의 계약수 (0 입력시 올인)')
+                        .setDescription('선물의 계약수 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -104,9 +105,9 @@ module.exports = {
                         .setDescription('선물의 종목 코드 또는 종목명')
                         .setRequired(true)
                 )
-                .addIntegerOption((option) =>
+                .addNumberOption((option) =>
                     option.setName('수량')
-                        .setDescription('선물의 계약수 (0 입력시 올인)')
+                        .setDescription('선물의 계약수 (0 입력시 올인, 0~1 입력시 잔액 비율)')
                         .setMinValue(0)
                         .setRequired(true)
                 )
@@ -219,16 +220,16 @@ module.exports = {
                 fetchReply: true
             });
         } else if (subCommand === '차트') {
-            let ticker = interaction.options.getString('종목');
-            ticker = tryGetTicker(ticker.trim());
-            
-            if (ticker === null) {
+            const tickerInput = interaction.options.getString('종목');
+            const tickerList = tickerInput.split(',').map(t => tryGetTicker(t.trim())).filter(Boolean);
+
+            if (tickerList.length === 0) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle(':x:  차트 불러오기 실패')
-                            .setDescription(`존재하지 않는 종목입니다.`)
+                            .setDescription('존재하지 않는 종목입니다.')
                             .setTimestamp()
                     ],
                 });
@@ -249,30 +250,48 @@ module.exports = {
                 if (minutes === null) minutes = 0;
             }
 
-            const result = await generateStockChartImage(ticker, getFutureTimeRangeData([ticker], (days * 24) + hours, minutes), minutes);
+            const chartSettings = getUserChartSettings(interaction.user.id);
 
-            try {
+            if (chartSettings.chartType === 'candlestick' && tickerList.length > 1) {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle(':chart_with_upwards_trend:  선물 차트')
-                            .setImage(`attachment://${result.filename}`)
+                            .setColor(0xEA4144)
+                            .setTitle(':x:  차트 불러오기 실패')
+                            .setDescription('캔들차트는 단일 종목만 지원합니다.\n`/차트설정 차트종류 종류:선형` 으로 선형차트로 변경하거나, 종목을 하나만 입력해 주세요.')
+                            .setTimestamp()
                     ],
-                    files: [{
-                        attachment: await result.filepath,
-                        name: result.filename,
-                     }],
+                });
+                return;
+            }
+
+            const charts = await generateStockChartImage(tickerList, getFutureTimeRangeData(tickerList, (days * 24) + hours, minutes), minutes, chartSettings);
+
+            try {
+                const mainChart = charts[0];
+                const embeds = [
+                    new EmbedBuilder()
+                        .setTitle(':chart_with_upwards_trend:  선물 차트')
+                        .setImage(`attachment://${mainChart.filename}`),
+                ];
+                charts.slice(1).forEach(panel => {
+                    embeds.push(new EmbedBuilder().setTitle(panel.label).setImage(`attachment://${panel.filename}`));
                 });
 
-                try {
-                    fs.unlink(result.filepath,  (err) => {
-                        if (err) {
-                            serverLog(`[ERROR] Error deleting chart image file: ${err}`);
-                        }
-                    });
-                } catch (err) {
-                    serverLog(`[ERROR] Error deleting chart image file: ${err}`);
-                }
+                await interaction.reply({
+                    embeds,
+                    files: charts.map(c => ({ attachment: c.filepath, name: c.filename })),
+                });
+
+                charts.forEach(c => {
+                    try {
+                        fs.unlink(c.filepath, (err) => {
+                            if (err) serverLog(`[ERROR] Error deleting chart image file: ${err}`);
+                        });
+                    } catch (err) {
+                        serverLog(`[ERROR] Error deleting chart image file: ${err}`);
+                    }
+                });
             } catch (err) {
                 serverLog(`[ERROR] Error uploading chart image: ${err}`);
 
@@ -304,7 +323,7 @@ module.exports = {
                 return;
             }
 
-            const quantity = interaction.options.getInteger('수량');
+            const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
             const leverage = interaction.options.getInteger('레버리지');
 
             const result = await futureLong(interaction.user.id, ticker, quantity, leverage);
@@ -336,7 +355,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} 선물 롱 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매수 주문이 체결되었습니다.`)
+                            .setDescription(`${ticker} 선물 롱 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 주문이 체결되었습니다.`)
                             .setTimestamp()
                     ],
                 });
@@ -358,7 +377,7 @@ module.exports = {
                 return;
             }
 
-            const quantity = interaction.options.getInteger('수량');
+            const quantity = (q => q >= 1 ? Math.floor(q) : q)(interaction.options.getNumber('수량'));
             const leverage = interaction.options.getInteger('레버리지');
 
             const result = await futureShort(interaction.user.id, ticker, quantity, leverage);
@@ -390,7 +409,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0x448FE6)
                             .setTitle(':white_check_mark:  주문 체결 완료')
-                            .setDescription(`${ticker} 선물 숏 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 매도 주문이 체결되었습니다.`)
+                            .setDescription(`${ticker} 선물 숏 ${result.data.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")}계약 주문이 체결되었습니다.`)
                             .setTimestamp()
                     ],
                 });

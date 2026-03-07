@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, CommandInteractionOptionResolver } = require('discord.js');
-const { loan, loanRepay, openFixedDeposit, openSavingsAccount, getUserCredit, checkUserExists } = require('../database');
-const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint } = require('../stock_system/bank_manager');
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, CommandInteractionOptionResolver } = require('discord.js');
+const { loan, loanRepay, openFixedDeposit, openSavingsAccount, getUserCredit, checkUserExists, getActiveAsset } = require('../database');
+const { getInterestRatePoint, getFixedDepositInterestRatePoint, getLoanInterestRatePoint, getSavingsAccountInterestRatePoint, getHistoricalRates, generateRateChart } = require('../systems/bank_manager');
+const { getCreditGrade, calculateFundCreditRating } = require('../systems/credit_system');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -99,6 +100,10 @@ module.exports = {
         .addSubcommand((subCommand) =>
             subCommand.setName('적금금리')
                 .setDescription('적금금리는 변동될 수 있습니다.')
+        )
+        .addSubcommand((subCommand) =>
+            subCommand.setName('금리차트')
+                .setDescription('기준금리 / 예금금리 / 적금금리의 최근 12개월 추이를 차트로 확인합니다.')
         )
         .addSubcommand((subCommand) =>
             subCommand.setName('신용등급')
@@ -285,6 +290,28 @@ module.exports = {
                     ]
                 });
             }
+        } else if (subCommand === '금리차트') {
+            await interaction.deferReply();
+
+            const chartBuffer = await generateRateChart();
+            const attachment = new AttachmentBuilder(chartBuffer, { name: 'rate_chart.png' });
+
+            const rates = getHistoricalRates(1)[0];
+            await interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle('금리 추이 차트 (최근 12개월)')
+                        .addFields(
+                            { name: '기준금리', value: `\`${rates.base}%\``, inline: true },
+                            { name: '예금금리', value: `\`${rates.deposit}%\``, inline: true },
+                            { name: '적금금리', value: `\`${rates.savings}%\``, inline: true },
+                        )
+                        .setImage('attachment://rate_chart.png')
+                        .setTimestamp(),
+                ],
+                files: [attachment],
+            });
         } else if (subCommand === '예금금리') {
             const interestRatePoint = getFixedDepositInterestRatePoint();
 
@@ -293,7 +320,7 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xF1C40F)
                         .setTitle('예금금리')
-                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\``)
+                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\`\n-# 예금금리는 10일 기준 이자로 1일 기준 이자는 10으로 나누어야 합니다.`)
                 ],
             });
         } else if (subCommand === '적금금리') {
@@ -304,16 +331,15 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xF1C40F)
                         .setTitle('적금금리')
-                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\``)
+                        .setDescription(`\`\`\`${interestRatePoint}%\`\`\`\n-# 적금금리는 10일 기준 이자로 1일 기준 이자는 10으로 나누어야 합니다.`)
                 ],
             });
         } else if (subCommand === '신용등급') {
-            let targetUser = interaction.options.getUser('유저');
-            if (!targetUser) {
-                targetUser = interaction.user;
-            }
+            const targetUser = interaction.options.getUser('유저');
+            const isSelf = !targetUser || targetUser.id === interaction.user.id;
+            const lookupUser = targetUser ?? interaction.user;
 
-            const userExists = await checkUserExists(targetUser.id);
+            const userExists = await checkUserExists(lookupUser.id);
             if (userExists.state === 'error') {
                 await interaction.reply({
                     embeds: [
@@ -333,35 +359,77 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0xEA4144)
                             .setTitle('존재하지 않는 계정입니다')
-                            .setDescription(`<@${targetUser.id}>의 계정이 존재하지 않습니다.`)
+                            .setDescription(`<@${lookupUser.id}>의 계정이 존재하지 않습니다.`)
                     ],
                 });
                 return;
             }
 
-            const userCredit = await getUserCredit(targetUser.id);
+            let creditScore;
+            let embedTitle;
 
-            if (userCredit.state === 'error') {
-                await interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xEA4144)
-                            .setTitle('서버 오류')
-                            .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
-                            .setTimestamp()
-                    ],
-                });
-                return;
-            } else if (userCredit.state === 'success') {
-                await interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xF1C40F)
-                            .setTitle('신용등급')
-                            .setDescription(`\`\`\`${userCredit.data}/1000\`\`\``)
-                    ],
-                });
+            if (isSelf) {
+                // 자신: 현재 로그인된 계정(펀드 or 개인) 기준으로 표시
+                const activeAsset = await getActiveAsset(interaction.user.id);
+                if (activeAsset.state === 'error') {
+                    await interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0xEA4144)
+                                .setTitle('서버 오류')
+                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                .setTimestamp()
+                        ],
+                    });
+                    return;
+                }
+                if (activeAsset.isFund) {
+                    creditScore = calculateFundCreditRating(activeAsset.data);
+                    embedTitle = `신용등급 [${activeAsset.fundName} 펀드]`;
+                } else {
+                    const userCredit = await getUserCredit(interaction.user.id);
+                    if (userCredit.state === 'error') {
+                        await interaction.reply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xEA4144)
+                                    .setTitle('서버 오류')
+                                    .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                    .setTimestamp()
+                            ],
+                        });
+                        return;
+                    }
+                    creditScore = userCredit.data;
+                    embedTitle = `신용등급 [${interaction.user.username}]`;
+                }
+            } else {
+                // 타인: 항상 개인 계좌 기준
+                const userCredit = await getUserCredit(lookupUser.id);
+                if (userCredit.state === 'error') {
+                    await interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0xEA4144)
+                                .setTitle('서버 오류')
+                                .setDescription(`오류가 발생하였습니다.\n공식 디스코드 서버 **디모랜드**에서 *서버 오류* 태그를 통해 문의해주세요.`)
+                                .setTimestamp()
+                        ],
+                    });
+                    return;
+                }
+                creditScore = userCredit.data;
+                embedTitle = `신용등급 [${lookupUser.username}]`;
             }
+
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xF1C40F)
+                        .setTitle(embedTitle)
+                        .setDescription(`\`\`\`${creditScore}/1000 (${getCreditGrade(creditScore)})\`\`\``)
+                ],
+            });
         }
     }
 }

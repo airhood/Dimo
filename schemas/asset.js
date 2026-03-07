@@ -250,6 +250,113 @@ const AssetSchema = new Schema({
             required: true,
         },
     }],
+    etfs: [{
+        etfId: {
+            type: String,
+            required: true,
+        },
+        quantity: {
+            type: Number,
+            required: true,
+        },
+        purchasePrice: {
+            type: Number,
+            required: true,
+        },
+        purchaseDate: {
+            type: Date,
+            required: true,
+        },
+    }],
+    bonds: [{
+        faceValue: {
+            type: Number,
+            required: true,
+        },
+        quantity: {
+            type: Number,
+            required: true,
+        },
+        couponRate: {
+            type: Number,
+            required: true,
+        },
+        maturityDays: {
+            type: Number,
+            required: true,
+        },
+        purchaseDate: {
+            type: Date,
+            required: true,
+        },
+        maturityDate: {
+            type: Date,
+            required: true,
+        },
+        uid: {
+            type: Number,
+            required: true,
+        },
+    }],
+    loanHistory: [{
+        amount: {
+            type: Number,
+            required: true,
+        },
+        onTime: {
+            type: Boolean,
+            required: true,
+        },
+        repaidAt: {
+            type: Date,
+            required: true,
+        },
+    }],
+    properties: [{
+        propertyId: {
+            type: String,
+            required: true,
+        },
+        name: {
+            type: String,
+            required: true,
+        },
+        region: {
+            type: String,
+            required: true,
+        },
+        type: {
+            type: String,
+            required: true,
+        },
+        size: {
+            type: Number,
+            required: true,
+        },
+        purchasePrice: {
+            type: Number,
+            required: true,
+        },
+        purchaseDate: {
+            type: Date,
+            required: true,
+        },
+        rentalYield: {
+            type: Number,
+            required: true,
+        },
+        purchaseIndex: {
+            type: Number,
+            default: 1.0,
+        },
+        mortgage: {
+            amount: { type: Number },
+            interestRate: { type: Number },
+            startDate: { type: Date },
+            dueDate: { type: Date },
+            uid: { type: String },
+        },
+    }],
 });
 
 module.exports = mongoose.model('Asset', AssetSchema);

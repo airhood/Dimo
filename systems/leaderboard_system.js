@@ -1,6 +1,6 @@
 const schedule = require('node-schedule');
-const { getAllUserAsset } = require('./database');
-const { calculateAssetValue } = require('./stock_system/credit_system');
+const { getAllUserAsset } = require('../database');
+const { calculateAssetValue } = require('./credit_system');
 
 let leaderboard = [];
 

@@ -1,19 +1,30 @@
 const { connectDatabase, loadServersideLockData } = require('./database');
-const { serverLog } = require('./server/server_logger');
-const { initStockSim } = require('./stock_system/stock_sim');
+const { initStockSim, addHourlyListener, getIndexPrice, getIndexTimeRangeData, getIndexHistoryLength } = require('./systems/stock_sim');
+const { initEtfSystem, updateEtfHour } = require('./systems/etf_system');
+const { initTaxSystem } = require('./systems/tax_system');
 const { initTerminal } = require('./server/server_terminal');
-const { startBucketCycle } = require('./message_reference_tracker');
+const { startBucketCycle } = require('./systems/message_reference_tracker');
 const { initResourceMonitor, checkResource } = require('./server/resource_monitor');
-const { initScheduleManager } = require('./stock_system/transaction_schedule_manager');
-
+const { initScheduleManager } = require('./systems/transaction_schedule_manager');
 const discord_bot = require('./discord_bot');
-const { initCreditSystem, updateCreditRating } = require('./stock_system/credit_system');
+const { initCreditSystem, updateCreditRating } = require('./systems/credit_system');
+const { initFundPriceSystem } = require('./systems/fund_price');
+const { initNotificationScheduler } = require('./systems/notification_checker');
+const { initMarginCallChecker } = require('./systems/margin_call_checker');
+const { initAutoTradeScheduler } = require('./systems/auto_trade_scheduler');
+const { initReservationChecker } = require('./systems/reservation_checker');
+const { setTimezone } = require('./utils/korean_time');
+const { loadKeywordsFromFile } = require('./chat_bot/message_filter');
+const { initDividendSystem } = require('./systems/dividend_system');
+const { initRealEstateSystem } = require('./systems/real_estate_system');
 
 require('dotenv').config();
 
 module.exports = {
     async run() {
         initResourceMonitor();
+        
+        setTimezone();
 
         console.log('[BOOT] Resource Monitor loaded');
         
@@ -35,7 +46,17 @@ module.exports = {
         if (!result3) return false;
 
         console.log('[BOOT] Stock simulation loaded');
-        
+
+        initEtfSystem({ getIndexPrice, getIndexTimeRangeData, getIndexHistoryLength });
+        addHourlyListener(updateEtfHour);
+
+        console.log('[BOOT] ETF system loaded');
+
+        const result3b = await initFundPriceSystem();
+        if (!result3b) return false;
+
+        console.log('[BOOT] Fund price system loaded');
+
         const result4 = await initCreditSystem();
         if (!result4) return false;
 
@@ -50,7 +71,45 @@ module.exports = {
         if (!result6) return false;
 
         console.log('[BOOT] Schedule Manager loaded');
-        
+
+        await initTaxSystem();
+
+        console.log('[BOOT] Tax system initialized');
+
+        const result7 = initNotificationScheduler();
+        if (!result7) return false;
+
+        console.log('[BOOT] Notification scheduler loaded');
+
+        const result8 = initMarginCallChecker();
+        if (!result8) return false;
+
+        console.log('[BOOT] Margin call checker loaded');
+
+        const result9 = initAutoTradeScheduler();
+        if (!result9) return false;
+
+        console.log('[BOOT] Auto-trade scheduler loaded');
+
+        const result10 = initReservationChecker();
+        if (!result10) return false;
+
+        console.log('[BOOT] Reservation checker loaded');
+
+        const result11 = initDividendSystem();
+        if (!result11) return false;
+
+        console.log('[BOOT] Dividend system loaded');
+
+        const result12 = initRealEstateSystem();
+        if (!result12) return false;
+
+        console.log('[BOOT] Real estate system loaded');
+
+        loadKeywordsFromFile();
+
+        console.log('[BOOT] Message filter loaded');
+
         await discord_bot.setup();
 
         console.log('[BOOT] Discord bot loaded');

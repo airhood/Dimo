@@ -24,6 +24,6 @@ module.exports = {
 
     memoryUsage() {
         const memoryData = process.memoryUsage();
-        return memoryData.rss;
+        return memoryData.heapTotal + memoryData.external;
     }
 }
