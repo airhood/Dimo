@@ -91,15 +91,6 @@ config.json
 stock_prices.txt
 recent-stock_prices.txt
 
-data/news_pool.json
-data/etf_state.json
-data/message_buckets.json
-data/dividend_state.json
-data/chart_settings.json
-data/property_market.json
-data/property_price_index.json
-data/rental_state.json
-
 tempCodeRunnerFile.js
 
 .idea/
@@ -107,3 +98,9 @@ tempCodeRunnerFile.js
 assets/charts
 
 .claude/
+
+data/*
+!data/company_info.txt
+!data/stock_meta.txt
+!data/stock_names.txt
+!data/filter_keywords.txt
